@@ -2,8 +2,43 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <!-- 不设 maximum-scale / user-scalable=no：WCAG 1.4.4 要求文本可放大至 200% -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!--
+    theme-color 只有一份：深浅两套都靠 media 判断是行不通的 —— 用户手选「深色」但系统是浅色时
+    状态栏会错。真实值由 composables/useTheme.ts 在切换时写入（跟随 --bg-card）。
+    这里给的是首帧兜底值，下面那段内联脚本会紧接着按 localStorage 镜像覆盖。
+  -->
   <meta name="theme-color" content="#FFFFFF">
+  <script>
+    /*
+     * 首屏防闪烁：在样式生效前把 data-theme 写到 <html> 上。
+     *
+     * 深色变量挂在 html[data-theme='dark'] 上（见 src/styles/index.css），而 IndexedDB（Dexie）
+     * 是异步的、这里读不到，所以主题设置额外在 localStorage 存了一份镜像（hs.theme）。
+     * 镜像缺失/损坏 → 回落到跟随系统；localStorage 不可用（隐私模式）→ 回落浅色。
+     * 主题色不在这里处理：首帧还没渲染任何内容，等 App.vue 拿到设置后再 apply，不会闪。
+     *
+     * ⚠️ 这是唯一一处内联脚本，不要用外部文件 —— 外部文件是异步或延后的，防不住闪烁。
+     * ⚠️ 改这里必须同步 composables/useTheme.ts 的 MIRROR_KEY 与 DEFAULT_SETTINGS.themeMode。
+     */
+    (function () {
+      var dark = false;
+      try {
+        var raw = localStorage.getItem('hs.theme');
+        var mode = raw ? (JSON.parse(raw) || {}).mode : 'system';
+        if (mode === 'dark' || (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          dark = true;
+        }
+      } catch (e) {
+        dark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
+      }
+      var el = document.documentElement;
+      el.dataset.theme = dark ? 'dark' : 'light';
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', dark ? '#1c211f' : '#ffffff');
+    })();
+  </script>
   <meta name="description" content="家庭食材与物资的保质期、位置与购物清单管理，数据仅存本机">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">

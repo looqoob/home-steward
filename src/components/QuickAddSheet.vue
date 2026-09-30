@@ -21,12 +21,42 @@ const locations = useLocationsStore();
 const dict = useDictStore();
 const { show } = useToast();
 
+/** 常用单位快捷选择；下面的输入框仍可自由填写其它单位 */
+const UNITS = ['个', '袋', '斤', '瓶', '盒'];
+
 const selected = ref<string | null>(null);
 const qty = ref(1);
 const unit = ref('个');
 const locId = ref<string | null>(null);
+/** 自定义食材名：与九宫格共用 `selected`，非空时九宫格自动取消高亮 */
+const customName = ref('');
 
 const canAdd = computed(() => !!selected.value && !!locId.value);
+
+/** 最近入库过的名称（在库 + 消耗日志），供一键复用，最多 8 个 */
+const recentNames = computed(() => {
+  const seen: string[] = [];
+  const push = (n: string) => {
+    const name = n.trim();
+    if (name && !seen.includes(name) && seen.length < 8) seen.push(name);
+  };
+  const live = [...items.list].filter((x) => !x.deletedAt).sort((a, b) => b.createdAt - a.createdAt);
+  for (const i of live) push(i.name);
+  const logs = [...items.logs].filter((x) => !x.deletedAt).sort((a, b) => b.at - a.at);
+  for (const l of logs) push(l.name);
+  return seen;
+});
+
+watch(customName, (v) => {
+  const n = v.trim();
+  if (n) selected.value = n;
+});
+
+/** 点九宫格：占用 `selected` 并清空自定义输入，避免两处同时高亮 */
+function pickFood(f: string) {
+  selected.value = f;
+  customName.value = '';
+}
 
 const note = computed(() => {
   if (!selected.value || !locId.value) return '';
@@ -48,6 +78,7 @@ watch(
   (open) => {
     if (open) {
       selected.value = null;
+      customName.value = '';
       qty.value = 1;
       unit.value = '个';
       locId.value = locations.enabled[0]?.id ?? null;
@@ -59,10 +90,20 @@ function close() {
   emit('update:modelValue', false);
 }
 
-async function confirm() {
+/**
+ * 加入库存。
+ * @param keepOpen `true` = 连续录入模式：保留已选位置，只重置食材与数量，弹框不关闭。
+ */
+async function confirm(keepOpen = false) {
   if (!canAdd.value || !selected.value || !locId.value) return;
   await items.add({ name: selected.value, quantity: qty.value, unit: unit.value || '个', locationId: locId.value });
   show(`已加入：${selected.value}`);
+  if (keepOpen) {
+    selected.value = null;
+    customName.value = '';
+    qty.value = 1;
+    return;
+  }
   close();
 }
 
@@ -81,66 +122,162 @@ function goLocations() {
 </script>
 
 <template>
-  <div v-if="modelValue" class="quick-add">
-    <div class="scrim" @click="close"></div>
-    <div class="sheet">
-      <div class="grabber"></div>
-      <h3>快速入库</h3>
+  <div v-if="modelValue">
+    <div class="absolute inset-0 bg-mask z-28" @click="close"></div>
+    <div
+      class="absolute left-0 right-0 bottom-0 bg-card rounded-t-3xl pt-2 px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] z-29 max-h-[86%] overflow-y-auto overscroll-contain no-scrollbar"
+    >
+      <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
+      <h3 class="text-[16px] font-semibold mb-3.5">快速入库</h3>
 
-      <div class="field">
-        <label>选食材</label>
-        <div class="grid9">
+      <div v-if="recentNames.length > 0" class="mb-3.5">
+        <div class="text-[12px] text-ink-2 mb-1.5">最近入库</div>
+        <div class="flex gap-1.5 flex-wrap">
+          <button
+            v-for="n in recentNames"
+            :key="n"
+            type="button"
+            class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+            :class="selected === n
+              ? 'bg-primary-600 border-primary-600 text-white font-medium'
+              : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+            @click="pickFood(n)"
+          >{{ n }}</button>
+        </div>
+      </div>
+
+      <div class="mb-3.5">
+        <div class="text-[12px] text-ink-2 mb-1.5">选食材</div>
+        <!--
+          九宫格固定 QUICK_FOODS 9 项 = 3 行，天然放得下，**不要**给这一层加 max-h / overflow：
+          之前的 max-h-[248px] 比 3 行实际高度（约 254px）小，会在格子内部挤出一点点滚动条，
+          鼠标/手指一划就整块跟着动。要滚也由弹框本身（外层 max-h-[86%]）承担。
+        -->
+        <div class="grid grid-cols-3 gap-2.5">
           <button
             v-for="f in QUICK_FOODS"
             :key="f"
-            class="tile"
-            :class="{ on: selected === f }"
-            @click="selected = f"
+            type="button"
+            class="bg-card border border-line rounded-md py-3 px-1 text-center cursor-pointer min-h-[76px] flex flex-col items-center justify-center gap-1.5 transition-colors"
+            :class="{ 'border-primary-600 bg-primary-50 ring-2 ring-primary-100': selected === f }"
+            @click="pickFood(f)"
           >
-            <span class="ic">{{ f.slice(0, 1) }}</span>
-            <span>{{ f }}</span>
+            <span class="w-8 h-8 rounded-full bg-primary-50 text-primary-700 flex items-center justify-center text-[14px] font-medium">{{ f.slice(0, 1) }}</span>
+            <span class="text-[12px] text-ink-1">{{ f }}</span>
           </button>
         </div>
       </div>
 
-      <button class="btn btn-ghost" style="margin-bottom: 14px" @click="goCustom">＋ 自定义食材</button>
+      <div class="mb-3.5">
+        <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-custom">或输入其它食材</label>
+        <input
+          id="qa-custom"
+          v-model="customName"
+          class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+          placeholder="如 鸭血 / 碱水面"
+        />
+      </div>
+
+      <van-button block class="mb-3.5" @click="goCustom">
+        <span class="inline-flex items-center gap-1.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+          自定义食材
+        </span>
+      </van-button>
 
       <template v-if="selected">
-        <div class="field">
-          <label>数量 / 单位</label>
-          <div class="stepper">
-            <button @click="qty = Math.max(1, qty - 1)" aria-label="减少">−</button>
-            <span class="val">{{ qty }}</span>
-            <button @click="qty++" aria-label="增加">＋</button>
+        <div class="mb-3.5">
+          <div class="text-[12px] text-ink-2 mb-1.5">数量 / 单位</div>
+          <div class="flex items-center gap-3 bg-card border border-line rounded-md px-2.5 py-1.5">
+            <button
+              type="button"
+              class="relative w-8 h-8 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
+              aria-label="减少"
+              @click="qty = Math.max(0.5, Math.round((qty - 1) * 100) / 100)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+            </button>
+            <input
+              v-model.number="qty"
+              class="flex-1 min-w-0 text-center text-[15px] font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
+              type="number"
+              step="0.5"
+              min="0.5"
+              aria-label="数量"
+            />
+            <button
+              type="button"
+              class="relative w-8 h-8 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
+              aria-label="增加"
+              @click="qty = Math.round((qty + 1) * 100) / 100"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+            </button>
           </div>
-          <input v-model="unit" class="input" style="margin-top: 8px" placeholder="单位，如 个 / 袋 / 斤" />
+          <div class="flex gap-1.5 flex-wrap mt-2">
+            <button
+              v-for="u in UNITS"
+              :key="u"
+              type="button"
+              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+              :class="unit === u
+                ? 'bg-primary-600 border-primary-600 text-white font-medium'
+                : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+              @click="unit = u"
+            >{{ u }}</button>
+          </div>
+          <div class="mt-2">
+            <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-unit">其它单位</label>
+            <input
+              id="qa-unit"
+              v-model="unit"
+              class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+              placeholder="如 把 / 根"
+            />
+          </div>
         </div>
 
-        <div class="field">
-          <label>存放位置</label>
-          <div class="wrap-seg">
+        <div class="mb-3.5">
+          <div class="text-[12px] text-ink-2 mb-1.5">存放位置</div>
+          <div class="flex gap-1.5 flex-wrap">
             <button
               v-for="l in locations.enabled"
               :key="l.id"
-              :class="{ on: locId === l.id }"
+              type="button"
+              class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+              :class="locId === l.id
+                ? 'bg-primary-600 border-primary-600 text-white font-medium'
+                : 'bg-card border-line text-ink-2 hover:border-line-strong'"
               @click="locId = l.id"
             >
-              <i class="pos-dot" :class="ENV_MAP[l.env].dotClass"></i>{{ l.name }}
+              <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
             </button>
-            <button class="add" @click="goLocations">＋新位置</button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 whitespace-nowrap text-[13px] text-ink-3 bg-transparent border border-dashed border-line rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+              @click="goLocations"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              新位置
+            </button>
           </div>
         </div>
 
-        <div class="note">{{ note }}</div>
+        <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">{{ note }}</div>
       </template>
 
-      <button class="btn btn-primary" :disabled="!canAdd" @click="confirm">加入库存</button>
+      <!--
+        主操作吸底：内容变长时不用滚到底才能点。
+        「加入并继续」保留已选位置，适合一次入库多件。
+      -->
+      <div class="sticky bottom-0 bg-card pt-3 pb-[calc(4px+env(safe-area-inset-bottom,0px))] mt-1 border-t border-line">
+        <van-button block type="primary" :disabled="!canAdd" class="mb-2" @click="confirm(true)">
+          加入并继续
+        </van-button>
+        <van-button block :disabled="!canAdd" @click="confirm(false)">
+          加入
+        </van-button>
+      </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.quick-add :deep(.pos-dot) {
-  margin-right: 4px;
-}
-</style>

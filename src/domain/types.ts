@@ -36,13 +36,18 @@ export interface EnvMeta {
   color: string;
 }
 
+/**
+ * ⚠️ 这里的 `color` 与 `src/styles/index.css` 的 `--env-*` 是同一组颜色的两份定义，
+ * **改任一侧都必须同步另一侧**。取值已按 WCAG 1.4.11（非文本图形 ≥3:1）校准，
+ * 括号内为对白底实测对比度。
+ */
 export const ENV_LIST: EnvMeta[] = [
-  { key: 'chilled', label: '冷藏', fullLabel: '冷藏 0–4℃', group: 'cold', dotClass: 'cold', color: '#4A8FD4' },
-  { key: 'frozen', label: '冷冻', fullLabel: '冷冻 −18℃', group: 'frozen', dotClass: 'frozen', color: '#7FA8D9' },
-  { key: 'cool', label: '阴凉', fullLabel: '常温阴凉', group: 'normal', dotClass: 'cool', color: '#8C7FA6' },
-  { key: 'dry', label: '干燥', fullLabel: '常温干燥', group: 'normal', dotClass: 'dry', color: '#C4A05A' },
-  { key: 'ventilated', label: '通风', fullLabel: '常温通风', group: 'normal', dotClass: 'air', color: '#6FA98C' },
-  { key: 'dark', label: '避光', fullLabel: '常温避光', group: 'normal', dotClass: 'dark', color: '#5E6B78' },
+  { key: 'chilled', label: '冷藏', fullLabel: '冷藏 0–4℃', group: 'cold', dotClass: 'cold', color: '#4A8FD4' }, // 3.40:1
+  { key: 'frozen', label: '冷冻', fullLabel: '冷冻 −18℃', group: 'frozen', dotClass: 'frozen', color: '#5B87BE' }, // 3.71:1
+  { key: 'cool', label: '阴凉', fullLabel: '常温阴凉', group: 'normal', dotClass: 'cool', color: '#8C7FA6' }, // 3.68:1
+  { key: 'dry', label: '干燥', fullLabel: '常温干燥', group: 'normal', dotClass: 'dry', color: '#A9823C' }, // 3.53:1
+  { key: 'ventilated', label: '通风', fullLabel: '常温通风', group: 'normal', dotClass: 'air', color: '#4F8A6E' }, // 4.04:1
+  { key: 'dark', label: '避光', fullLabel: '常温避光', group: 'normal', dotClass: 'dark', color: '#5E6B78' }, // 5.45:1
   { key: 'none', label: '不计', fullLabel: '不计保质期', group: 'normal', dotClass: 'dark', color: '#5E6B78' },
 ];
 
@@ -121,7 +126,21 @@ export interface ConsumeLog {
   unit: string;
   locationId: string;
   type: ConsumeType;
+  /**
+   * 本次金额 = 单价 × 消耗数量（见 `stores/items.consume` 的写入说明）。
+   * 明细里的「金额」列与「本月浪费金额」统计都读它，不是 `unitPrice`。
+   */
   price: number | null;
+  /**
+   * 消耗时的**单价**快照（元/单位），用于明细「单价」列。
+   * 旧日志无此字段（运行时为 `undefined`），展示以 `== null` 兜底为「-」。
+   */
+  unitPrice?: number | null;
+  /**
+   * 物品备注快照，明细「备注」列展示。
+   * 旧日志无此字段（运行时为 `undefined`），空时隐藏备注行。
+   */
+  note?: string | null;
   expireAt: string | null;
   overdueDays: number | null;
   at: number;
@@ -161,6 +180,17 @@ export interface ShoppingItem {
   deletedAt: number | null;
 }
 
+/**
+ * 外观主题模式。
+ *
+ * - `light` / `dark`：用户手动锁定；
+ * - `system`：跟随系统 `prefers-color-scheme`（默认）。
+ *
+ * `system` 只是**存储值**，运行时一定会被解析成 `light` 或 `dark`
+ * （Vant 的 `van-config-provider` 不认识 `system`）。解析在 `composables/useTheme.ts`。
+ */
+export type ThemeMode = 'light' | 'dark' | 'system';
+
 export interface Settings {
   id: 'singleton';
   schemaVersion: number;
@@ -172,6 +202,10 @@ export interface Settings {
   urgentDays: number;
   lastRemindAt: number | null;
   lastBackupAt: number | null;
+  /** 外观：主题模式，默认跟随系统 */
+  themeMode: ThemeMode;
+  /** 外观：主题色（`#rrggbb`）。非法值由 `domain/accent.ts` 兜底为 `DEFAULT_ACCENT` */
+  accent: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -187,6 +221,8 @@ export const DEFAULT_SETTINGS: Omit<Settings, 'createdAt' | 'updatedAt'> = {
   urgentDays: 3,
   lastRemindAt: null,
   lastBackupAt: null,
+  themeMode: 'system',
+  accent: '#228055',
 };
 
 export const SCHEMA_VERSION = 1;

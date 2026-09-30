@@ -50,21 +50,6 @@ export function freshnessOf(item: Item, today: string, settings: Pick<Settings, 
   return { state, label, remainDays: d, progress, sortKey: d };
 }
 
-export function badgeClass(state: FreshnessState): string {
-  switch (state) {
-    case 'fresh':
-      return 'b-fresh';
-    case 'soon':
-      return 'b-soon';
-    case 'urgent':
-      return 'b-urgent';
-    case 'over':
-      return 'b-over';
-    default:
-      return 'b-over';
-  }
-}
-
 export function barColor(state: FreshnessState): string {
   switch (state) {
     case 'fresh':
@@ -81,4 +66,69 @@ export function barColor(state: FreshnessState): string {
 /** 按剩余天数升序；不计保质期/未设置的排最后 */
 export function sortByFreshness<T extends { sortKey: number; name: string }>(list: T[]): T[] {
   return [...list].sort((a, b) => (a.sortKey - b.sortKey) || a.name.localeCompare(b.name, 'zh-Hans-CN'));
+}
+
+/* ==================== 列表分组 ==================== */
+
+/** 库存列表的四个展示分组；与六态 `FreshnessState` 是多对一关系 */
+export type FreshGroup = 'urgent' | 'soon' | 'fresh' | 'none';
+
+export const GROUP_LABEL: Record<FreshGroup, string> = {
+  urgent: '紧急待吃',
+  soon: '临期',
+  fresh: '新鲜',
+  none: '未设保质期',
+};
+
+/** 分组展示顺序：最需要处理的在最前 */
+export const GROUP_ORDER: FreshGroup[] = ['urgent', 'soon', 'fresh', 'none'];
+
+/**
+ * 六态 → 四组。`over`（已过期）并入 `urgent` 组的最前面，
+ * 因为它比「临期」更需要处理；`warn`（不建议存放）与 `none` 都归到「未设保质期」。
+ */
+export function groupOf(state: FreshnessState): FreshGroup {
+  switch (state) {
+    case 'over':
+    case 'urgent':
+      return 'urgent';
+    case 'soon':
+      return 'soon';
+    case 'fresh':
+      return 'fresh';
+    default:
+      return 'none'; // 'warn' | 'none'
+  }
+}
+
+export interface FreshGroupBundle<T> {
+  group: FreshGroup;
+  label: string;
+  items: T[];
+}
+
+/**
+ * 把**已按 `sortByFreshness` 排好序**的列表切成带分组头的段落。
+ *
+ * - 保持传入顺序，不做二次排序（组内顺序 = 剩余天数升序）；
+ * - 空组自动跳过，调用方无需再判空；
+ * - 返回的组顺序固定为 `GROUP_ORDER`。
+ *
+ * @example groupByFreshness([{ state: 'over' }, { state: 'fresh' }])
+ * // → [{ group: 'urgent', label: '紧急待吃', items: [over] },
+ * //    { group: 'fresh',  label: '新鲜',     items: [fresh] }]
+ */
+export function groupByFreshness<T extends { state: FreshnessState }>(list: T[]): FreshGroupBundle<T>[] {
+  const buckets = new Map<FreshGroup, T[]>();
+  for (const it of list) {
+    const g = groupOf(it.state);
+    const arr = buckets.get(g);
+    if (arr) arr.push(it);
+    else buckets.set(g, [it]);
+  }
+  return GROUP_ORDER.filter((g) => buckets.has(g)).map((g) => ({
+    group: g,
+    label: GROUP_LABEL[g],
+    items: buckets.get(g) as T[],
+  }));
 }

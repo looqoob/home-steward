@@ -11,18 +11,65 @@ import { useToast } from '@/composables/useToast';
 const { message, show } = useToast();
 show('已加入：牛奶');          // 默认 2200ms 后自动清空
 show('操作成功', 4000);        // 自定义时长
+
+// 带「撤销」动作按钮：停留时长自动提升到至少 5s
+const logId = await items.consume(id, 'consumed');
+show(`已记录用掉：${name}`, 2200, { text: '撤销', run: () => items.undoConsume(logId) });
 ```
 
 | 成员 | 类型 | 说明 |
 | --- | --- | --- |
 | `message` | `Ref<string>` | 当前提示文本，空串表示不显示 |
-| `show(text, ms?)` | `(text: string, ms?: number) => void` | 显示提示。`ms` 默认 `2200` |
+| `action` | `Ref<ToastAction \| null>` | 当前动作按钮（`{ text, run }`），无则为 `null` |
+| `show(text, ms?, action?)` | `(text: string, ms?: number, act?: ToastAction) => void` | 显示提示。`ms` 默认 `2200` |
+| `runAction()` | `() => void` | 执行当前动作并关闭 toast（App.vue 的按钮用） |
+| `close()` | `() => void` | 立即关闭 |
 
 ### 边界条件
+
+- **带 `action` 时停留时长自动取 `max(ms, 5000)`** —— 2.2s 来不及让人点「撤销」，这是刻意的兜底。
 
 - `message` 是**模块级单例 ref**（不在工厂函数内部创建），所以**任何地方调用 `useToast()` 拿到的都是同一份状态** —— 这是刻意设计，跨页面共享一个 toast。不要把它改成每个组件独立的状态。
 - 连续调用 `show` 会 `clearTimeout` 上一个定时器并重设，不会出现「后一条被前一条的定时器提前清掉」。
 - `<div v-if="message" class="toast">` 的渲染挂在 `App.vue` 根部，所以**调用方不需要在自己模板里写 toast 节点**。
+
+---
+
+## useTheme.ts — 外观主题（深浅 + 主题色）
+
+```ts
+import { useTheme } from '@/composables/useTheme';
+
+const theme = useTheme();
+theme.sync(settings.settings.themeMode, settings.settings.accent); // App.vue 里 watch 调用
+theme.resolved.value;   // 'light' | 'dark' —— 给 van-config-provider :theme 用
+theme.adjusted.value;   // 用户选的色是否被自动微调过
+theme.preview('#ff0000'); // 取色器拖动中预览：只改 DOM，不落库
+theme.refresh();          // 放弃预览、回到已保存值（组件卸载时调用）
+```
+
+| 成员 | 类型 | 说明 |
+| --- | --- | --- |
+| `mode` | `Readonly<Ref<ThemeMode>>` | 存储中的模式（可能是 `system`） |
+| `accent` | `Readonly<Ref<string>>` | 当前主色（已归一化） |
+| `resolved` | `Readonly<Ref<'light' \| 'dark'>>` | 解析后的实际模式 |
+| `adjusted` | `Readonly<Ref<boolean>>` | 主色是否被对比度校正过 |
+| `sync(mode, accent)` | `(ThemeMode, string) => void` | 设置 → DOM 的同步入口，值没变就不重算 |
+| `preview(hex)` | `(string) => void` | 临时预览（不落库、不写镜像） |
+| `refresh()` | `() => void` | 丢弃预览、恢复已保存值 |
+
+### 三条机制（改前必读）
+
+1. **`html[data-theme]` 而不是 `@media`**：深色变量挂在 `html[data-theme='dark']` 上（见 `styles/README.md`）。媒体查询无法被应用内状态覆盖 —— 用户手选浅色但系统是深色时会失效，所以 `system` 在 JS 里解析成实际值后写进 `data-theme`。
+2. **主题色整条色阶由 JS 写入 `<html>` 的 inline style**（`--primary-50…700`、`--focus-ring`、`--accent`）。inline 优先级高于 `:root`，CSS 里的色板只是首帧兜底。算法在 `domain/accent.ts`（纯函数，含 WCAG 对比度校正）。
+3. **首屏防闪烁**：`index.html` 的内联脚本在首帧前读 localStorage 镜像 `hs.theme` 并写好 `data-theme`。Dexie 异步读不到，所以设置额外镜像一份；**镜像只是首屏优化，真源永远是 IndexedDB**，读不到就用默认值、绝不阻塞。
+
+### 边界条件
+
+- `preview()` 不写镜像也不落库，所以**调用方必须在卸载时 `refresh()`**，否则预览色会残留到下一次真正落库。
+- 取色器 `input` 事件只预览、`change` 才落库 —— 反过来会在一次拖动里产生几十条 IndexedDB 写请求。
+- `resolved` 是给 Vant 的：`<van-config-provider :theme>` 只认 `'light' | 'dark'`，传 `system` 会失效。
+- 备份导入会整表替换 `settings`，`BackupView` 导入后重新 `load()` 了所有 store，所以主题会跟着变；**新增导入路径时要记得 reload settings**，否则主题不生效。
 
 ---
 

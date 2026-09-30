@@ -18,6 +18,7 @@
 | `locationRules.ts` | 位置删除校验、计数、排序值 |
 | `shoppingRules.ts` | 购物建议自动生成规则 |
 | `stats.ts` | 月度统计、位置分布、今日概览 |
+| `accent.ts` | 主题色：预设色板、WCAG 对比度校正、色阶派生（纯数学，可 Node 单测） |
 
 ---
 
@@ -176,9 +177,13 @@ fallbackDays('none', 'other');           // null
 | `FreshnessState` | 类型 | `'fresh' \| 'soon' \| 'urgent' \| 'over' \| 'warn' \| 'none'` |
 | `Freshness` | 接口 | `{ state, label, remainDays, progress, sortKey }` |
 | `freshnessOf` | `(item, today, settings) => Freshness` | 主函数，见下 |
-| `badgeClass` | `(state) => string` | 状态 → CSS 类（`'b-fresh'` 等） |
-| `barColor` | `(state) => string` | 状态 → 进度条颜色（CSS 变量字符串） |
+| `barColor` | `(state) => string` | 状态 → 进度条颜色（CSS 变量字符串 `var(--state-*-bar)`） |
 | `sortByFreshness` | `<T extends { sortKey: number; name: string }>(list: T[]) => T[]` | 按 sortKey 升序，同值按名称中文排序。**返回新数组，不改原数组** |
+| `FreshGroup` | 类型 | 库存列表的四个展示分组：`'urgent' \| 'soon' \| 'fresh' \| 'none'` |
+| `GROUP_LABEL` | `Record<FreshGroup, string>` | 分组 → 中文标题（紧急待吃 / 临期 / 新鲜 / 未设保质期） |
+| `GROUP_ORDER` | `FreshGroup[]` | 分组展示顺序，最需要处理的最前 |
+| `groupOf` | `(state: FreshnessState) => FreshGroup` | 六态 → 四组；`over` 并入 `urgent`，`warn` 并入 `none` |
+| `groupByFreshness` | `<T extends { state: FreshnessState }>(list: T[]) => FreshGroupBundle<T>[]` | 把已排序列表切成带分组头的段落，**空组自动跳过** |
 
 ### `freshnessOf(item, today, settings)`
 
@@ -213,7 +218,8 @@ item.expireAt 为空 →
 
 - `progress` 的分母优先取 `item.shelfLifeDays`（>0 时），否则退化为 `max(d, 1)`。
 - `progress` 被 `clamp` 到 `[0.04, 1]`：**过期固定显示 0.04**，保证进度条永远不完全消失（原型视觉要求）。
-- `badgeClass` / `barColor` 对 `'warn'` 和 `'none'` 走 `default` 分支（同 `over` 样式）。UI 一般不显示它们的进度条。
+- `barColor` 对 `'warn'` 和 `'none'` 走 `default` 分支（同 `over` 样式）。UI 一般不显示它们的进度条。
+- 徽章的**背景/前景配色**不再经由本模块（旧 `badgeClass` 已删除），改由 `ItemCard.vue` 的 `badgeColor` 映射（Tailwind 工具类 `bg-*-bg` / `text-*-fg`）负责。
 
 **示例**
 
@@ -227,6 +233,37 @@ const rows = items.active.map((i) => ({
   ...freshnessOf(i, today, { soonDays: 14, urgentDays: 3 }),
 }));
 const sorted = sortByFreshness(rows);   // 快过期的排最前
+```
+
+### 列表分组（`groupByFreshness`）
+
+六态 `FreshnessState` 对 UI 来说太细，列表展示用四组就够，映射关系：
+
+| FreshnessState | FreshGroup | 说明 |
+| --- | --- | --- |
+| `over` | `urgent` | 已过期比临期更急，排在该组最前（sortKey 为负） |
+| `urgent` | `urgent` | 紧急待吃 |
+| `soon` | `soon` | 临期 |
+| `fresh` | `fresh` | 新鲜 |
+| `warn` | `none` | 不建议存放 —— 没有到期日，与「未设保质期」同组 |
+| `none` | `none` | 未设保质期 |
+
+**边界条件**
+
+- 传入的列表**必须已经排好序**：`groupByFreshness` 只做分桶，不排序，组内顺序即传入顺序。
+- 空组不会出现（内部 `filter` 掉了），调用方无需再判空。
+- 返回的组顺序固定为 `GROUP_ORDER`，与传入顺序无关。
+
+```ts
+import { groupByFreshness, freshnessOf, sortByFreshness } from '@/domain/freshness';
+
+const rows = sortByFreshness(
+  items.active.map((i) => ({ item: i, ...freshnessOf(i, today, settings) })),
+).map((r) => ({ ...r, state: r.state }));
+
+groupByFreshness(rows);
+// → [{ group: 'urgent', label: '紧急待吃', items: [...] },
+//    { group: 'fresh',  label: '新鲜',     items: [...] }]
 ```
 
 ---
@@ -393,7 +430,7 @@ suggestions.forEach((s) => console.log(s.name, REASON_LABEL[s.reason], s.why));
 | 导出 | 签名 | 说明 |
 | --- | --- | --- |
 | `MonthStats` | 接口 | `{ inbound, consumed, wastedCount, wastedAmount }` |
-| `monthStats` | `(items, logs, now?) => MonthStats` | 本月入库件数 / 消耗件数 / 浪费件数与金额 |
+| `monthStats` | `(items, logs, now?) => MonthStats` | 本月入库件数 / 消耗与浪费**数量**（累加日志 `quantity`）/ 浪费金额 |
 | `LocationSlice` | 接口 | `{ locationId, name, count, color, percent }` |
 | `locationDistribution` | `(items, locations, colorOf) => LocationSlice[]` | 位置分布（`count > 0` 才返回，按数量降序） |
 | `TodayOverview` | 接口 | `{ dueToday, overdue }` |
@@ -403,7 +440,8 @@ suggestions.forEach((s) => console.log(s.name, REASON_LABEL[s.reason], s.why));
 
 - `monthStats` 的「本月」按传入 `now` 的月份判定；日志按 `at` 字段判定（不是 `createdAt`）。
 - `monthStats` 统计入库时**包含**已用完（`finished`）的商品。
-- `wastedAmount` 累加 `l.price ?? 0`，没填价格的不报错、计 0。
+- `wastedAmount` 累加 `l.price ?? 0`。日志里的 `price` 已是**本次金额**（`单价 × 本次数量`，由 `items.consume` 折算），没填价格的不报错、计 0。
+- `consumed` / `wastedCount` 是**数量口径**（累加 `l.quantity`）：吃掉 2 个鸡蛋记 2，而不是一次操作记 1 件。跨单位（个/袋/盒）直接相加是本实现的粗略口径，改统计语义时注意。
 - `locationDistribution` 的分母 `total = live.length || 1`，所以**库存为空时 percent 全为 0 而不是 NaN**；但因为过滤了 `count > 0`，此时返回空数组。
 - `todayOverview` 只统计有 `expireAt` 的在库商品。
 
@@ -417,6 +455,48 @@ const m = monthStats(items.list, items.logs);
 const slices = locationDistribution(items.list, locations.all, (env) => ENV_MAP[env].color);
 const today = todayOverview(items.list, todayStr(), 3);
 ```
+
+---
+
+## accent.ts — 主题色
+
+用户选的主色**不能直接用**：可能是荧光黄（白字读不出）、近白（按钮陷进浅色底）或近黑（深色模式里看不见）。
+这个文件负责把任意 hex 校正成可用主色，并派生整条色阶。纯数学、零依赖，可以在 Node 里直接跑。
+
+```ts
+import { ACCENT_PRESETS, accentScale, contrastRatio, resolveAccent } from '@/domain/accent';
+
+resolveAccent('#ffff00', 'light');  // { hex: '#7a7a00', adjusted: true } —— 荧光黄被压暗
+accentScale('#228055', 'dark');     // { '--primary-50': '#173027', …, '--focus-ring': '#7fc9a5' }
+contrastRatio('#ffffff', '#228055'); // 4.9
+```
+
+| 成员 | 说明 |
+| --- | --- |
+| `ACCENT_PRESETS` | 6 个预设色（`{ id, name, hex }`），深浅两套都做过对比度自测 |
+| `DEFAULT_ACCENT` | 默认色，与 `DEFAULT_SETTINGS.accent` 同源（不要在别处再写一份） |
+| `THEME_MODES` | 三档选项（跟随系统 / 浅色 / 深色），顺序即 UI 顺序 |
+| `normalizeHex(input)` | `#abc` → `#aabbcc`，非法返回 `null` |
+| `contrastRatio(a, b)` | WCAG 对比度（1–21） |
+| `resolveAccent(hex, mode)` | 校正主色 → `{ hex, adjusted }` |
+| `accentScale(hex, mode)` | 派生色阶 → `--primary-50/100/500/600/700` + `--focus-ring` |
+
+### 两条硬约束（顺序即优先级）
+
+1. **白字在主色上 ≥ 4.5:1** —— 主色是按钮底色、按钮字是白色，不满足就是不可读。
+2. **主色与所在模式的底色 ≥ 3:1** —— 浅色模式太浅、深色模式太暗，按钮会「陷进」背景（WCAG 1.4.11 非文本对比）。
+
+冲突时（深色模式下选了又暗又灰的色）**文字对比度优先**。`adjusted: true` 时 UI 必须提示用户，否则他以为自己选的色没生效。
+
+### 语义色不参与
+
+环境色（`ENV_MAP` 的 chilled/frozen/…）与新鲜度四态（fresh/soon/urgent/over）**不跟随主题色**。
+「冷藏=蓝、临期=橙、过期=灰」是用户已建立的语义，跟着品牌色变会失去辨识度。
+
+### 为什么不走 CSS `color-mix()`
+
+`color-mix()` 做不了「不达标就继续调」的闭环，而且老 WebView（Capacitor 壳）未必支持。
+这里在 JS 里算完，由 `composables/useTheme.ts` 写成 `<html>` 的 inline style，最稳。
 
 ---
 

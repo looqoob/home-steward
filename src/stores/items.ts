@@ -10,6 +10,11 @@ import { lookupFood } from '@/data/dict';
 import { useDictStore } from './dict';
 import { useLocationsStore } from './locations';
 
+/** 数量保留 2 位小数：0.5 斤这类输入参与加减后不会留下 0.30000000000000004 */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export const useItemsStore = defineStore('items', () => {
   const list = ref<Item[]>([]);
   const logs = ref<ConsumeLog[]>([]);
@@ -89,15 +94,27 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   /**
-   * 消耗一件商品：写一条日志，并把商品状态改为 `'finished'`。
+   * 消耗商品，**支持部分消耗**（如「一次买了 20 个鸡蛋，这次只用 2 个」）。
    *
    * @param type `'consumed'` 用掉了 / `'wasted'` 扔掉了。后者会计入「本月浪费金额」。
-   * @remarks 方法本身不校验重复调用；UI 层对已 finished 的商品隐藏了入口。
-   * @example await items.consume(id, 'wasted')
+   * @param qty 本次消耗数量，**缺省 = 全部用完**（保持「一键清空」的手感）。
+   *            取值会被钳到 `(0, 剩余数量]`：给多了按剩余算，给 0 / 负数直接不写日志。
+   * @returns 新写入的日志 id，可传给 `undoConsume()` 撤销；商品不存在或 qty 非法时返回 `''`。
+   * @remarks
+   * - **数量不足时不改状态**：`quantity` 扣减后商品仍是 `in_stock`，继续留在库存里；
+   *   只有 `qty >= 剩余数量` 才置 `'finished'`（此时 `quantity` 保留原值不归零，供日志对账）。
+   * - 日志的 `price` 记的是**本次金额**（`单价 × 消耗数量`）——`Item.price` 的语义是单价。
+   * @example
+   * await items.consume(eggId, 'consumed', 2);  // 20 → 18，仍在库
+   * await items.consume(eggId, 'wasted');       // 剩下的全扔掉
    */
-  async function consume(id: string, type: ConsumeType) {
+  async function consume(id: string, type: ConsumeType, qty?: number): Promise<string> {
     const cur = byId(id);
-    if (!cur) return;
+    if (!cur) return '';
+    const remain = cur.quantity;
+    const take = Math.min(remain, qty === undefined ? remain : round2(qty));
+    if (take <= 0) return '';
+
     const now = Date.now();
     const today = todayStr(now);
     let overdueDays: number | null = null;
@@ -109,11 +126,16 @@ export const useItemsStore = defineStore('items', () => {
       id: newId(),
       itemId: cur.id,
       name: cur.name,
-      quantity: cur.quantity,
+      quantity: take,
       unit: cur.unit,
       locationId: cur.locationId,
       type,
-      price: cur.price,
+      // Item.price 是单价，日志要记本次金额，否则「扔掉 2 个」会记成整份的钱
+      price: cur.price === null ? null : round2(cur.price * take),
+      // 单价快照：明细「单价」列用；与上面的「金额」是两个维度，别混
+      unitPrice: cur.price === null ? null : cur.price,
+      // 备注快照：明细「备注」列用。item.note 之后可能改，消耗时定格一份
+      note: cur.note ?? null,
       expireAt: cur.expireAt,
       overdueDays,
       at: now,
@@ -121,17 +143,65 @@ export const useItemsStore = defineStore('items', () => {
       deletedAt: null,
     };
     await db.logs.put(log);
-    await db.items.put({ ...cur, status: 'finished', updatedAt: now });
+    if (take >= remain) {
+      await db.items.put({ ...cur, status: 'finished', updatedAt: now });
+    } else {
+      await db.items.put({ ...cur, quantity: round2(remain - take), updatedAt: now });
+    }
+    await load();
+    return log.id;
+  }
+
+  /**
+   * 撤销一次消耗：删掉那条日志，把商品状态改回 `'in_stock'`，**并把数量加回去**。
+   * 供 toast 的「撤销」按钮使用；日志已不存在时静默返回。
+   *
+   * @param logId `consume()` 返回的日志 id
+   * @remarks
+   * 整条消耗时 `quantity` 并未被扣减（仍是原值），只有**部分消耗**需要回加；
+   * 靠 `status` 判断：撤销时若商品仍是 `in_stock`，说明当初是部分消耗。
+   * @example await items.undoConsume(logId)
+   */
+  async function undoConsume(logId: string) {
+    const log = logs.value.find((l) => l.id === logId);
+    if (!log) return;
+    const cur = list.value.find((i) => i.id === log.itemId);
+    if (cur) {
+      const addBack = cur.status === 'in_stock' ? log.quantity : 0;
+      await db.items.put({
+        ...cur,
+        status: 'in_stock',
+        quantity: addBack ? round2(cur.quantity + addBack) : cur.quantity,
+        updatedAt: Date.now(),
+      });
+    }
+    await db.logs.hardDelete(logId);
     await load();
   }
 
   /**
    * 软删除商品（不写消耗日志）。用于「手滑加错了」的场景，
    * 与 `consume` 的区别是不影响统计。
-   * @example await items.remove(id)
+   *
+   * @returns 删除前的商品快照；把它传给 `restore()` 即可撤销。
+   * @remarks `db.items.all()` 会过滤掉 `deletedAt` 非空的行，所以撤销必须靠这份快照，查不回来了。
+   * @example const snap = await items.remove(id);
    */
-  async function remove(id: string) {
+  async function remove(id: string): Promise<Item | undefined> {
+    const cur = byId(id);
     await db.items.softDelete(id);
+    await load();
+    return cur;
+  }
+
+  /**
+   * 撤销软删除：把 `deletedAt` 置回 `null` 后整条写回。
+   *
+   * @param snapshot `remove()` 返回的快照
+   * @example await items.restore(snap)
+   */
+  async function restore(snapshot: Item) {
+    await db.items.put({ ...snapshot, deletedAt: null, updatedAt: Date.now() });
     await load();
   }
 
@@ -154,5 +224,5 @@ export const useItemsStore = defineStore('items', () => {
     await load();
   }
 
-  return { list, logs, loaded, active, load, byId, add, save, moveTo, setManualShelfLife, consume, remove, recomputeAll };
+  return { list, logs, loaded, active, load, byId, add, save, moveTo, setManualShelfLife, consume, undoConsume, remove, restore, recomputeAll };
 });

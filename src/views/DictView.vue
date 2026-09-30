@@ -57,76 +57,96 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
 </script>
 
 <template>
-  <div class="screen">
+  <div class="flex flex-col bg-page h-full w-full max-w-[480px] mx-auto relative overflow-hidden">
     <NavBar title="保质期字典" show-back @back="router.back()" />
 
-    <div class="body">
-      <div class="section-title"><span>我的自定义</span></div>
-      <div v-if="dict.entries.length === 0" class="empty" style="padding: 20px">
-        还没有自定义，点击下方添加
-      </div>
+    <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
+      <div class="text-[12px] text-ink-3 mt-2 mb-2">我的自定义</div>
+      <div v-if="dict.entries.length === 0" class="text-center py-5 px-5 text-[13px] text-ink-3">还没有自定义，点击下方添加</div>
       <div
         v-for="e in dict.entries"
         :key="e.id"
-        class="pos-row"
+        class="flex items-center gap-3 bg-card border border-line rounded-md p-3 mb-2 shadow-card"
       >
-        <div class="ic">{{ e.displayName.slice(0, 1) }}</div>
-        <div class="meta">
-          <div class="n">{{ e.displayName }}</div>
-          <div class="e">{{ ENV_MAP[e.env].label }} · {{ shelfLifeText(e.days) }}<span v-if="e.reason"> · {{ e.reason }}</span></div>
+        <div class="w-8 h-8 rounded-md flex-none flex items-center justify-center text-[13px] font-medium text-ink-2 bg-sunken">{{ e.displayName.slice(0, 1) }}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-[14px] font-medium">{{ e.displayName }}</div>
+          <div class="text-[12px] text-ink-3 mt-0.5">{{ ENV_MAP[e.env].label }} · {{ shelfLifeText(e.days) }}<span v-if="e.reason"> · {{ e.reason }}</span></div>
         </div>
-        <button class="icon-btn" aria-label="恢复默认" @click="reset(e)">↺</button>
+        <button class="relative w-8 h-8 flex items-center justify-center rounded-md text-ink-3 cursor-pointer before:absolute before:content-[''] before:-inset-2" aria-label="恢复默认" @click="reset(e)">↺</button>
       </div>
 
-      <div class="section-title"><span>添加 / 覆盖自定义</span></div>
-      <div class="panel" style="padding: 16px">
-        <div class="field">
-          <label>食材名称（可与内置同名以覆盖）</label>
-          <input v-model="form.name" class="input" placeholder="如 西红柿" />
+      <div class="text-[12px] text-ink-3 mt-2 mb-2">添加 / 覆盖自定义</div>
+      <div class="bg-card border border-line rounded-lg p-4 mb-3 shadow-card">
+        <div class="mb-3.5">
+          <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-name">食材名称</label>
+          <input
+            id="dict-name"
+            v-model="form.name"
+            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            placeholder="如 西红柿"
+          />
         </div>
-        <div class="field">
-          <label>环境</label>
-          <div class="wrap-seg">
+        <div class="mb-3.5">
+          <label class="block text-[12px] text-ink-2 mb-1.5">环境</label>
+          <div class="flex gap-1.5 flex-wrap">
             <button
               v-for="e in ENV_LIST"
               :key="e.key"
-              :class="{ on: form.env === e.key }"
+              type="button"
+              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+              :class="form.env === e.key
+                ? 'bg-primary-600 border-primary-600 text-white font-medium'
+                : 'bg-card border-line text-ink-2 hover:border-line-strong'"
               @click="form.env = e.key"
             >{{ e.label }}</button>
           </div>
         </div>
-        <div class="field">
-          <label>保质期（天）</label>
-          <input v-model="form.days" type="number" min="1" class="input" placeholder="如 7" />
+        <div class="mb-3.5">
+          <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-days">保质期（天）</label>
+          <input
+            id="dict-days"
+            v-model="form.days"
+            type="number"
+            min="1"
+            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            placeholder="如 7"
+          />
         </div>
-        <div class="field">
-          <label>备注（可选，如 不建议原因）</label>
-          <input v-model="form.reason" class="input" placeholder="如 冷藏易发芽" />
+        <div class="mb-3.5">
+          <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-reason">备注</label>
+          <input
+            id="dict-reason"
+            v-model="form.reason"
+            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            placeholder="如 冷藏易发芽"
+          />
         </div>
-        <button class="btn btn-primary" @click="submitCustom">保存</button>
+        <van-button block type="primary" @click="submitCustom">保存</van-button>
       </div>
 
-      <div class="section-title"><span>内置参考（{{ allBuiltinFoods().length }} 种）</span></div>
-      <div v-for="g in groups" :key="g.cat" class="panel" style="padding: 14px">
-        <h3>{{ g.label }}</h3>
+      <div class="text-[12px] text-ink-3 mt-2 mb-2">内置参考（{{ allBuiltinFoods().length }} 种）</div>
+      <div v-for="g in groups" :key="g.cat" class="bg-card border border-line rounded-lg p-3.5 mb-3 shadow-card">
+        <h3 class="text-[13px] font-semibold mb-3.5">{{ g.label }}</h3>
         <div
           v-for="f in g.foods"
-          :key="f.key"
-          style="display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); cursor: pointer"
+          class="flex items-center gap-2 py-1.5 border-b border-dashed border-line cursor-pointer"
           @click="prefill(f.key)"
         >
-          <span style="font-size: 14px; font-weight: 500; min-width: 64px">{{ f.key }}</span>
-          <span style="flex: 1; display: flex; flex-wrap: wrap; gap: 6px">
+          <span class="text-[14px] font-medium min-w-[64px] max-w-[96px] truncate">{{ f.key }}</span>
+          <span class="flex-1 flex flex-wrap gap-1.5">
             <span
               v-for="(days, env) in f.envs"
               :key="env"
-              class="loc-tag"
+              class="inline-flex items-center text-[12px] text-ink-2 bg-sunken px-1.5 py-0.5 rounded"
             >{{ ENV_MAP[env as EnvType].label }} {{ shelfLifeText(days as number) }}</span>
           </span>
         </div>
       </div>
 
-      <div class="note">点击任意内置食材可快速填到上方表单进行覆盖。字典未覆盖的组合会按品类 / 全局默认值兜底。</div>
+      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed">
+        点击任意内置食材可快速填到上方表单进行覆盖。字典未覆盖的组合会按品类 / 全局默认值兜底。
+      </div>
     </div>
   </div>
 </template>

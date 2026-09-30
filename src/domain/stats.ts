@@ -4,9 +4,9 @@ import { diffDays, fromEpoch, monthKey, todayStr } from './dates';
 export interface MonthStats {
   /** 本月入库件数 */
   inbound: number;
-  /** 本月消耗件数 */
+  /** 本月消耗**数量**（累加日志 quantity；支持部分消耗后不再是「日志条数」） */
   consumed: number;
-  /** 本月浪费件数 */
+  /** 本月浪费**数量**（累加日志 quantity） */
   wastedCount: number;
   /** 本月浪费金额 */
   wastedAmount: number;
@@ -17,7 +17,10 @@ export interface MonthStats {
  *
  * - 入库按 `Item.storedAt` 的月份计，**包含**已用完（`finished`）的商品；
  * - 消耗 / 浪费按 `ConsumeLog.at`（事件发生时间，不是 `createdAt`）的月份计；
- * - 浪费金额累加 `price ?? 0`，没填价格的商品计 0，不报错。
+ * - 消耗 / 浪费累加的是 `ConsumeLog.quantity`（**数量口径**）：吃掉 2 个鸡蛋记 2，
+ *   而不是「一次操作记 1 件」；
+ * - 浪费金额累加 `price ?? 0`。日志里的 `price` 已是「单价 × 本次数量」的**本次金额**，
+ *   没填价格的商品计 0，不报错。
  *
  * @param now epoch 毫秒，决定「本月」是哪个月。默认 `Date.now()`，便于测试。
  * @example const { inbound, consumed, wastedCount, wastedAmount } = monthStats(items, logs);
@@ -35,9 +38,9 @@ export function monthStats(items: Item[], logs: ConsumeLog[], now: number = Date
   for (const l of logs) {
     if (l.deletedAt) continue;
     if (monthKey(fromEpoch(l.at)) !== key) continue;
-    if (l.type === 'consumed') consumed++;
+    if (l.type === 'consumed') consumed += l.quantity;
     else {
-      wastedCount++;
+      wastedCount += l.quantity;
       wastedAmount += l.price ?? 0;
     }
   }

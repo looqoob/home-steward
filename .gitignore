@@ -21,6 +21,9 @@ coverage/
 sw.js.map
 workbox-*.js.map
 
+# 无头浏览器验证时产生的临时截图（每次验证都会覆盖，不入库）
+shots/
+
 # 环境变量（任何以 .env* 开头的本地配置都不入库）
 .env
 .env.*

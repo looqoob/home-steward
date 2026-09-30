@@ -1,11 +1,51 @@
 import { fileURLToPath, URL } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
+import tailwindcss from '@tailwindcss/vite';
+import Components from 'unplugin-vue-components/vite';
+import { VantResolver } from 'unplugin-vue-components/resolvers';
 import { VitePWA } from 'vite-plugin-pwa';
+
+/**
+ * 把 Vant 自带样式整体放进低优先级的 `@layer vant`。
+ *
+ * 为什么必须这么做：Vant 的 `style/base.css` 里有几条**全局元素选择器**（`input,button,textarea{color:inherit;font:inherit}`、
+ * `body{font-family:...}`、`*:focus{outline:none}`）。这些规则是 **unlayered** 的，而 Tailwind v4 的工具类在
+ * `@layer utilities` 里 —— 按 CSS 层叠规则，**未分层样式永远压过任何分层样式**，与选择器权重、加载顺序都无关。
+ * 结果就是所有 `text-*` / `font-*` 工具类在 `<button>`、`<input>` 上集体失效（选中态文字变黑、FAB 图标变黑、
+ * 字号字重失效、焦点环消失）。
+ *
+ * 把 Vant 装进 `@layer vant` 后，它在层序里低于 base/components/utilities（层序由 `src/styles/index.css`
+ * 首行的 `@layer` 声明决定），Tailwind 工具类重新生效，且不需要任何 `!important`。
+ */
+function vantCssLayer(): Plugin {
+  // 层序声明随 Vant 的 CSS 一起下发：Vant 的样式文件在构建产物里可能排在
+  // src/styles/index.css 之前（见 dist/index.html 的 <link> 顺序），层序由「第一次出现」决定，
+  // 所以每个 Vant CSS 文件都要自带一份完整声明，保证先加载的那个建立出正确顺序。
+  const ORDER = '@layer theme, base, vant, components, utilities;';
+  return {
+    name: 'vant-css-layer',
+    enforce: 'pre',
+    transform(code, id) {
+      const normalized = id.replace(/\\/g, '/');
+      if (!normalized.endsWith('.css')) return null;
+      if (!normalized.includes('/node_modules/vant/')) return null;
+      return { code: `${ORDER}\n@layer vant {\n${code}\n}`, map: null };
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     vue(),
+    vantCssLayer(),
+    // Tailwind v4：通过 @tailwindcss/vite 注入，样式在 src/styles/index.css 中用 @import "tailwindcss"
+    tailwindcss(),
+    // Vant 按需引入：模板里写 <van-button> 等即自动引入组件与对应样式，不打包未用到的组件
+    Components({
+      dts: 'src/components.d.ts',
+      resolvers: [VantResolver()],
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       // 手动注册：原生壳里必须跳过 SW，否则 APK 内会缓存旧代码
@@ -39,13 +79,18 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  css: {
-    preprocessorOptions: { scss: { api: 'modern-compiler' } as Record<string, unknown> },
-  },
   build: {
     target: 'es2020',
     // 中文文件名资源在部分 WebView 上有问题，统一用 ASCII 命名
     assetsInlineLimit: 4096,
   },
   server: { host: 'localhost', port: 5173 },
+  // 线上部署（反代域名）下预览服务必须放行 Host，否则 Vite 会返回 "Blocked request"
+  // 端口读 $PORT：部署沙箱把它注入给服务进程，命令行里展开不可靠
+  preview: {
+    host: '0.0.0.0',
+    allowedHosts: true,
+    port: Number(process.env.PORT) || 4173,
+    strictPort: true,
+  },
 });

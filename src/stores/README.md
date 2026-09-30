@@ -64,8 +64,10 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 | `save` | `(item: Item) => Promise<void>` | 整条覆盖写入，自动刷 `updatedAt` |
 | `moveTo` | `(id, locationId) => Promise<void>` | 切换位置并**重算到期日**（`storedAt` 不变） |
 | `setManualShelfLife` | `(id, days: number \| null) => Promise<void>` | 设/清手填保质期并重算。`days <= 0` 归一化为 `null`（即关闭手填） |
-| `consume` | `(id, type: ConsumeType) => Promise<void>` | 用掉 / 扔掉：写一条 `ConsumeLog`，并把商品置 `'finished'` |
-| `remove` | `(id) => Promise<void>` | 软删除（不写日志，用于误添加） |
+| `consume` | `(id, type: ConsumeType, qty?: number) => Promise<string>` | 用掉 / 扔掉，**支持部分消耗**：`qty` 缺省 = 全部（置 `'finished'`）；`qty < 剩余` 时只扣 `quantity`、状态保持 `'in_stock'`。**返回日志 id**（商品不存在或 `qty <= 0` 时返回 `''`） |
+| `undoConsume` | `(logId: string) => Promise<void>` | 撤销一次消耗：删掉该日志、状态改回 `'in_stock'`，**部分消耗还会把数量加回去** |
+| `remove` | `(id) => Promise<Item \| undefined>` | 软删除（不写日志，用于误添加）。**返回删除前的快照** |
+| `restore` | `(snapshot: Item) => Promise<void>` | 撤销软删：把 `deletedAt` 置回 `null` 整条写回 |
 | `recomputeAll` | `() => Promise<void>` | 用当前字典重算所有在库商品的到期日（**字典变更后必须调**） |
 
 ### 边界条件
@@ -73,7 +75,13 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 - `add` 若找不到 `input.locationId` 对应的位置，`envOf` 会退化成 `'cool'`，不会抛错。
 - `moveTo` / `setManualShelfLife` 如果商品不存在 → **静默返回**，不抛错。
 - `consume` 会计算 `overdueDays`（过期则为过期天数，否则 0；无 `expireAt` 时为 `null`），写进日志供「本月浪费金额」统计使用。
+- `consume` 写入的 `ConsumeLog` 含两个**快照字段**：`unitPrice`（消耗时单价，`Item.price` 原样）与 `note`（物品备注 `item.note` 快照）。「消耗明细」页的「单价」「备注」列读它们；旧日志无这两字段（运行时 `undefined`），展示以 `== null` 兜底。「金额」读的是 `log.price`（= 单价 × 数量），**不是** `unitPrice`。
+- `consume` 的 `qty` 会被钳到 `(0, 剩余数量]`：给多了按剩余算，`0` / 负数不写日志直接返回 `''`。数量保留 2 位小数（`0.5 斤` 这类输入不产生浮点残留）。
+- **部分消耗的日志 `price` 是「单价 × 本次数量」**——`Item.price` 的语义是单价，直接抄过去会把「扔 2 个」记成整份的钱。
+- `undoConsume` 靠 `status` 区分整条 / 部分：撤销时商品仍是 `'in_stock'` 视为部分消耗，回加 `log.quantity`；已是 `'finished'` 视为整条消耗，数量不动（整条消耗本来就未扣量）。
 - `consume` 不会重复二次消耗：商品变 `'finished'` 后就不在 `active` 里了，但**方法本身不校验**，重复调用会再写一条日志。UI 层的按钮已隐藏，暂不加防御。
+- **`remove` 必须返回快照**：`db.items.all()` 会过滤掉 `deletedAt` 非空的行，删完就查不回来了，撤销只能靠这份快照。
+- `undoConsume` 找不到日志时**静默返回**；`restore` 不校验 `deletedAt`，传错对象会直接写回。
 - **`recomputeAll` 只处理 `active`（在库）商品**，历史记录的天数快照不会被改写。
 
 ### 示例
@@ -92,9 +100,16 @@ await items.moveTo(itemId, pantryId);
 // 手填 30 天（优先级最高，后续换位置也不会被字典覆盖）
 await items.setManualShelfLife(itemId, 30);
 
-// 用掉了
-await items.consume(itemId, 'consumed');
-await items.consume(itemId, 'wasted');
+// 用掉了 —— 返回日志 id，可用于撤销
+const logId = await items.consume(itemId, 'consumed');
+await items.undoConsume(logId);
+
+// 部分消耗：20 个鸡蛋一次只用 2 个 → 20 变 18，仍在库
+await items.consume(eggId, 'consumed', 2);
+
+// 误添加后删除 —— 返回快照，可用于撤销
+const snap = await items.remove(itemId);
+if (snap) await items.restore(snap);
 ```
 
 ---

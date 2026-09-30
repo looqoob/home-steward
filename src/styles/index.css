@@ -1,0 +1,268 @@
+/*
+ * 层序声明：必须写在 @import "tailwindcss" 之前。
+ *
+ * `@layer vant` 用来装 Vant 自带样式（见 vite.config.ts 的 vantCssLayer 插件）。
+ * 它必须排在 utilities/components 之前 —— 否则 Vant 那些 unlayered 的全局元素选择器
+ * （`input,button,textarea{color:inherit;font:inherit}` 等）会反过来压过所有 Tailwind 工具类。
+ * 层序由「第一次出现」决定，所以声明要早于 Tailwind 自己的 `@layer theme, base, components, utilities;`。
+ */
+@layer theme, base, vant, components, utilities;
+
+@import "tailwindcss";
+
+/*
+ * 设计 Token —— 原 _tokens.scss / base.scss 的 CSS 变量唯一真源。
+ * 深色模式只覆盖变量（见下方 @media），组件一律用 var(--bg-card) 等，绝不在 Tailwind 里硬编码颜色。
+ */
+:root {
+  /*
+   * 主色色阶。这里是**默认色板**（首帧、JS 还没跑时的兜底）；
+   * 用户改过主题色后，`useTheme` 会把 `--primary-*` 作为 inline style 写到 `<html>` 上覆盖它们。
+   * `--accent` 同理：始终等于当前生效的 `--primary-600`（可能被对比度校正过）。
+   */
+  --accent: #228055;
+  --primary-50: #e8f5ef;
+  --primary-100: #cfe9dc;
+  --primary-500: #2e9e6b;
+  --primary-600: #228055;
+  --primary-700: #1a6442;
+
+  --state-fresh-bg: #e8f5ef; --state-fresh-fg: #1a6442; --state-fresh-bar: #2e9e6b;
+  --state-soon-bg: #fbeeda; --state-soon-fg: #7a4e0f; --state-soon-bar: #e0952f;
+  --state-urgent-bg: #fbeae8; --state-urgent-fg: #8e2f27; --state-urgent-bar: #d9534a;
+  --state-over-bg: #f0eae9; --state-over-fg: #6e322e; --state-over-bar: #a9857f;
+
+  --bg-page: #f6f7f6;
+  --bg-card: #ffffff;
+  --bg-sunken: #eff2f0;
+  --line: #e4e8e5;
+  --line-strong: #d2d8d4;
+  /* 弹层遮罩：三个底部弹框共用，别再写死 bg-black/40（深色模式下会灰得看不出层次） */
+  --mask: rgba(20, 30, 25, 0.45);
+  --text-1: #222624;
+  --text-2: #5f6763;
+  --text-3: #6b736e;
+  --danger: #8e2f27;
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(20, 30, 25, 0.06);
+  --shadow-pop: 0 6px 24px rgba(20, 30, 25, 0.12);
+  --ease: 200ms ease;
+
+  --env-chilled: #4a8fd4;
+  --env-frozen: #5b87be;
+  --env-cool: #8c7fa6;
+  --env-dry: #a9823c;
+  --env-ventilated: #4f8a6e;
+  --env-dark: #5e6b78;
+
+  /* 焦点环：浅色用 primary-700；深色模式另覆盖（见下方媒体查询） */
+  --focus-ring: #1a6442;
+}
+
+/*
+ * 深色模式：只覆盖 CSS 变量，不动组件逻辑。每个值都按「对该深色底 ≥4.5:1（文字）/ ≥3:1（图形）」挑过。
+ *
+ * ⚠️ 选择器是 `html[data-theme='dark']`，**不是** `@media (prefers-color-scheme: dark)`：
+ * 媒体查询无法被应用内状态覆盖 —— 用户手选「浅色」但系统是深色时就会失效。
+ * `data-theme` 由 `index.html` 的内联脚本（首帧前，读 localStorage 镜像）与
+ * `composables/useTheme.ts`（运行中）共同维护，`system` 模式在 JS 里已解析成 light/dark。
+ * 本应用是纯客户端 SPA，没有 JS 就没有任何内容，所以不额外保留 `@media` 兜底。
+ */
+html[data-theme='dark'] {
+  --bg-page: #141816;
+  --bg-card: #1c211f;
+  --bg-sunken: #232926;
+  --line: #2e3532;
+  --line-strong: #3d453f;
+  --mask: rgba(0, 0, 0, 0.6);
+
+  --text-1: #e8ece9;
+  --text-2: #a8b0ac;
+  --text-3: #8b938e;
+
+  /* 默认主色的深色版本；用户改色后同样被 useTheme 的 inline 变量覆盖 */
+  --primary-50: #173027;
+  --primary-100: #1e4032;
+  --primary-500: #2e9e6b;
+  --primary-600: #228055; /* 保持：白字在其上 4.9:1，提亮会掉到 4.5 以下 */
+  --primary-700: #7fc9a5; /* 提亮：深底上的强调文字需要更高对比 */
+
+  --state-fresh-bg: #143527; --state-fresh-fg: #9fe1cb; --state-fresh-bar: #2e9e6b;
+  --state-soon-bg: #3a2c14; --state-soon-fg: #fac775; --state-soon-bar: #e0952f;
+  --state-urgent-bg: #3d1b17; --state-urgent-fg: #f7c1c1; --state-urgent-bar: #d9534a;
+  --state-over-bg: #2c2625; --state-over-fg: #c9bcb9; --state-over-bar: #a9857f;
+
+  --danger: #f09595;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 6px 24px rgba(0, 0, 0, 0.5);
+
+  --focus-ring: #5dcaa5;
+}
+
+/*
+ * Vant 主题对齐项目主色。
+ * 深色模式交给 <van-config-provider theme="dark">（在 App.vue 里按系统偏好切换），
+ * 这里只定浅色基线，Vant 自带深色调色板。
+ */
+:root {
+  /*
+   * Vant 只有一个 primary 变量可用（它的按钮/开关不像我们有完整色阶），
+   * 指向 `--primary-600` 才能跟着用户选的主题色走。
+   */
+  --van-primary-color: var(--primary-600);
+  --van-success-color: #2e9e6b;
+  --van-danger-color: #8e2f27;
+  --van-text-color: #222624;
+  --van-text-color-2: #5f6763;
+  --van-text-color-3: #6b736e;
+  --van-background: #f6f7f6;
+  --van-background-2: #ffffff;
+  --van-background-3: #eff2f0;
+  --van-border-color: #e4e8e5;
+  --van-gray-5: #6b736e;
+
+  /* 形状 / 尺寸对齐设计系统：Vant 默认 4px 圆角、16px 字号与本项目不一致 */
+  --van-radius-md: var(--radius-md);
+  --van-button-radius: var(--radius-md);
+  --van-button-default-font-size: 14px;
+  --van-button-normal-font-size: 14px;
+  --van-button-default-color: var(--text-1);
+  --van-button-default-background: var(--bg-card);
+  --van-button-default-border-color: var(--line-strong);
+  --van-button-plain-background: var(--bg-card);
+  --van-switch-on-background: var(--primary-600);
+}
+
+/*
+ * Vant 组件与项目设计语言的对齐规则。
+ * 写在 @layer components：优先级高于 @layer vant（Vant 自带样式），低于 utilities ——
+ * 因此既改得动 Vant 的默认值，又不会压过页面上的 Tailwind 工具类，不需要 !important。
+ */
+@layer components {
+  /*
+   * `van-config-provider` 会渲染成一个真实 div，而它是 #app（`display:flex`）里唯一的 flex item。
+   * flex item 的 `width:auto` 会退化成「内容宽度」：库存页被撑到 480px 溢出屏幕，
+   * 消耗明细页只有 323px（两侧各留 33px 空白）——这就是整页忽宽忽窄的根因。
+   * 强制它占满 #app，居中与 480px 上限仍由内部根容器的 `max-w-[480px] mx-auto` 负责。
+   */
+  .van-config-provider {
+    width: 100%;
+  }
+
+  /* Vant 的 base 里有 `[class*=van-]:focus{outline:none}`，会把无障碍焦点环抹掉，这里补回来 */
+  .van-button:focus-visible,
+  .van-switch:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * 把设计 token 暴露为 Tailwind 工具类（@theme inline：工具类直接引用上面的 CSS 变量，
+ * 因此深色模式切换时工具类颜色同步变化）。
+ * 命名约定：页面底色用 bg-page / bg-card / bg-sunken，文字用 text-ink-1/2/3，描边用 border-line。
+ */
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  --color-page: var(--bg-page);
+  --color-card: var(--bg-card);
+  --color-sunken: var(--bg-sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-mask: var(--mask);
+  --color-ink-1: var(--text-1);
+  --color-ink-2: var(--text-2);
+  --color-ink-3: var(--text-3);
+  --color-danger: var(--danger);
+
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+
+  --color-fresh-bg: var(--state-fresh-bg); --color-fresh-fg: var(--state-fresh-fg);
+  --color-soon-bg: var(--state-soon-bg); --color-soon-fg: var(--state-soon-fg);
+  --color-urgent-bg: var(--state-urgent-bg); --color-urgent-fg: var(--state-urgent-fg);
+  --color-over-bg: var(--state-over-bg); --color-over-fg: var(--state-over-fg);
+
+  --color-env-chilled: var(--env-chilled);
+  --color-env-frozen: var(--env-frozen);
+  --color-env-cool: var(--env-cool);
+  --color-env-dry: var(--env-dry);
+  --color-env-ventilated: var(--env-ventilated);
+  --color-env-dark: var(--env-dark);
+
+  /* 圆角：覆盖 Tailwind 默认刻度以贴合设计 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+  --radius-3xl: 20px;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body, #app { height: 100%; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-page);
+    color: var(--text-1);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+  #app {
+    display: flex;
+    justify-content: center;
+    position: relative;
+    background: var(--bg-page);
+  }
+  button, input, select, textarea { font: inherit; color: inherit; touch-action: manipulation; }
+  a { color: inherit; text-decoration: none; }
+
+  /* 全局可见焦点环（WCAG 2.4.7） */
+  :where(button, a, input, select, textarea, [tabindex],
+    [role="button"], [role="checkbox"], [role="switch"], [role="radio"]):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
+
+  /* 尊重系统「减弱动态效果」设置 */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* 隐藏滚动条（移动端滚动容器） */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* 视觉隐藏但仍可被读屏与键盘访问（隐藏的 file input 等） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
