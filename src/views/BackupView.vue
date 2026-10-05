@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
@@ -8,9 +8,11 @@ import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { useShoppingStore } from '@/stores/shopping';
 import { useSettingsStore } from '@/stores/settings';
+import { useBarcodesStore } from '@/stores/barcodes';
 import { buildBackup, backupToJson, backupFileName, downloadJson, copyToClipboard } from '@/data/backup/export';
 import { parseBackup, importBackup, type ImportMode } from '@/data/backup/import';
 import { useToast } from '@/composables/useToast';
+import { formatMD, fromEpoch } from '@/domain/dates';
 
 const router = useRouter();
 const items = useItemsStore();
@@ -18,6 +20,7 @@ const locations = useLocationsStore();
 const dict = useDictStore();
 const shopping = useShoppingStore();
 const settings = useSettingsStore();
+const barcodes = useBarcodesStore();
 const { show } = useToast();
 
 const mode = ref<ImportMode>('merge');
@@ -28,26 +31,57 @@ function pickFile() {
   fileInput.value?.click();
 }
 
+/**
+ * 上次备份时间。
+ *
+ * ⚠️ 「下载」与「复制 JSON」是两条独立的导出路径，原生 WebView 里常常只有后者可用
+ * （`downloadJson` 会返回 false）。两条路径都必须记 `lastBackupAt`，
+ * 只记一条会出现「明明导出了还在提醒未备份」的假提醒。
+ */
+const lastBackupLabel = computed(() => {
+  const ts = settings.settings.lastBackupAt;
+  if (!ts) return '从未备份';
+  const days = Math.floor((Date.now() - ts) / 86400000);
+  const d = Math.max(0, days);
+  return `${formatMD(fromEpoch(ts))}（${d} 天前）`;
+});
+
+async function markExported() {
+  await settings.patch({ lastBackupAt: Date.now() });
+}
+
 async function exportFile() {
   const b = await buildBackup();
   const json = backupToJson(b);
   const ok = downloadJson(backupFileName(), json);
   if (!ok) {
+    // 环境不支持下载：已落到剪贴板，同样算一次成功导出
     const copied = await copyToClipboard(json);
     show(copied ? '当前环境不支持下载，已复制 JSON 到剪贴板' : '导出失败');
-  } else {
-    show('已导出备份文件');
+    if (copied) await markExported();
+    return;
   }
+  await markExported();
+  show('已导出备份文件');
 }
 
 async function copyJson() {
   const b = await buildBackup();
   const ok = await copyToClipboard(backupToJson(b));
   show(ok ? '已复制 JSON 到剪贴板' : '复制失败');
+  if (ok) await markExported();
 }
 
 async function reloadStores() {
-  await Promise.all([items.load(), locations.load(), dict.load(), shopping.load(), settings.load()]);
+  await Promise.all([
+    items.load(),
+    locations.load(),
+    dict.load(),
+    shopping.load(),
+    settings.load(),
+    // 条码映射是 v2 新增的独立表，导入后不刷新的话管理页会显示旧数据
+    barcodes.load(),
+  ]);
 }
 
 const confirmImport = ref(false);
@@ -105,6 +139,11 @@ async function doImport() {
     <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
       <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mb-3.5">
         所有数据仅存本机。导出为 JSON 文件可备份或迁移；导入可选择「合并」或「覆盖」。建议每次大改前导出一份。
+      </div>
+
+      <div class="flex items-center justify-between bg-card border rounded-md px-3 py-2.5 mb-3.5">
+        <span class="text-[12px] text-ink-2">上次备份</span>
+        <span class="text-[13px] text-ink-1">{{ lastBackupLabel }}</span>
       </div>
 
       <div class="text-[12px] text-ink-3 mt-2 mb-2">导出</div>

@@ -1,15 +1,7 @@
-/** 食材名归一化：全角转半角、去括号及其内容、去空白、英文小写 */
-export function normalizeName(input: string): string {
-  return input
-    .trim()
-    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
-    .replace(/[（(][^（()）]*[)）]/g, '')
-    .replace(/\s+/g, '')
-    .toLowerCase();
-}
-
-/** 取首字作为默认图标文字 */
-export function firstChar(name: string): string {
-  const n = name.trim();
-  return n ? Array.from(n)[0] : '?';
-}
+/**
+ * 食材名归一化：全角转半角、去括号及其内容、去空白、英文小写。
+ *
+ * 实现已迁至 `@/domain/normalize`（它不依赖任何数据源，属于领域逻辑）。
+ * 本文件保留为转出层，避免既有引用（`stores/items`、`stores/dict` 等）失效。
+ */
+export { normalizeName, firstChar } from '@/domain/normalize';

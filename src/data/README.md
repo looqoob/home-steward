@@ -53,12 +53,13 @@ interface Repository<T extends { id: string }> {
 | `LogRepository` | `since(ts)` | `at > ts` 且未删除（走 `at` 索引） |
 | `DictRepository` | `byKey(dictKey)` | 该 dictKey 下未删除的条目（走 `dictKey` 索引） |
 | `SettingsRepository` | `get()` / `save(s)` | 单例；`get()` 在记录缺失时**自动写入默认设置并返回**（绝不返回 undefined） |
+| `BarcodeRepository`（v2） | `byCode(code)` | 按条码查未删除的映射。⚠️ `code` 必须原样传 **string**，条码有前导 0，转数字就匹配不上 |
 
 ### DataSources
 
 ```ts
 interface DataSources {
-  items / locations / logs / shopping / dict / settings;
+  items / locations / logs / shopping / dict / settings / barcodes;
   transaction<T>(fn: () => Promise<T>): Promise<T>;  // 跨表事务
   wipe(): Promise<void>;      // 清空全部业务表（**不含 settings**）
   probe(): Promise<boolean>;  // 存储可用性探针 + 缺默认设置时补写
@@ -77,7 +78,7 @@ interface DataSources {
 
 ## dexie/db.ts — 表结构
 
-数据库名 `home-steward`，版本 1。
+数据库名 `home-steward`，**版本 2**（v2 新增 `barcodes` 表）。
 
 | 表 | 主键 | 索引 | 说明 |
 | --- | --- | --- | --- |
@@ -87,12 +88,19 @@ interface DataSources {
 | `shopping` | `id` | `checked, reason, deletedAt` | 购物清单 |
 | `dict` | `id` | `dictKey, env, deletedAt` | 用户自定义字典 |
 | `settings` | `id` | — | 单例，id 恒为 `'singleton'` |
+| `barcodes` | `id` | `code, name, deletedAt` | **v2**：条码 → 名称的本地映射 |
 
-### ⚠️ 改表结构必须做三件事
+`version(2).stores()` 只声明新增的表，Dexie 会自动把 v1 数据带上新表，**不需要 `upgrade()`**。
+
+### ⚠️ 改表结构必须做五件事（v2 起）
 
 1. `this.version(N).stores({...})` **递增版本号**（改索引也算）。
 2. 升 `src/domain/types.ts` 的 `SCHEMA_VERSION`（备份格式随之演进）。
-3. 在 `backup/import.ts` 里处理旧版本的兼容读取。
+3. 在 `backup/import.ts` 里处理旧版本的兼容读取（新字段用 `?? []` 兜底）。
+4. **`dexie/sources.ts` 的 `wipe()` 表清单加上新表** —— 漏了会导致「覆盖导入」后旧数据残留。
+5. **`dexie/sources.ts` 的 `transaction()` 表清单加上新表** —— 漏了会导致事务里读不到新表。
+
+> 第 4、5 条是 v2 踩过的坑：新增 `barcodes` 时最容易只改 `wipe()` 忘了 `transaction()`。
 
 **不要对已有索引做破坏性变更**（删索引、改主键）而不写迁移逻辑 —— 用户本地已有真实数据，且**我们没有服务器兜底**，数据丢了就是真丢了。
 
@@ -210,12 +218,16 @@ shelfLifeText(null); // '未设置'
 ```ts
 interface BackupFile {
   app: 'home-steward';      // 应用标识，导入时校验
-  version: number;          // 与 SCHEMA_VERSION 对齐
+  version: number;          // 与 SCHEMA_VERSION 对齐（v2 起为 2）
   exportedAt: number;       // epoch ms
   items / locations / logs / shopping / dict: Array<...>;
+  barcodes?: Array<BarcodeEntry>;  // v2 新增，**声明为可选**：v1 备份没这个键
   settings: Settings;
 }
 ```
+
+> `barcodes` 必须是**可选属性**。声明为必填的话，v1 备份在类型层面就说不通。
+> 导入侧用 `?? []` 兜底。
 
 ```ts
 export function emptyBackup(): BackupFile;

@@ -20,6 +20,7 @@
     "@capacitor/core": "^8.5.2",
     "@capacitor/local-notifications": "^8.3.1",
     "dexie": "^4.4.6",
+    "html5-qrcode": "^2.3.8",
     "pinia": "^4.0.3",
     "vant": "^4.9.15",
     "vue": "^3.5.43",

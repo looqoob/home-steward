@@ -8,15 +8,21 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    BarcodeManageView: typeof import('./components/BarcodeManageView.vue')['default']
+    BulkActionBar: typeof import('./components/BulkActionBar.vue')['default']
     ConfirmSheet: typeof import('./components/ConfirmSheet.vue')['default']
     ConsumeSheet: typeof import('./components/ConsumeSheet.vue')['default']
     ItemCard: typeof import('./components/ItemCard.vue')['default']
     LocationChipBar: typeof import('./components/LocationChipBar.vue')['default']
+    LocationPickerSheet: typeof import('./components/LocationPickerSheet.vue')['default']
     NavBar: typeof import('./components/NavBar.vue')['default']
     QuickAddSheet: typeof import('./components/QuickAddSheet.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ScanSheet: typeof import('./components/ScanSheet.vue')['default']
     SearchField: typeof import('./components/SearchField.vue')['default']
+    ShoppingInboundRow: typeof import('./components/ShoppingInboundRow.vue')['default']
+    TodayTodo: typeof import('./components/TodayTodo.vue')['default']
     VanButton: typeof import('vant/es')['Button']
     VanConfigProvider: typeof import('vant/es')['ConfigProvider']
     VanSwitch: typeof import('vant/es')['Switch']

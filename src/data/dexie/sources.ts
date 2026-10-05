@@ -1,5 +1,5 @@
-import type { DataSources, DictRepository, ItemRepository, LocationRepository, LogRepository, ShoppingRepository, SettingsRepository } from '../repository';
-import type { ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
+import type { BarcodeRepository, DataSources, DictRepository, ItemRepository, LocationRepository, LogRepository, ShoppingRepository, SettingsRepository } from '../repository';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
 import { DEFAULT_SETTINGS } from '@/domain/types';
 import type { Table } from 'dexie';
 import { dexieDb } from './db';
@@ -82,6 +82,15 @@ const settings: SettingsRepository = {
   },
 };
 
+const barcodes: BarcodeRepository = {
+  ...base<BarcodeEntry>(dexieDb.barcodes),
+  async byCode(code: string) {
+    // ⚠️ 必须原样传 string 比较：条码有前导 0，转成数字就再也匹配不上
+    const rows = await dexieDb.barcodes.where('code').equals(code).toArray();
+    return rows.find((r) => !r.deletedAt);
+  },
+};
+
 export function createDexieSources(): DataSources {
   return {
     items,
@@ -90,16 +99,23 @@ export function createDexieSources(): DataSources {
     shopping,
     dict,
     settings,
+    barcodes,
     async transaction<T>(fn: () => Promise<T>): Promise<T> {
-      return dexieDb.transaction('rw', [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.settings], fn);
+      return dexieDb.transaction(
+        'rw',
+        [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.settings, dexieDb.barcodes],
+        fn,
+      );
     },
     async wipe() {
-      await dexieDb.transaction('rw', [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict], async () => {
+      await dexieDb.transaction('rw', [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.barcodes], async () => {
         await dexieDb.items.clear();
         await dexieDb.locations.clear();
         await dexieDb.logs.clear();
         await dexieDb.shopping.clear();
         await dexieDb.dict.clear();
+        // ⚠️ 别漏：漏了会导致「覆盖导入」后旧条码映射残留
+        await dexieDb.barcodes.clear();
       });
     },
     async probe(): Promise<boolean> {

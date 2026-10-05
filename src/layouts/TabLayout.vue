@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import QuickAddSheet from '@/components/QuickAddSheet.vue';
+import ScanSheet from '@/components/ScanSheet.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -30,11 +31,6 @@ const headerTitle = computed(() => route.meta.header);
  * 不能随便给带 sticky 元素的页面加容器 padding：sticky 偏移是相对内容盒算的，
  * padding 会把吸顶/吸底条整体推离容器边缘，中间漏出的缝里能看到滚动中的卡片。
  */
-const padClass = computed(() => {
-  if (isStock.value) return 'pt-0 pb-[84px]';
-  if (headerTitle.value) return 'pt-0 pb-0';
-  return 'pt-4 pb-3';
-});
 
 /**
  * 快速入库弹框的开合由路由 query 驱动（?quickadd=1），而非普通的局部状态。
@@ -42,6 +38,15 @@ const padClass = computed(() => {
  * 页面不会跳转（path 始终是 /stock）。
  */
 const quickAddOpen = computed(() => route.query.quickadd === '1');
+
+/**
+ * 库存页多选态下要隐藏 FAB。
+ *
+ * 多选时底部会出现 `BulkActionBar`（同样是 `absolute` 悬浮），两个悬浮元素叠在一起
+ * 既挡内容又容易误触。用 query 参数传递选择态：多选是**跨组件**的（StockView 内部的
+ * 卡片与操作条都要知道），走 provide/prop 会让 TabLayout 依赖子页面，故用 query 声明式传递。
+ */
+const selectMode = computed(() => route.query.select === '1');
 
 function openQuickAdd() {
   router.push({ path: '/stock', query: { quickadd: '1' } });
@@ -51,6 +56,20 @@ function closeQuickAdd() {
   // 仅当 query 仍在时才回退，避免与「自定义食材 / 新位置」的跳转互相打断
   if (route.query.quickadd) router.back();
 }
+
+/** 扫码入库（?scan=1），由快速入库弹层里的「扫码入库」按钮切过来 */
+const scanOpen = computed(() => route.query.scan === '1');
+
+function closeScan() {
+  if (route.query.scan) router.back();
+}
+
+/** 多选态下让出 FAB 与操作条占用的底部空间（操作条约 120px 高） */
+const padClass = computed(() => {
+  if (isStock.value) return selectMode.value ? 'pt-0 pb-[132px]' : 'pt-0 pb-[84px]';
+  if (headerTitle.value) return 'pt-0 pb-0';
+  return 'pt-4 pb-3';
+});
 
 function go(path: string) {
   if (!route.path.startsWith(path)) router.push(path);
@@ -127,7 +146,7 @@ function go(path: string) {
       </button>
 
       <button
-        v-if="isStock"
+        v-if="isStock && !selectMode"
         type="button"
         class="absolute right-4 bottom-[calc(100%+12px)] w-[52px] h-[52px] rounded-full bg-primary-600 text-white flex items-center justify-center shadow-pop z-25 hover:bg-primary-700"
         aria-label="快速入库"
@@ -142,5 +161,6 @@ function go(path: string) {
     </div>
 
     <QuickAddSheet :model-value="quickAddOpen" @update:model-value="closeQuickAdd" />
+    <ScanSheet :model-value="scanOpen" @update:model-value="closeScan" />
   </div>
 </template>

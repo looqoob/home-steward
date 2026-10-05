@@ -16,8 +16,21 @@
 | `/dict` | `DictView.vue` | NavBar | 保质期字典 |
 | `/appearance` | `AppearanceView.vue` | NavBar | 外观与主题（深浅模式 + 主题色） |
 | `/settings` | `SettingsView.vue` | NavBar | 设置（提醒） |
-| `/backup` | `BackupView.vue` | NavBar | 备份导出/导入 |
+| `/backup` | `BackupView.vue` | NavBar | 备份导出/导入（顶部显示上次备份时间） |
+| `/barcodes` | `BarcodeManageView.vue`（在 `../components/`） | NavBar | **v2**：条码映射的查看/改名/删除 |
 | `/consume-log` | `ConsumeLogView.vue` | TabLayout + 顶栏（`meta.header`） | 消耗明细（每次用掉/扔掉的逐条记录） |
+
+### v2 新增的 query 参数状态
+
+有两个 UI 状态走**路由 query**而不是本地 `ref`，因为需要跨组件共享（外壳 `TabLayout` 也要读）：
+
+| query | 含义 | 读取处 |
+| --- | --- | --- |
+| `?quickadd=1` | 快速入库弹框开 | `TabLayout` |
+| `?scan=1` | **v2** 扫码入库弹框开 | `TabLayout` |
+| `?select=1` | **v2** 库存页多选态开 | `TabLayout`（据此隐藏 FAB、底部多留 132px）+ `StockView` |
+
+> 用 query 而非 provide/prop：避免把外壳和页面耦合起来，两边看同一个真值。
 
 路由定义在 `src/router/index.ts`，**全部懒加载**（`() => import('@/views/Xxx.vue')`）。
 

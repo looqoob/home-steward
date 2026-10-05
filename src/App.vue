@@ -7,6 +7,7 @@ import { useDictStore } from '@/stores/dict';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { useShoppingStore } from '@/stores/shopping';
+import { useBarcodesStore } from '@/stores/barcodes';
 import { useToast } from '@/composables/useToast';
 import { useReminder } from '@/composables/useReminder';
 import { useTheme } from '@/composables/useTheme';
@@ -16,6 +17,7 @@ const dict = useDictStore();
 const locations = useLocationsStore();
 const items = useItemsStore();
 const shopping = useShoppingStore();
+const barcodes = useBarcodesStore();
 const reminder = useReminder();
 const { message, action, runAction } = useToast();
 const theme = useTheme();
@@ -47,7 +49,15 @@ onMounted(async () => {
       return;
     }
     await ensureSeed(db);
-    await Promise.all([settings.load(), dict.load(), locations.load(), items.load(), shopping.load()]);
+    await Promise.all([
+      settings.load(),
+      dict.load(),
+      locations.load(),
+      items.load(),
+      shopping.load(),
+      // 条码映射：扫码时要立刻能查到历史映射，不能等到进管理页才加载
+      barcodes.load(),
+    ]);
     ready.value = true;
     await shopping.generate();
     await reminder.refresh();

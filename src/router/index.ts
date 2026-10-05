@@ -42,6 +42,8 @@ const router = createRouter({
     { path: '/appearance', component: () => import('@/views/AppearanceView.vue') },
     { path: '/settings', component: () => import('@/views/SettingsView.vue') },
     { path: '/backup', component: () => import('@/views/BackupView.vue') },
+    // v2：条码映射管理（扫码扫错时要能改能删，必须有出口）
+    { path: '/barcodes', component: () => import('@/components/BarcodeManageView.vue') },
   ],
 });
 

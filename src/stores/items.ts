@@ -7,6 +7,8 @@ import { todayStr } from '@/domain/dates';
 import { createItem, recomputeForLocation, type NewItemInput } from '@/domain/itemFactory';
 import { fallbackDays } from '@/domain/categories';
 import { lookupFood } from '@/data/dict';
+import { snoozeUntilOf } from '@/domain/todo';
+import { planBulkConsume, planBulkMove, planBulkRemove, type BulkOp } from '@/domain/bulk';
 import { useDictStore } from './dict';
 import { useLocationsStore } from './locations';
 
@@ -54,6 +56,30 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   /**
+   * 批量新建商品。
+   *
+   * ⚠️ 为什么必须有这条路径：`add()` 内部每次都 `await load()`（全量重读 items + logs），
+   * 批量入库 20 件就会触发 20 次全表读。这里一次 `bulkPut` + 一次 `load` 搞定。
+   *
+   * 品类解析与单个 `add()` 完全一致（`lookupFood(name)?.category ?? null`），
+   * 否则批量入库的卡片图标/品类会和单个入库对不上。
+   *
+   * @returns 落库后的完整 Item 列表，顺序与 `inputs` 一致
+   */
+  async function addMany(inputs: NewItemInput[]): Promise<Item[]> {
+    if (!inputs.length) return [];
+    const dict = useDictStore();
+    const locs = useLocationsStore();
+    const now = Date.now();
+    const rows = inputs.map((input) =>
+      createItem(input, locs.envOf(input.locationId), dict.resolve, fallbackDays, now, lookupFood(input.name)?.category ?? null),
+    );
+    await db.items.bulkPut(rows);
+    await load();
+    return rows;
+  }
+
+  /**
    * 整条覆盖写入商品，并刷新 `updatedAt`。
    * ⚠️ 是 put 而非 patch：传入的对象缺失的字段会被写成上一次的值（调用方通常传展开后的完整 Item）。
    */
@@ -90,6 +116,29 @@ export const useItemsStore = defineStore('items', () => {
     const next = { ...cur, manualShelfLife: days && days > 0 ? days : null };
     const patch = recomputeForLocation(next, locs.envOf(cur.locationId), dict.resolve, fallbackDays);
     await db.items.put({ ...next, ...patch, updatedAt: Date.now() });
+    await load();
+  }
+
+  /**
+   * 「明天再说」：把物品延后 N 天不处理。
+   *
+   * 只写 `snoozeUntil`，**不动 `expireAt`** —— 它表示「我今天不想处理它」，
+   * 不是「它变新鲜了」。延后仅影响今日待办列表与提醒推送。
+   *
+   * @param days 延后天数，默认 1；传 0 或负数 = 立即取消延后
+   */
+  async function snooze(id: string, days = 1) {
+    const cur = byId(id);
+    if (!cur) return;
+    await db.items.put({ ...cur, snoozeUntil: snoozeUntilOf(cur, days), updatedAt: Date.now() });
+    await load();
+  }
+
+  /** 取消延后，立即回到今日待办 */
+  async function unsnooze(id: string) {
+    const cur = byId(id);
+    if (!cur) return;
+    await db.items.put({ ...cur, snoozeUntil: null, updatedAt: Date.now() });
     await load();
   }
 
@@ -224,5 +273,107 @@ export const useItemsStore = defineStore('items', () => {
     await load();
   }
 
-  return { list, logs, loaded, active, load, byId, add, save, moveTo, setManualShelfLife, consume, undoConsume, remove, restore, recomputeAll };
+  /* ==================== 批量操作 ==================== */
+
+  /**
+   * 批量操作的撤销快照表。
+   *
+   * 只存内存、不落库：撤销入口只在 Toast 上存在 5 秒，为它建表不值得；
+   * 刷新页面后撤销失效是可接受的代价。
+   *
+   * 同时限制长度上限（`BULK_OP_KEEP`），避免长时间使用后无界增长。
+   */
+  const bulkOps = new Map<string, BulkOp>();
+  const BULK_OP_KEEP = 20;
+
+  function remember(op: BulkOp): BulkOp {
+    bulkOps.set(op.id, op);
+    while (bulkOps.size > BULK_OP_KEEP) {
+      const oldest = bulkOps.keys().next().value;
+      if (oldest === undefined) break;
+      bulkOps.delete(oldest);
+    }
+    return op;
+  }
+
+  /** 把 id 列表解析成在库商品对象；已删除/已用完的直接排除 */
+  function pickActive(ids: string[]): Item[] {
+    const set = new Set(ids);
+    return list.value.filter((i) => set.has(i.id) && !i.deletedAt && i.status === 'in_stock');
+  }
+
+  /**
+   * 批量消耗：每件各自清空剩余量。
+   *
+   * @returns 供 toast 撤销的 `BulkOp`；无可操作项时返回 `null`
+   */
+  async function bulkConsume(ids: string[], type: ConsumeType): Promise<BulkOp | null> {
+    const targets = pickActive(ids);
+    if (!targets.length) return null;
+    const now = Date.now();
+    const before = targets.map((i) => ({ ...i }));
+    const plan = planBulkConsume(targets, type, now);
+    await db.transaction(async () => {
+      await db.logs.bulkPut(plan.logs);
+      await db.items.bulkPut(plan.items);
+    });
+    await load();
+    return remember({
+      id: newId(),
+      kind: 'consume',
+      consumeType: type,
+      items: before,
+      logIds: plan.logs.map((l) => l.id),
+      createdAt: now,
+    });
+  }
+
+  /** 批量换位置：按新位置重算到期日（手填保质期优先级不变） */
+  async function bulkMoveTo(ids: string[], locationId: string): Promise<BulkOp | null> {
+    const dict = useDictStore();
+    const locs = useLocationsStore();
+    const targets = pickActive(ids);
+    if (!targets.length) return null;
+    const now = Date.now();
+    const before = targets.map((i) => ({ ...i }));
+    const next = planBulkMove(targets, locationId, locs.envOf(locationId), dict.resolve, fallbackDays, now);
+    await db.items.bulkPut(next);
+    await load();
+    return remember({ id: newId(), kind: 'move', items: before, logIds: [], createdAt: now });
+  }
+
+  /** 批量删除：软删除且**不写消耗日志**（与逐条 `remove` 语义一致，不污染统计） */
+  async function bulkRemove(ids: string[]): Promise<BulkOp | null> {
+    const set = new Set(ids);
+    const targets = list.value.filter((i) => set.has(i.id) && !i.deletedAt);
+    if (!targets.length) return null;
+    const now = Date.now();
+    const before = targets.map((i) => ({ ...i }));
+    await db.items.bulkPut(planBulkRemove(targets, now));
+    await load();
+    return remember({ id: newId(), kind: 'remove', items: before, logIds: [], createdAt: now });
+  }
+
+  /**
+   * 撤销一次批量操作。
+   *
+   * ⚠️ 顺序要紧：**先硬删日志，再写回商品快照**。反了会留下
+   * 「商品状态是 in_stock、日志却记着已消耗」的脏账，统计页会对不上。
+   */
+  async function undoBulk(op: BulkOp | null | undefined) {
+    if (!op) return;
+    const items = op.items.map((i) => ({ ...i, deletedAt: null, updatedAt: Date.now() }));
+    await db.transaction(async () => {
+      for (const id of op.logIds) await db.logs.hardDelete(id);
+      await db.items.bulkPut(items);
+    });
+    bulkOps.delete(op.id);
+    await load();
+  }
+
+  return {
+    list, logs, loaded, active, load, byId, add, addMany, save, moveTo, setManualShelfLife,
+    snooze, unsnooze, consume, undoConsume, remove, restore, recomputeAll,
+    bulkConsume, bulkMoveTo, bulkRemove, undoBulk,
+  };
 });

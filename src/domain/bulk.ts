@@ -1,0 +1,148 @@
+/**
+ * 批量操作的规划逻辑（纯函数）。
+ *
+ * 场景：清理冰箱 / 换季，十几件要一起处理，逐件点太慢。
+ * 本模块只负责**算出该写什么**，不碰数据库；落库由 `stores/items` 完成。
+ */
+
+import type { ConsumeLog, ConsumeType, EnvType, Item } from './types';
+import type { ShelfLifeResolver } from './shelfLife';
+import { computeExpiry } from './shelfLife';
+import { newId } from './ids';
+import { diffDays, todayStr } from './dates';
+
+export type BulkKind = 'consume' | 'move' | 'remove';
+
+/**
+ * 一次批量操作的快照，供撤销使用。
+ *
+ * ⚠️ 只存在内存（`stores/items` 的模块级 Map），**不落库**：
+ * 撤销入口只在 Toast 上存在 5 秒，为它建表不值得；刷新页面后撤销失效是可接受的。
+ */
+export interface BulkOp {
+  id: string;
+  kind: BulkKind;
+  /** kind === 'consume' 时有效 */
+  consumeType?: ConsumeType;
+  /** 操作前的商品快照，撤销时整条写回 */
+  items: Item[];
+  /** kind === 'consume' 时新产生的日志 id，撤销时硬删除 */
+  logIds: string[];
+  createdAt: number;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function activeOnly(items: Item[]): Item[] {
+  return items.filter((i) => !i.deletedAt && i.status === 'in_stock' && i.quantity > 0);
+}
+
+/** 构造消耗日志；字段与 `stores/items.consume` 保持完全一致，避免明细页对不上账 */
+function buildLog(item: Item, type: ConsumeType, take: number, today: string, now: number): ConsumeLog {
+  let overdueDays: number | null = null;
+  if (item.expireAt) {
+    const d = diffDays(item.expireAt, today);
+    overdueDays = d < 0 ? -d : 0;
+  }
+  return {
+    id: newId(),
+    itemId: item.id,
+    name: item.name,
+    quantity: take,
+    unit: item.unit,
+    locationId: item.locationId,
+    type,
+    // Item.price 是单价，日志记「本次金额」，否则「扔掉 2 个」会算成整份的钱
+    price: item.price === null ? null : round2(item.price * take),
+    unitPrice: item.price ?? null,
+    note: item.note ?? null,
+    expireAt: item.expireAt,
+    overdueDays,
+    at: now,
+    createdAt: now,
+    deletedAt: null,
+  };
+}
+
+export interface BulkConsumePlan {
+  logs: ConsumeLog[];
+  items: Item[];
+}
+
+/**
+ * 规划批量消耗：**每件各自清空自己的剩余量**。
+ *
+ * 与逐条 `consume()` 的语义一致：全清 → `status` 置 `'finished'` 且 `quantity` 保留原值
+ * （供日志对账，撤销时才能正确回加）；不足清空的情况这里不会出现，因为按剩余量取。
+ *
+ * @returns 新建日志 + 更新后的商品完整对象（调用方 bulkPut）
+ */
+export function planBulkConsume(
+  items: Item[],
+  type: ConsumeType,
+  now: number = Date.now(),
+): BulkConsumePlan {
+  const today = todayStr(now);
+  const logs: ConsumeLog[] = [];
+  const out: Item[] = [];
+  for (const it of activeOnly(items)) {
+    const take = it.quantity;
+    logs.push(buildLog(it, type, take, today, now));
+    out.push({ ...it, status: 'finished', updatedAt: now });
+  }
+  return { logs, items: out };
+}
+
+/**
+ * 规划批量换位置：**逐件重算到期日**，入库日期 `storedAt` 保持不变。
+ *
+ * 直接复用 `computeExpiry` 而不是自己算一遍：它已经处理了「环境为 none 不计保质期」
+ * 与「字典返回 NOT_RECOMMENDED」两个分支，自己重写必然漏掉其中之一，
+ * 导致批量换位置与逐条 `items.moveTo` 的结果不一致。
+ *
+ * 手填保质期（`manualShelfLife`）优先级最高，切换位置不会被内置字典覆盖。
+ */
+export function planBulkMove(
+  items: Item[],
+  locationId: string,
+  env: EnvType,
+  resolve: ShelfLifeResolver,
+  fallback: (env: EnvType, category: Item['category']) => number | null,
+  now: number = Date.now(),
+): Item[] {
+  const out: Item[] = [];
+  for (const it of activeOnly(items)) {
+    const r = computeExpiry(
+      {
+        name: it.name,
+        category: it.category,
+        storedAt: it.storedAt,
+        producedAt: it.producedAt,
+        manualShelfLife: it.manualShelfLife,
+      },
+      env,
+      resolve,
+      fallback,
+    );
+    out.push({
+      ...it,
+      locationId,
+      expireAt: r.expireAt,
+      shelfLifeDays: r.days,
+      shelfLifeSource: r.source,
+      notRecommended: r.notRecommended,
+      notRecommendedReason: r.reason,
+      updatedAt: now,
+    });
+  }
+  return out;
+}
+
+/** 规划批量删除：软删除，不写消耗日志（与逐条 `items.remove` 语义一致） */
+export function planBulkRemove(items: Item[], now: number = Date.now()): Item[] {
+  return items
+    .filter((i) => !i.deletedAt)
+    .map((i) => ({ ...i, deletedAt: now, updatedAt: now }));
+}

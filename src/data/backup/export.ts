@@ -1,25 +1,29 @@
 import { db } from '../index';
 import type { BackupFile } from './schema';
+import { SCHEMA_VERSION } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
 
 export async function buildBackup(): Promise<BackupFile> {
-  const [items, locations, logs, shopping, dict, settings] = await Promise.all([
+  const [items, locations, logs, shopping, dict, settings, barcodes] = await Promise.all([
     db.items.all(),
     db.locations.all(),
     db.logs.all(),
     db.shopping.all(),
     db.dict.all(),
     db.settings.get(),
+    db.barcodes.all(),
   ]);
   return {
     app: 'home-steward',
-    version: 1,
+    // 用常量而不是写死 1：以后再升版时这里自动跟上，漏改会写出"版本号比内容旧"的备份
+    version: SCHEMA_VERSION,
     exportedAt: Date.now(),
     items,
     locations,
     logs,
     shopping,
     dict,
+    barcodes,
     settings,
   };
 }

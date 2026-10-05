@@ -61,6 +61,9 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 | `load` | `() => Promise<void>` | 并行重读 `items` 与 `logs` |
 | `byId` | `(id) => Item \| undefined` | 同步查找，过滤软删 |
 | `add` | `(input: NewItemInput) => Promise<Item>` | 新建。内部查 `lookupFood` 拿品类、查位置取环境、调 `createItem` 算到期日，**返回落库后的 Item** |
+| `addMany` | `(inputs: NewItemInput[]) => Promise<Item[]>` | **v2**：批量新建。一次 `bulkPut` + 一次 `load`。品类解析与 `add()` 完全一致 |
+| `snooze` | `(id, days = 1) => Promise<void>` | **v2**：「明天再说」。只写 `snoozeUntil`，**不动 `expireAt`**。`days <= 0` = 立即取消延后 |
+| `unsnooze` | `(id) => Promise<void>` | **v2**：取消延后，立即回到今日待办 |
 | `save` | `(item: Item) => Promise<void>` | 整条覆盖写入，自动刷 `updatedAt` |
 | `moveTo` | `(id, locationId) => Promise<void>` | 切换位置并**重算到期日**（`storedAt` 不变） |
 | `setManualShelfLife` | `(id, days: number \| null) => Promise<void>` | 设/清手填保质期并重算。`days <= 0` 归一化为 `null`（即关闭手填） |
@@ -69,6 +72,23 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 | `remove` | `(id) => Promise<Item \| undefined>` | 软删除（不写日志，用于误添加）。**返回删除前的快照** |
 | `restore` | `(snapshot: Item) => Promise<void>` | 撤销软删：把 `deletedAt` 置回 `null` 整条写回 |
 | `recomputeAll` | `() => Promise<void>` | 用当前字典重算所有在库商品的到期日（**字典变更后必须调**） |
+| `bulkConsume` | `(ids, type) => Promise<BulkOp \| null>` | **v2**：批量消耗，每件各自清空剩余量。返回撤销快照 |
+| `bulkMoveTo` | `(ids, locationId) => Promise<BulkOp \| null>` | **v2**：批量换位置，逐件重算到期日 |
+| `bulkRemove` | `(ids) => Promise<BulkOp \| null>` | **v2**：批量软删，**不写消耗日志**（不污染统计） |
+| `undoBulk` | `(op: BulkOp \| null) => Promise<void>` | **v2**：撤销整批。**必须先删日志再写回商品快照** |
+
+### ⚠️ 批量路径不要循环调 `add()`
+
+`add()` 内部每次都 `await load()`（全量重读 items + logs），批量入库 20 件就会触发 20 次全表读。
+批量一律走 `addMany()` 或上面三个 `bulk*` 方法，它们都是 `bulkPut` + 单次 `load`。
+
+### 批量撤销的内存快照表
+
+`bulkOps: Map<string, BulkOp>` 是**模块级内存变量，不落库**：
+
+- 撤销入口只在 Toast 上存在 5 秒，为它建表不值得
+- 刷新页面后撤销失效是可接受的代价
+- 保留上限 20 条，超出丢弃最旧的，避免长时间使用后无界增长
 
 ### 边界条件
 
@@ -239,8 +259,20 @@ const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
 | `generate` | `() => Promise<number>` | 调 `planShopping` 生成建议并落库，**返回新增条数**（0 表示没有新建议） |
 | `toggle` | `(id) => Promise<void>` | 勾选/取消勾选，同步 `checkedAt` |
 | `addManual` | `(name: string) => Promise<void>` | 手动添加。`name` 为空（`trim()` 后）**静默返回** |
-| `remove` | `(id) => Promise<void>` | 删除。**自动项**：软删 + 设 `dismissedUntil = now + 7 天`（7 天内不再自动重生）；**手动项**：直接软删 |
+| `remove` | `(id) => Promise<ShoppingItem \| undefined>` | 删除，**返回删除前快照**（撤销要用）。**自动项**：软删 + 设 `dismissedUntil = now + 7 天`（7 天内不再自动重生）；**手动项**：直接软删 |
+| `restore` | `(snapshot: ShoppingItem) => Promise<void>` | 撤销删除：清掉 `deletedAt` 与 `dismissedUntil` 后整条写回 |
 | `clearDone` | `() => Promise<void>` | 清除已勾选项（同样是软删 + dismissedUntil） |
+| `inboundOne` | `(id, quantity, locationId) => Promise<Item \| null>` | **v2**：单项入库，走 `items.addMany` |
+| `inboundAll` | `(ids, overrides?) => Promise<{ count, skipped }>` | **v2**：批量入库。`skipped` 必须如实告知用户，不能静默丢弃 |
+| `undoInbound` | `(id) => Promise<Item \| undefined>` | **v2**：撤销入库，返回被删物品的快照 |
+
+### 边界条件（v2 新增）
+
+- `inboundAll` **不用 `db.transaction`** 包「写物品 + 回写清单」：`items.addMany` 内部需要
+  全量 `load()`，放进事务容易与事务外的读冲突。改成「先落物品、再回写清单项」两步 ——
+  中途失败最坏结果是清单项没勾上但物品已入库（数据只多不少，不会丢），比事务回滚更安全。
+- 入库时写入 `inboundItemId`，`undoInbound` 据此反查并删掉物品。旧数据没有这个字段，
+  读取时按 `?? null` 处理（视作未入库）。
 
 ### 边界条件
 
@@ -317,6 +349,37 @@ const urgentDays = computed({
   set: (v) => settings.patch({ urgentDays: v }),
 });
 ```
+
+---
+
+## barcodes — 条码映射（v2 新增）
+
+`useBarcodesStore()`
+
+条码 → 名称的**本地**映射。隐私边界：只存本机，**不联网查询任何商品数据库**。
+用户首次扫到未知条码时手输一次名称，之后扫码即可自动带出。
+
+### 状态
+
+| 成员 | 类型 | 说明 |
+| --- | --- | --- |
+| `list` | `Ref<BarcodeEntry[]>` | 全部映射（未删除） |
+| `loaded` | `Ref<boolean>` | |
+
+### 方法
+
+| 方法 | 签名 | 说明 |
+| --- | --- | --- |
+| `load` | `() => Promise<void>` | |
+| `lookup` | `(code: string) => Promise<BarcodeEntry \| undefined>` | 按条码查。内存没有时兜底查一次库 |
+| `upsert` | `(input: BarcodeInput) => Promise<BarcodeEntry \| undefined>` | 同条码**覆盖**（扫错了要能改），不报重复错误 |
+| `update` | `(id, patch: Partial<BarcodeInput>) => Promise<void>` | 管理页改名用 |
+| `remove` | `(id) => Promise<void>` | 软删 |
+
+### ⚠️ `code` 必须是 `string`
+
+EAN-8 / EAN-13 有**前导 0**：`Number("0123456789012")` → `123456789012`，条码永远匹配不上。
+全链路（类型、索引、`byCode`、输入框）都用 string，**不要先转数字**。
 
 ---
 

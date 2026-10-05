@@ -85,6 +85,33 @@ export default defineConfig({
     assetsInlineLimit: 4096,
   },
   server: { host: 'localhost', port: 5173 },
+
+  /**
+   * 预声明**全部**按需引入的依赖入口。
+   *
+   * 为什么必须写死：Vite 默认会「边跑边发现」依赖 —— 首次访问某个路由时才扫到新的 import，
+   * 于是重新预构建并删除 `node_modules/.vite/deps_temp_*`。某些受控环境（如本机的
+   * safe-delete 守卫）会拦截超过阈值的批量删除，导致 dev server **直接抛错退出**
+   * （SAFE_DELETE_BULK_CONFIRM_REQUIRED）。
+   *
+   * 全部预声明后，冷启动时一次预构建完成，后续访问任何路由都不再触发重建。
+   *
+   * ⚠️ **新增 Vant 组件或新的动态 import 时，必须同步加到这里**，否则又会退化为运行时发现。
+   * 当前模板里用到的 Vant 组件：`van-button` / `van-config-provider` / `van-switch`。
+   * `html5-qrcode` 是 `ScanSheet.vue` 里的动态 import，同样要预声明。
+   */
+  optimizeDeps: {
+    include: [
+      'vant/es',
+      'vant/es/button',
+      'vant/es/button/style/index',
+      'vant/es/config-provider',
+      'vant/es/config-provider/style/index',
+      'vant/es/switch',
+      'vant/es/switch/style/index',
+      'html5-qrcode',
+    ],
+  },
   // 线上部署（反代域名）下预览服务必须放行 Host，否则 Vite 会返回 "Blocked request"
   // 端口读 $PORT：部署沙箱把它注入给服务进程，命令行里展开不可靠
   preview: {

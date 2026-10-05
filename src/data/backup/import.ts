@@ -1,14 +1,14 @@
 import { db } from '../index';
 import type { BackupFile } from './schema';
 import { validateBackup } from './schema';
-import type { ConsumeLog, DictEntry, Item, Location, ShoppingItem } from '@/domain/types';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, ShoppingItem } from '@/domain/types';
 
 export type ImportMode = 'replace' | 'merge';
 
 export interface ImportResult {
   ok: boolean;
   message: string;
-  counts?: { items: number; locations: number; logs: number; shopping: number; dict: number };
+  counts?: { items: number; locations: number; logs: number; shopping: number; dict: number; barcodes: number };
 }
 
 export function parseBackup(text: string): { ok: true; data: BackupFile } | { ok: false; message: string } {
@@ -30,6 +30,8 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
   const incomingLogs = (data.logs ?? []).filter((l) => !l.deletedAt);
   const incomingShopping = (data.shopping ?? []).filter((s) => !s.deletedAt);
   const incomingDict = (data.dict ?? []).filter((d) => !d.deletedAt);
+  // v1 备份没有 barcodes 字段，必须 `?? []` 兜底
+  const incomingBarcodes = (data.barcodes ?? []).filter((b) => !b.deletedAt);
 
   try {
     await db.transaction(async () => {
@@ -40,17 +42,19 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
         await db.logs.bulkPut(incomingLogs);
         await db.shopping.bulkPut(incomingShopping);
         await db.dict.bulkPut(incomingDict);
+        await db.barcodes.bulkPut(incomingBarcodes);
         if (data.settings) await db.settings.save(data.settings);
         return;
       }
 
       // merge
-      const [curLocations, curItems, curLogs, curShopping, curDict] = await Promise.all([
+      const [curLocations, curItems, curLogs, curShopping, curDict, curBarcodes] = await Promise.all([
         db.locations.all(),
         db.items.all(),
         db.logs.all(),
         db.shopping.all(),
         db.dict.all(),
+        db.barcodes.all(),
       ]);
 
       await db.locations.bulkPut(mergeById<Location>(curLocations, incomingLocations));
@@ -58,6 +62,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
       await db.logs.bulkPut(mergeById<ConsumeLog>(curLogs, incomingLogs));
       await db.shopping.bulkPut(mergeById<ShoppingItem>(curShopping, incomingShopping));
       await db.dict.bulkPut(mergeById<DictEntry>(curDict, incomingDict));
+      await db.barcodes.bulkPut(mergeById<BarcodeEntry>(curBarcodes, incomingBarcodes));
     });
 
     // 位置排序重排（在事务外做，避免与 bulkPut 冲突）
@@ -75,6 +80,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
         logs: incomingLogs.length,
         shopping: incomingShopping.length,
         dict: incomingDict.length,
+        barcodes: incomingBarcodes.length,
       },
     };
   } catch (e) {

@@ -9,6 +9,11 @@ export interface Suggestion {
   sourceItemId: string | null;
   locationId: string | null;
   unit: string | null;
+  /**
+   * 建议数量。用于清单一键入库时预填 —— 用户上次买了 2 盒，这次大概率也是 2 盒。
+   * 规则只能从日志推断「曾消耗过多少」，拿不到精确采购量，所以给 `null` 表示「未知」。
+   */
+  quantity: number | null;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -16,6 +21,25 @@ const DISMISS_DAYS = 7;
 
 function activeItems(items: Item[]): Item[] {
   return items.filter((i) => !i.deletedAt && i.status === 'in_stock');
+}
+
+/**
+ * 名称 → 最近一次「用掉」的数量。
+ *
+ * 用途是给清单一键入库预填数量：上次买了 2 盒，这次大概率也是 2 盒。
+ * 取的是**消耗**日志而非入库记录 —— 消耗日志更可能接近真实采购量
+ * （买了 10 个鸡蛋分 4 次吃完，最后一次是 3，不够准但优于直接给 1）。
+ */
+function lastConsumedQty(logs: ConsumeLog[]): Map<string, number> {
+  const latest = new Map<string, { at: number; qty: number }>();
+  for (const l of logs) {
+    if (l.deletedAt || l.type !== 'consumed') continue;
+    const prev = latest.get(l.name);
+    if (!prev || l.at >= prev.at) latest.set(l.name, { at: l.at, qty: l.quantity });
+  }
+  const out = new Map<string, number>();
+  for (const [name, v] of latest) out.set(name, v.qty);
+  return out;
 }
 
 /**
@@ -35,6 +59,7 @@ export function planShopping(
   const live = activeItems(items);
   const logs60 = logs.filter((l) => !l.deletedAt && l.type === 'consumed' && now - l.at <= 60 * DAY);
   const logs90 = logs.filter((l) => !l.deletedAt && l.type === 'wasted' && now - l.at <= 90 * DAY);
+  const lastQty = lastConsumedQty(logs);
 
   const out: Suggestion[] = [];
   const seen = new Set<string>();
@@ -50,14 +75,14 @@ export function planShopping(
   const inStockNames = new Set(live.map((i) => i.name));
   for (const l of logs60) {
     if (inStockNames.has(l.name)) continue;
-    push({ name: l.name, reason: 'out_of_stock', why: '库存 0', sourceItemId: null, locationId: l.locationId, unit: l.unit });
+    push({ name: l.name, reason: 'out_of_stock', why: '库存 0', sourceItemId: null, locationId: l.locationId, unit: l.unit, quantity: lastQty.get(l.name) ?? null });
   }
 
   // ② 临期替换
   for (const it of live) {
     const f = freshnessOf(it, today, settings);
     if (f.state === 'urgent' || f.state === 'over') {
-      push({ name: it.name, reason: 'near_expiry', why: '临期替换', sourceItemId: it.id, locationId: it.locationId, unit: it.unit });
+      push({ name: it.name, reason: 'near_expiry', why: '临期替换', sourceItemId: it.id, locationId: it.locationId, unit: it.unit, quantity: it.quantity });
     }
   }
 
@@ -66,7 +91,7 @@ export function planShopping(
   for (const l of logs90) wasteCount.set(l.name, (wasteCount.get(l.name) ?? 0) + 1);
   for (const [name, cnt] of wasteCount) {
     if (cnt >= 2) {
-      push({ name, reason: 'frequent_waste', why: `近 90 天扔掉 ${cnt} 次 · 建议少买`, sourceItemId: null, locationId: null, unit: null });
+      push({ name, reason: 'frequent_waste', why: `近 90 天扔掉 ${cnt} 次 · 建议少买`, sourceItemId: null, locationId: null, unit: null, quantity: lastQty.get(name) ?? null });
     }
   }
 

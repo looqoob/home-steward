@@ -18,7 +18,15 @@
 | `SearchField.vue` | 列表页搜索框：胶囊外框 + 放大镜 + 原生 input | StockView、ConsumeLogView |
 | `QuickAddSheet.vue` | 快速入库底部弹框 | TabLayout |
 | `ConfirmSheet.vue` | 二次确认弹层：标题 + 说明 + 取消/确认，危险操作用实心红 | ItemEditView、LocationManageView、BackupView |
-| `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（默认 1，含「全部」） | StockView、ItemEditView |
+| `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（默认 1，含「全部」） | StockView、ItemEditView、TodayTodo |
+| `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」 | StockView |
+| `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/位置/到期日预览） | ListView |
+| `BulkActionBar.vue` | **v2**：多选态吸底操作条（用掉/扔掉/换位置/删除） | StockView |
+| `LocationPickerSheet.vue` | **v2**：选择存放位置的弹层，带到期日预览 | StockView |
+| `ScanSheet.vue` | **v2**：扫码入库弹层（动态加载 html5-qrcode） | TabLayout |
+| `BarcodeManageView.vue` | **v2**：条码映射的查看/改名/删除（路由 `/barcodes`） | 独立路由 |
+
+> v2 组件的坑位与设计取舍见 [`docs/V2-CHANGELOG.md`](../../docs/V2-CHANGELOG.md)。
 
 ---
 
@@ -32,13 +40,29 @@
 | --- | --- | --- | --- | --- |
 | `item` | `Item` | ✅ | — | 商品数据 |
 | `location` | `Location` | ❌ | `undefined` | 传入则显示位置标签（灰底 + 环境色圆点） |
+| `selectable` | `boolean` | ❌ | `false` | **v2**：多选模式。左侧出现复选框、右侧快捷按钮隐藏、整卡改为切换选中 |
+| `selected` | `boolean` | ❌ | `false` | **v2**：是否已选中（描边 + 浅色环） |
 
 ### Emits
 
 | 事件 | 载荷 | 触发时机 |
 | --- | --- | --- |
-| `click` | `(item: Item)` | 点击卡片主操作区（进详情页） |
-| `consume` | `(item: Item, type: ConsumeType)` | 点击右侧「用掉 / 扔掉」快捷按钮 |
+| `click` | `(item: Item)` | 点击卡片主操作区（进详情页）。`selectable` 时改为切换选中 |
+| `consume` | `(item: Item, type: ConsumeType)` | 点击右侧「用掉 / 扔掉」快捷按钮（多选态下不渲染） |
+| `select` | `(item: Item)` | **v2**：`selectable` 时点击卡片切换选中 |
+| `longpress` | `(item: Item)` | **v2**：`selectable` 时长按 500ms 进入多选并选中该项 |
+
+### ★ 长按防误触（v2）
+
+进入多选的第二条路径是长按，但**必须同时监听 `pointermove`**：
+
+```
+pointerdown → 启动 500ms 计时
+pointermove → 位移 > 10px 则取消计时（用户想滚动，不是想选中）
+pointerup / pointercancel / pointerleave → 取消计时
+```
+
+漏掉 `pointermove` 的话，在列表上按住并滑动（想滚动）会逐张误触选中。
 
 ### ★ 结构约束（改之前先看）
 

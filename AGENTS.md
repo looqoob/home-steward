@@ -451,7 +451,18 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 17 | 底部 Tab 的「库存」图标看着像缺一角、画不全 | 内联 SVG 的 `d` 被写坏（圆弧参数 `a2 2 0 0 0` 掉了一个 `2` 变成 `a2 0 0 0`），外加几条超出框体的辅助线，小尺寸下就成了「残图」 | 换图标时**改完要在浏览器里放大看一眼**；缺参数的 path 不报错、只是画得不对。图标一律内联 SVG + `currentColor`，笔画粗细对齐（1.9–2.2） |
 | 18 | 用户手选「浅色」但系统是深色，整页还是黑的 | 深色变量挂在 `@media (prefers-color-scheme: dark)` 上，媒体查询无法被应用内状态覆盖 | 深色变量只挂 `html[data-theme='dark']`；`data-theme` 由 `index.html` 内联脚本（首帧前，读 localStorage 镜像 `hs.theme`）+ `useTheme` 维护。详见 §6.4 与 `src/styles/README.md`「深色模式与主题色」 |
 | 19 | 自定义主题色后按钮白字看不清 / 按钮陷进背景 | 主色直接拿来用，没做对比度校正（用户可能选荧光黄、近白、近黑） | 主色必须过 `domain/accent.ts` 的 `resolveAccent`（白字 ≥4.5、与底色 ≥3，文字优先），色阶由 `accentScale` 派生后写 inline style。不要在 CSS 里 `color-mix()` 派生——做不了「不达标继续调」的闭环 |
-| 20 | 换了主题色，Vant 按钮/开关还是老绿色 | `--van-primary-color` 写死了 hex | 指向 `var(--primary-600)`；同理 Vant 的颜色变量一律引用项目 token，别写死 |
+| 20 | 换了主题色， Vant 按钮/开关还是老绿色 | `--van-primary-color` 写死了 hex | 指向 `var(--primary-600)`；同理 Vant 的颜色变量一律引用项目 token，别写死 |
+| 21 | 概览卡显示「今日待吃 3」，点进去待办只有 2 条；或待办里没有它、通知却弹出来 | 数字、列表、通知三处各自实现了一套筛选逻辑，规则一分叉就自相矛盾 | **三处都调 `domain/todo.buildTodayTodo()`**，禁止各筛各的。见 `docs/V2-CHANGELOG.md` §2.1 |
+| 22 | 批量入库 20 件卡顿 | 循环调 `items.add()`，而它内部每次都 `await load()`（全量重读 items + logs） | 批量一律走 `items.addMany()` / `bulk*` 方法：`bulkPut` + 单次 `load` |
+| 23 | 覆盖导入后旧条码映射残留 | 新增表时只改了 `dexie/sources.ts` 的 `wipe()`，忘了同一文件的 `transaction()` 表清单 | 改表结构要同步**五个地方**（见 `src/data/README.md`「改表结构必须做五件事」） |
+| 24 | 条码扫出来永远匹配不上 | `BarcodeEntry.code` 被当成 number 存/传：EAN-13 有前导 0，`Number("0123…")` 会丢 0 | 全链路用 `string`，包括输入框与 `byCode()` 的查询参数 |
+| 25 | 关掉扫码页后摄像灯一直亮、持续耗电 | 只调了 `scanner.stop()`，没有显式停视频轨 | `ScanSheet.stopScanner()` 三步：`stop()` → `clear()` → **`video.srcObject.getTracks().forEach(t => t.stop())`** |
+| 26 | 长按列表想滚动，却逐张误触进入多选 | 长按计时没有监听 `pointermove` | `ItemCard` 在位移 > 10px 时取消计时。见 `src/components/README.md`「长按防误触」 |
+| 27 | 「明天再说」之后物品从库存列表消失了 | 实现时顺手改了 `expireAt` | `snoozeUntil` **只影响待办与通知**，绝不碰 `expireAt`；物品仍在「紧急待吃」分组里 |
+| 28 | v2 新字段在旧数据上炸了 | 旧 IndexedDB 记录与 v1 备份里没有 `snoozeUntil` / `inboundItemId` | 这两个字段声明为**可选**，读取时一律 `?? null`，不写 `item.snoozeUntil > now`（依赖隐式转换很脆） |
+| 29 | 快速入库弹层滚到底，「加入」按钮下方仍露出滚动内容 | 吸底按钮条是 `sticky`，被钳制在包含块（滚动容器**内容盒**）内；容器自己的 `padding-bottom` 让按钮条永远差一个 pb 到不了弹层底边 | 滚动容器**不给**与 sticky 元素同侧的 padding，留白由 sticky 条自己的 pb 承担（见 `QuickAddSheet`） |
+| 30 | 多选态（`?select=1`）分组头悬在距顶 ~55px：上方漏卡片、下方盖住第一张卡的顶部 | 分组头吸顶偏移用的是筛选条实测高度，但多选态筛选条已被 `v-if` 移除，偏移量没跟着变 | 吸顶偏移的**邻居被 v-if 掉时偏移必须同步变**：`groupTop` 在 `selectMode` 下返回 `-1px`（见 `StockView`） |
+| 31 | 清单写「西红柿」、历史里存「番茄」，入库默认值还是落到第一个位置 | 以为 `normalizeName` 能等同义词——它只做全角 / 括号 / 空格 / 大小写的归一，**没有同义词表** | 需要别名匹配就给 `domain/inbound` 传 `AliasKeyResolver`（调用方传 `data/dict` 的 `foodKeyOf`）；domain 不得反向依赖 data，与 `ShelfLifeResolver` 同一套路 |
 
 ---
 
@@ -518,6 +529,7 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 文件 | 内容 |
 | --- | --- |
 | `README.md` | 产品简介、快速开始、GitHub 首页 |
+| `docs/V2-CHANGELOG.md` | **v2 变更说明**：新概念、一致性约束、备份升版同步清单（改 v2 相关代码前先看） |
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |
 | `src/domain/README.md` | 领域层全部纯函数 API 参考 |
 | `src/data/README.md` | 持久化接口、表结构、备份格式 |

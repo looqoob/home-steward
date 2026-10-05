@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { freshnessOf } from '@/domain/freshness';
+import { buildTodayTodo } from '@/domain/todo';
+import type { Freshness } from '@/domain/freshness';
 import { hashId } from '@/domain/ids';
 import { nextDailyAt, todayStr } from '@/domain/dates';
 import { useItemsStore } from '@/stores/items';
@@ -15,11 +16,18 @@ export function useReminder() {
   const items = useItemsStore();
   const settings = useSettingsStore();
 
+  /**
+   * 需要推送提醒的物资。
+   *
+   * ⚠️ 直接复用 `domain/todo.buildTodayTodo`，不自己再筛一遍：
+   * 待办列表与通知若各筛各的，会出现「待办里没有它、通知却弹出来」，
+   * 用户对整个提醒功能就失去信任了（数字口径同理，见 `domain/todo` 顶部注释）。
+   */
   function due() {
-    const today = todayStr();
-    return items.active
-      .map((i) => ({ item: i, f: freshnessOf(i, today, settings.settings) }))
-      .filter((x) => x.f.state === 'urgent' || x.f.state === 'over');
+    return buildTodayTodo(items.list, todayStr(), settings.settings).map((e) => ({
+      item: e.item,
+      f: { state: e.state, label: e.label, remainDays: e.remainDays, progress: null, sortKey: e.remainDays } as Freshness,
+    }));
   }
 
   async function scheduleNative() {

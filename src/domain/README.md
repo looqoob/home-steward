@@ -19,6 +19,13 @@
 | `shoppingRules.ts` | 购物建议自动生成规则 |
 | `stats.ts` | 月度统计、位置分布、今日概览 |
 | `accent.ts` | 主题色：预设色板、WCAG 对比度校正、色阶派生（纯数学，可 Node 单测） |
+| `todo.ts` | **v2**：今日待办的构建、「明天再说」延后判断 |
+| `inbound.ts` | **v2**：清单入库的数量/单位/位置默认值推断 |
+| `bulk.ts` | **v2**：批量消耗/换位置/删除的规划（产出待写入的行，不碰数据库） |
+| `backup.ts` | **v2**：未备份提醒的档位与文案 |
+| `normalize.ts` | **v2 新增**：名称归一化与首字图标。原先在 `data/dict/normalize.ts`，因本层铁律禁止 import `data/`，逻辑迁到这里，`data` 侧改为转出层 |
+
+> v2 各模块的用法与坑位见 [`docs/V2-CHANGELOG.md`](../../docs/V2-CHANGELOG.md)。
 
 ---
 

@@ -20,6 +20,14 @@ const locations = useLocationsStore();
 const dict = useDictStore();
 const { show } = useToast();
 
+/** 常用单位快捷选择；下面的输入框仍可自由填写其它单位（与 QuickAddSheet 同一套） */
+const UNITS = ['个', '袋', '斤', '瓶', '盒'];
+
+/** 数量保留 2 位小数：0.5 斤这类值加减后不会浮出 0.30000000000000004 */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 const id = route.params.id as string;
 const isNew = id === 'new';
 const item = computed(() => (isNew ? undefined : items.byId(id)));
@@ -184,27 +192,56 @@ async function removeItem() {
         </div>
 
         <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">数量 / 单位</label>
-          <div class="flex items-center gap-3 bg-card border border-line rounded-md px-2.5 py-1.5">
+          <label class="block text-[12px] text-ink-2 mb-1.5" for="item-qty">数量 / 单位</label>
+          <div class="flex items-center gap-2 bg-card border border-line rounded-md px-2.5 py-1.5">
             <button
               type="button"
-              class="relative w-8 h-8 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
+              class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
               aria-label="减少"
-              @click="draft.quantity = Math.max(1, draft.quantity - 1)"
+              @click="draft.quantity = Math.max(0.5, round2(draft.quantity - 1))"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
-            <span class="flex-1 min-w-0 text-center text-[15px] font-medium">{{ draft.quantity }}</span>
+            <!-- 数字可直接输入：0.5 斤 / 1.5 袋这类值用 ±1 步进根本到不了 -->
+            <input
+              id="item-qty"
+              :value="draft.quantity"
+              type="number"
+              step="0.5"
+              min="0.5"
+              class="flex-1 min-w-0 text-center text-[15px] font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
+              aria-label="数量"
+              @input="draft.quantity = Number(($event.target as HTMLInputElement).value) || 0.5"
+            />
             <button
               type="button"
-              class="relative w-8 h-8 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
+              class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
               aria-label="增加"
-              @click="draft.quantity++"
+              @click="draft.quantity = round2(draft.quantity + 1)"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
+            <span class="flex-none text-[14px] text-ink-2">{{ draft.unit || '个' }}</span>
           </div>
-          <input v-model="draft.unit" class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 mt-2 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50" placeholder="单位，如 个 / 袋 / 斤" />
+          <!-- 单位：常用 chips + 自定义，与快速入库（QuickAddSheet）保持同一套交互 -->
+          <div class="flex gap-1.5 flex-wrap mt-2">
+            <button
+              v-for="u in UNITS"
+              :key="u"
+              type="button"
+              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+              :class="draft.unit === u
+                ? 'bg-primary-600 border-primary-600 text-white font-medium'
+                : 'bg-card border-line text-ink-2'"
+              @click="draft.unit = u"
+            >{{ u }}</button>
+          </div>
+          <input
+            v-model="draft.unit"
+            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 mt-2 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            placeholder="其它单位，如 把 / 根"
+            aria-label="其它单位"
+          />
         </div>
 
         <div class="mb-3.5">

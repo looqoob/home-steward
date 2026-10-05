@@ -4,13 +4,16 @@ import { useRouter } from 'vue-router';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
+import { useBarcodesStore } from '@/stores/barcodes';
 import { monthStats, locationDistribution } from '@/domain/stats';
+import { backupAdvice } from '@/domain/backup';
 import { ENV_MAP } from '@/domain/types';
 
 const router = useRouter();
 const items = useItemsStore();
 const locations = useLocationsStore();
 const settings = useSettingsStore();
+const barcodes = useBarcodesStore();
 
 const ms = computed(() => monthStats(items.list, items.logs, Date.now()));
 const dist = computed(() =>
@@ -29,10 +32,25 @@ const links = computed(() => [
   { label: '消耗明细', to: '/consume-log', hint: '' },
   { label: '位置管理', to: '/locations', hint: '' },
   { label: '保质期字典', to: '/dict', hint: '' },
+  {
+    label: '条码映射',
+    to: '/barcodes',
+    // 有映射时给个数量，没扫过时就是 0
+    hint: barcodes.list.length > 0 ? `${barcodes.list.length} 条` : '',
+  },
   { label: '外观与主题', to: '/appearance', hint: themeHint.value },
   { label: '提醒设置', to: '/settings', hint: '' },
   { label: '数据备份', to: '/backup', hint: '' },
 ]);
+/**
+ * 未备份提醒（`domain/backup.backupAdvice`）。
+ *
+ * 只在超过门槛时出现，`level: 'none'` 时整条不渲染。
+ * `warn`（90 天以上）用警示色描边——数据只在本机，丢了不可恢复，值得给个视觉升级。
+ */
+const backupTip = computed(() =>
+  backupAdvice(settings.settings.lastBackupAt, settings.settings.createdAt),
+);
 </script>
 
 <template>
@@ -40,6 +58,24 @@ const links = computed(() => [
     <div class="flex items-baseline justify-between gap-2 mb-3">
       <h1 class="text-[20px] font-semibold leading-[1.2]">我的</h1>
     </div>
+
+    <button
+      v-if="backupTip.level !== 'none'"
+      type="button"
+      class="flex items-center justify-between gap-2 w-full text-left bg-card border rounded-md px-3 py-2.5 mb-3.5 cursor-pointer"
+      :class="backupTip.level === 'warn' ? 'border-danger' : 'border-line'"
+      @click="router.push('/backup')"
+    >
+      <span class="flex items-center gap-2 min-w-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none" :class="backupTip.level === 'warn' ? 'text-danger' : 'text-ink-3'">
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        </svg>
+        <span class="text-[13px] text-ink-1 truncate">{{ backupTip.text }}</span>
+      </span>
+      <span class="text-[13px] text-primary-700 flex-none">立即导出</span>
+    </button>
 
     <div class="grid grid-cols-3 gap-2 mb-3.5">
       <div class="bg-card border border-line rounded-md p-2.5 text-center">

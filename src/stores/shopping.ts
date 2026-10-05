@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { db } from '@/data';
-import type { ShoppingItem } from '@/domain/types';
+import type { Item, ShoppingItem } from '@/domain/types';
 import { newId } from '@/domain/ids';
 import { planShopping, type Suggestion } from '@/domain/shoppingRules';
+import { inboundInputs } from '@/domain/inbound';
+import { foodKeyOf } from '@/data/dict';
 import { useItemsStore } from './items';
+import { useLocationsStore } from './locations';
 import { useSettingsStore } from './settings';
 
 const DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -41,7 +44,7 @@ export const useShoppingStore = defineStore('shopping', () => {
     const rows: ShoppingItem[] = suggestions.map((s) => ({
       id: newId(),
       name: s.name,
-      quantity: null,
+      quantity: s.quantity,
       unit: s.unit,
       locationId: s.locationId,
       reason: s.reason,
@@ -50,6 +53,7 @@ export const useShoppingStore = defineStore('shopping', () => {
       checkedAt: null,
       auto: true,
       dismissedUntil: null,
+      inboundItemId: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -67,7 +71,7 @@ export const useShoppingStore = defineStore('shopping', () => {
   }
 
   /** 手动添加一条清单项。`name` trim 后为空则静默返回（不报提示）。 */
-  async function addManual(name: string) {
+  async function addManual(name: string, unit: string | null = null) {
     const now = Date.now();
     const n = name.trim();
     if (!n) return;
@@ -75,7 +79,7 @@ export const useShoppingStore = defineStore('shopping', () => {
       id: newId(),
       name: n,
       quantity: null,
-      unit: null,
+      unit: unit ? unit.trim() || null : null,
       locationId: null,
       reason: 'manual',
       sourceItemId: null,
@@ -83,6 +87,7 @@ export const useShoppingStore = defineStore('shopping', () => {
       checkedAt: null,
       auto: false,
       dismissedUntil: null,
+      inboundItemId: null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -96,15 +101,25 @@ export const useShoppingStore = defineStore('shopping', () => {
    * - **手动项**（`auto: false`）：直接软删除。
    *
    * ⚠️ 「删除自动建议」不等于永久忽略：7 天后若规则仍命中会再次出现。这是设计意图。
+   *
+   * @returns 删除前的清单项快照，传给 `restore()` 即可撤销。
+   *   `db.shopping.all()` 会过滤掉 `deletedAt` 非空的行，删完就查不回来了，只能靠这份快照。
    */
-  async function remove(id: string) {
+  async function remove(id: string): Promise<ShoppingItem | undefined> {
     const cur = list.value.find((s) => s.id === id);
-    if (!cur) return;
+    if (!cur) return undefined;
     if (cur.auto) {
       await db.shopping.put({ ...cur, deletedAt: Date.now(), dismissedUntil: Date.now() + DISMISS_MS, updatedAt: Date.now() });
     } else {
       await db.shopping.softDelete(id);
     }
+    await load();
+    return cur;
+  }
+
+  /** 撤销删除：清掉 `deletedAt` 与 `dismissedUntil` 后整条写回 */
+  async function restore(snapshot: ShoppingItem) {
+    await db.shopping.put({ ...snapshot, deletedAt: null, dismissedUntil: null, updatedAt: Date.now() });
     await load();
   }
 
@@ -117,5 +132,91 @@ export const useShoppingStore = defineStore('shopping', () => {
     await load();
   }
 
-  return { list, loaded, visible, pending, done, load, generate, toggle, addManual, remove, clearDone };
+  /* ==================== 一键入库 ==================== */
+
+  /** 写入入库结果：勾选 + 记下生成的物品 id，供「撤销入库」反查 */
+  async function markInbound(id: string, itemId: string) {
+    const cur = list.value.find((s) => s.id === id);
+    if (!cur) return;
+    const now = Date.now();
+    await db.shopping.put({ ...cur, checked: true, checkedAt: now, inboundItemId: itemId, updatedAt: now });
+  }
+
+  /**
+   * 单项入库：把一条清单项变成库存里的物品。
+   *
+   * 走 `items.addMany`（一次 bulkPut）而不是循环 `add()`，后者每次都会全量重读。
+   *
+   * @returns 新建的物品；清单项已不存在时返回 `null`
+   */
+  async function inboundOne(id: string, quantity: number, locationId: string): Promise<Item | null> {
+    const items = useItemsStore();
+    const locs = useLocationsStore();
+    const s = list.value.find((x) => x.id === id && !x.deletedAt);
+    if (!s) return null;
+    // 传别名解析器：「西红柿」也能命中历史里的「番茄」，否则每次都要手选位置
+    const { rows } = inboundInputs([s], items.list, locs.all, { aliasKey: foodKeyOf });
+    if (!rows.length) return null;
+    const created = await items.addMany([rows[0].input]);
+    const item = created[0];
+    if (item) await markInbound(id, item.id);
+    return item ?? null;
+  }
+
+  /**
+   * 批量入库：把若干清单项一次性变成库存物品。
+   *
+   * ⚠️ 不用 `db.transaction` 包住「写物品 + 回写清单」：Dextr 事务会锁住相关表，
+   * 而 `items.addMany` 内部需要 `load()` 全量重读，放进事务里容易与事务外的读冲突。
+   * 这里改成「先落物品、再回写清单项」两步 —— 中途失败最坏结果是清单项没勾上，
+   * 物品已入库（数据只多不少，不会丢），比事务回滚更安全。
+   *
+   * @param ids 要入库的清单项 id
+   * @param overrides 逐项覆盖数量/位置；缺省时按 `domain/inbound` 推断
+   * @returns 入库成功的数量、未能入库的清单项
+   */
+  async function inboundAll(
+    ids: string[],
+    overrides?: Map<string, { quantity: number; locationId: string }>,
+  ): Promise<{ count: number; skipped: ShoppingItem[] }> {
+    const items = useItemsStore();
+    const locs = useLocationsStore();
+    const set = new Set(ids);
+    const targets = list.value.filter((s) => set.has(s.id) && !s.deletedAt);
+    if (!targets.length) return { count: 0, skipped: [] };
+
+    const { rows, skipped } = inboundInputs(targets, items.list, locs.all, { overrides, aliasKey: foodKeyOf });
+    if (!rows.length) return { count: 0, skipped };
+
+    const created = await items.addMany(rows.map((r) => r.input));
+    for (let i = 0; i < rows.length; i++) {
+      const item = created[i];
+      if (item) await markInbound(rows[i].shoppingId, item.id);
+    }
+    return { count: created.length, skipped };
+  }
+
+  /**
+   * 撤销入库：删掉入库时生成的物品，并把清单项恢复成「未入库」。
+   *
+   * @param id 清单项 id
+   * @returns 被删掉的物品快照，交给 `items.restore()` 才能真正撤销
+   */
+  async function undoInbound(id: string): Promise<Item | undefined> {
+    const items = useItemsStore();
+    const s = list.value.find((x) => x.id === id);
+    if (!s) return undefined;
+    const itemId = s.inboundItemId ?? null;
+    const snapshot = itemId ? items.byId(itemId) : undefined;
+    if (itemId) await items.remove(itemId);
+    const now = Date.now();
+    await db.shopping.put({ ...s, checked: false, checkedAt: null, inboundItemId: null, updatedAt: now });
+    await load();
+    return snapshot;
+  }
+
+  return {
+    list, loaded, visible, pending, done, load, generate, toggle, addManual, remove, restore, clearDone,
+    inboundOne, inboundAll, undoInbound,
+  };
 });

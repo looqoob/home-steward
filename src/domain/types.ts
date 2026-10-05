@@ -111,6 +111,16 @@ export interface Item {
 
   status: ItemStatus;
   note: string | null;
+  /**
+   * 「明天再说」的截止时刻（epoch 毫秒，`null` = 未延后）。
+   *
+   * v2 新增的**可选**字段：`undefined` 视作未延后，因此旧 IndexedDB 记录与旧备份 JSON
+   * 无需迁移即可安全读取（读取处一律用 `?? null` 兜底，不要依赖隐式类型转换）。
+   *
+   * 语义边界：只影响「今日待办」列表与提醒推送，**绝不改 `expireAt`** ——
+   * 它表达的是「我今天不想处理它」，不是「它变新鲜了」；改到期日会污染新鲜度排序与浪费统计。
+   */
+  snoozeUntil?: number | null;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -161,8 +171,30 @@ export interface DictEntry {
   deletedAt: number | null;
 }
 
-export type ShopReason = 'out_of_stock' | 'near_expiry' | 'frequent_waste' | 'manual';
+/**
+ * 条码 → 名称的本地映射（v2 新增）。
+ *
+ * 隐私边界：这张表**只存在本机**，不联网查询任何商品数据库。
+ * 首次扫到未知条码时让用户手输一次名称，之后扫码即可自动带出。
+ */
+export interface BarcodeEntry {
+  id: string;
+  /**
+   * ⚠️ 必须用 `string`：EAN-8 / EAN-13 存在前导 0（`"0123456789012"`）。
+   * 若用 `number` 存储，`Number("0123456789012")` 会变成 `123456789012`，条码就再也匹配不上了。
+   */
+  code: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  /** 默认存放位置；`null` 表示每次手选 */
+  locationId: string | null;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+}
 
+export type ShopReason = 'out_of_stock' | 'near_expiry' | 'frequent_waste' | 'manual';
 export interface ShoppingItem {
   id: string;
   name: string;
@@ -175,6 +207,11 @@ export interface ShoppingItem {
   checkedAt: number | null;
   auto: boolean;
   dismissedUntil: number | null;
+  /**
+   * v2 新增：勾选「入库」后生成的物品 id，用于反查与「撤销入库」；未入库为 `null`。
+   * 同样按可选字段处理，旧数据缺失时视作未入库。
+   */
+  inboundItemId?: string | null;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -225,5 +262,5 @@ export const DEFAULT_SETTINGS: Omit<Settings, 'createdAt' | 'updatedAt'> = {
   accent: '#228055',
 };
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const BUILTIN_DICT_VERSION = 1;

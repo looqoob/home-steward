@@ -1,4 +1,4 @@
-import type { ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
 
 /**
  * 持久化抽象层。业务代码只依赖这些接口，
@@ -38,6 +38,16 @@ export interface SettingsRepository {
   save(s: Settings): Promise<void>;
 }
 
+export interface BarcodeRepository extends Repository<BarcodeEntry> {
+  /**
+   * 按条码查映射。
+   *
+   * ⚠️ `code` 是 **string**：EAN-13 有前导 0，数据库里用 `where('code').equals(code)` 比较，
+   * 传数字会因类型不符而查不到。
+   */
+  byCode(code: string): Promise<BarcodeEntry | undefined>;
+}
+
 export interface DataSources {
   items: ItemRepository;
   locations: LocationRepository;
@@ -45,6 +55,7 @@ export interface DataSources {
   shopping: ShoppingRepository;
   dict: DictRepository;
   settings: SettingsRepository;
+  barcodes: BarcodeRepository;
   transaction<T>(fn: () => Promise<T>): Promise<T>;
   /** 清空所有业务数据（导入「覆盖」时使用） */
   wipe(): Promise<void>;

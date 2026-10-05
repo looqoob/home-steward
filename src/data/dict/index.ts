@@ -34,6 +34,18 @@ export function lookupFood(name: string) {
   return builtinIndex().byName.get(normalizeName(name));
 }
 
+/**
+ * 名称 → 字典规范 key（「西红柿」与「番茄」返回同一个 key），未命中返回 `null`。
+ *
+ * 供 `domain/inbound` 的 `AliasKeyResolver` 使用：入库默认值推断要靠它做别名匹配，
+ * 而 domain 不能反向依赖 data，所以由调用方把这个函数传进去。
+ * 两处调用点（清单入库 store / 行内入库卡）都必须用它，别各自 `lookupFood(...)?.key`，
+ * 否则一侧改了判定另一侧会漂移。
+ */
+export function foodKeyOf(name: string): string | null {
+  return lookupFood(name)?.key ?? null;
+}
+
 export function categoryOf(name: string): CategoryKey | null {
   const f = lookupFood(name);
   if (f) return f.category;

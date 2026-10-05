@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
@@ -8,15 +8,21 @@ import ItemCard from '@/components/ItemCard.vue';
 import LocationChipBar from '@/components/LocationChipBar.vue';
 import ConsumeSheet from '@/components/ConsumeSheet.vue';
 import SearchField from '@/components/SearchField.vue';
+import TodayTodo from '@/components/TodayTodo.vue';
+import BulkActionBar from '@/components/BulkActionBar.vue';
+import LocationPickerSheet from '@/components/LocationPickerSheet.vue';
+import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import { freshnessOf, sortByFreshness, groupByFreshness, type FreshGroup } from '@/domain/freshness';
-import { todayOverview } from '@/domain/stats';
+import { buildTodayTodo } from '@/domain/todo';
 import { todayStr } from '@/domain/dates';
 import { lookupFood } from '@/data/dict';
 import { normalizeName } from '@/data/dict/normalize';
 import type { ConsumeType, Item } from '@/domain/types';
+import type { BulkOp } from '@/domain/bulk';
 import { useToast } from '@/composables/useToast';
 
 const router = useRouter();
+const route = useRoute();
 const items = useItemsStore();
 const locations = useLocationsStore();
 const settings = useSettingsStore();
@@ -39,6 +45,7 @@ let ro: ResizeObserver | null = null;
 
 function measureFilter() {
   const el = filterEl.value;
+  // 多选态下筛选条被移除，此时没有可测量的元素，保留上一次的值即可
   if (el) filterH.value = el.getBoundingClientRect().height;
 }
 
@@ -55,14 +62,38 @@ onBeforeUnmount(() => {
   ro = null;
 });
 
-/** 分组头吸顶位置：紧贴筛选条下沿（-1px 做重叠，避免发丝缝） */
-const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
+/**
+ * 分组头吸顶位置：有筛选条时紧贴其下沿（-1px 做重叠，避免发丝缝）。
+ *
+ * ⚠️ 多选态（`?select=1`）下筛选条被 `v-if` 移除，但 `filterH` 仍是它的实测高度——
+ * 若继续用 `filterH - 1` 当偏移，分组头会悬在距顶 ~55px 处：上方露出滚动中的卡片、
+ * 下方盖住第一张卡片的顶部。此时必须与筛选条同款约定：直接贴容器顶（-1px）。
+ */
+const groupTop = computed(() => {
+  if (selectMode.value) return '-1px';
+  return `${Math.max(0, Math.round(filterH.value) - 1)}px`;
+});
 
 /** 概览卡筛选：`FreshGroup` 走分组，'overdue' 单独筛「已过期」，null 表示不筛 */
 const statusFilter = ref<FreshGroup | 'overdue' | null>(null);
 
-const overview = computed(() => todayOverview(items.active, today, settings.settings.urgentDays));
+/**
+ * 「今日待吃」概览。
+ *
+ * ⚠️ 必须与 `TodayTodo` 用**同一个** `buildTodayTodo`：
+ * 概览卡显示 3 而待办列表只有 2 条（因为有 items 被「明天再说」延后了），
+ * 用户点进去会觉得数字在骗人。这里的 `overdue` 另行统计已过期数。
+ */
+const todo = computed(() => buildTodayTodo(items.list, today, settings.settings));
 const total = computed(() => items.active.length);
+
+/**
+ * 「已过期」单独计数。
+ *
+ * 用 `rows`（已过滤/已排序的列表）而不是全量物品：概览卡应该与点进去看到的列表一致。
+ * 其中被「明天再说」延后的**不计入**——它今天不打算处理，就不该占着这个数字。
+ */
+const overdueCount = computed(() => rows.value.filter((r) => r.state === 'over').length);
 
 const dateLabel = computed(() => {
   const [, m, d] = today.split('-');
@@ -153,6 +184,91 @@ function confirmConsume(qty: number) {
   consumeTarget.value = null;
   if (target) void consume(target.item, target.type, qty);
 }
+
+/* ==================== 多选 / 批量操作 ==================== */
+
+/**
+ * 多选态放在路由 query 上（`?select=1`）而不是纯本地 `ref`：
+ * 外壳 `TabLayout` 需要知道「隐藏 FAB、给底部多留 120px」，那是另一个组件。
+ * 走 query 让两边看同一个真值，不用 provide/prop 把外壳和页面耦合起来。
+ */
+const selectMode = computed(() => route.query.select === '1');
+/** 选中的物品 id 集合（仅本页需要，不进 query） */
+const selected = ref<Set<string>>(new Set());
+
+function setSelectMode(on: boolean) {
+  const q = { ...route.query };
+  if (on) q.select = '1';
+  else delete q.select;
+  router.replace({ path: '/stock', query: q });
+}
+
+/** 筛选/搜索变化后，若选中的物品已不在结果里就清掉，避免对「看不见的项」执行批量操作 */
+watch([rows, statusFilter], () => {
+  if (!selected.value.size) return;
+  const visible = new Set(rows.value.map((r) => r.item.id));
+  const next = new Set([...selected.value].filter((id) => visible.has(id)));
+  if (next.size !== selected.value.size) selected.value = next;
+});
+
+function toggleSelect(item: Item) {
+  const next = new Set(selected.value);
+  if (next.has(item.id)) next.delete(item.id);
+  else next.add(item.id);
+  selected.value = next;
+  if (!next.size) setSelectMode(false);
+}
+
+function enterSelect(item?: Item) {
+  if (item) selected.value = new Set([item.id]);
+  setSelectMode(true);
+}
+
+function exitSelect() {
+  setSelectMode(false);
+  selected.value = new Set();
+}
+
+function selectAll() {
+  selected.value =
+    selected.value.size >= rows.value.length
+      ? new Set()
+      : new Set(rows.value.map((r) => r.item.id));
+}
+
+const selectedNames = computed(() =>
+  rows.value.filter((r) => selected.value.has(r.item.id)).map((r) => r.item.name),
+);
+
+/** 批量执行后的统一收尾：清空选择、退出多选，并给出**整批**撤销 */
+async function afterBulk(op: BulkOp | null, verb: string) {
+  if (!op) {
+    show('没有可操作的物资');
+    return;
+  }
+  exitSelect();
+  show(`${verb} ${op.items.length} 件`, 2200, { text: '撤销', run: () => items.undoBulk(op) });
+}
+
+async function bulkConsume(type: ConsumeType) {
+  const op = await items.bulkConsume([...selected.value], type);
+  await afterBulk(op, type === 'consumed' ? '已用掉' : '已扔掉');
+}
+
+const moveSheet = ref(false);
+
+async function bulkMove(locationId: string) {
+  const op = await items.bulkMoveTo([...selected.value], locationId);
+  const loc = locations.byId(locationId);
+  await afterBulk(op, `已移到${loc?.name ?? '新位置'}`);
+}
+
+const confirmBulkRemove = ref(false);
+
+async function bulkRemove() {
+  const op = await items.bulkRemove([...selected.value]);
+  await afterBulk(op, '已删除');
+}
 </script>
 
 <template>
@@ -166,10 +282,18 @@ function confirmConsume(qty: number) {
 
     <div class="flex items-baseline justify-between gap-2 mb-3">
       <h1 class="text-[20px] font-semibold leading-[1.2]">库存</h1>
-      <span class="text-[12px] text-ink-3 whitespace-nowrap">{{ dateLabel }} · 在库 {{ total }} 件</span>
+      <!-- 多选态时右侧换成「完成」，概览卡与待办区在多选下不参与操作，藏起来减少干扰 -->
+      <button
+        v-if="!selectMode"
+        type="button"
+        class="text-[13px] text-primary-700 cursor-pointer"
+        :disabled="rows.length === 0"
+        @click="enterSelect()"
+      >选择</button>
+      <span v-else class="text-[12px] text-ink-3 whitespace-nowrap">{{ dateLabel }} · 在库 {{ total }} 件</span>
     </div>
 
-    <div class="grid grid-cols-3 gap-2 mb-3.5">
+    <div v-if="!selectMode" class="grid grid-cols-3 gap-2 mb-3.5">
       <button
         type="button"
         class="border rounded-md px-2 py-2.5 text-center w-full cursor-pointer transition"
@@ -180,7 +304,7 @@ function confirmConsume(qty: number) {
         :aria-pressed="statusFilter === 'urgent'"
         @click="toggleStatus('urgent')"
       >
-        <span class="block text-[20px] font-semibold leading-[1.2]">{{ overview.dueToday }}</span>
+        <span class="block text-[20px] font-semibold leading-[1.2]">{{ todo.length }}</span>
         <span class="block text-[12px] mt-0.5" :class="statusFilter === 'urgent' ? 'text-urgent-fg' : 'text-ink-3'">今日待吃</span>
       </button>
       <button
@@ -193,7 +317,7 @@ function confirmConsume(qty: number) {
         :aria-pressed="statusFilter === 'overdue'"
         @click="toggleStatus('overdue')"
       >
-        <span class="block text-[20px] font-semibold leading-[1.2]">{{ overview.overdue }}</span>
+        <span class="block text-[20px] font-semibold leading-[1.2]">{{ overdueCount }}</span>
         <span class="block text-[12px] mt-0.5" :class="statusFilter === 'overdue' ? 'text-over-fg' : 'text-ink-3'">已过期</span>
       </button>
       <button
@@ -208,13 +332,19 @@ function confirmConsume(qty: number) {
       </button>
     </div>
 
-    <div v-if="overview.dueToday > 0" class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">
-      <b class="font-medium text-ink-1">今日待吃 {{ overview.dueToday }} 件</b>，点上方卡片可只看这部分。
-    </div>
+    <!--
+      今日待办放在概览卡与搜索之间：数字下面紧跟「是哪几件、怎么处理」，
+      这是本页最高频的动线。空库时不显示收尾文案（`:show-empty="total > 0"`）。
+    -->
+    <TodayTodo v-if="!selectMode" :show-empty="total > 0" />
 
-    <SearchField v-model="keyword" class="mb-3.5" placeholder="搜索食材（支持别名，如 番茄）" />
+    <SearchField v-if="!selectMode" v-model="keyword" class="mb-3.5" placeholder="搜索食材（支持别名，如 番茄）" />
 
-    <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pt-1 pb-2">
+    <div
+      v-if="!selectMode"
+      ref="filterEl"
+      class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pt-1 pb-2"
+    >
       <LocationChipBar v-model="filterLoc" @manage="router.push('/locations')" />
     </div>
 
@@ -244,8 +374,12 @@ function confirmConsume(qty: number) {
         :key="r.item.id"
         :item="r.item"
         :location="locations.byId(r.item.locationId)"
+        :selectable="selectMode"
+        :selected="selected.has(r.item.id)"
         @click="openItem(r.item.id)"
         @consume="askConsume"
+        @select="toggleSelect"
+        @longpress="enterSelect"
       />
     </section>
 
@@ -255,6 +389,34 @@ function confirmConsume(qty: number) {
       :type="consumeTarget?.type ?? 'consumed'"
       @update:model-value="consumeTarget = null"
       @confirm="confirmConsume"
+    />
+
+    <!-- 批量操作条绝对定位在容器底部（.relative 来自 TabLayout 的 max-w 容器） -->
+    <BulkActionBar
+      v-if="selectMode"
+      :count="selected.size"
+      :total="rows.length"
+      @consume="bulkConsume"
+      @move="moveSheet = true"
+      @remove="confirmBulkRemove = true"
+      @select-all="selectAll"
+      @exit="exitSelect"
+    />
+
+    <LocationPickerSheet
+      v-model="moveSheet"
+      :item-name="selectedNames[0] ?? null"
+      :count="selected.size"
+      @confirm="bulkMove"
+    />
+
+    <ConfirmSheet
+      v-model="confirmBulkRemove"
+      title="批量删除"
+      :message="`将从库存移除 ${selected.size} 件物资，不计入消耗统计。可在提示中撤销。`"
+      confirm-text="删除"
+      danger
+      @confirm="bulkRemove"
     />
   </div>
 </template>
