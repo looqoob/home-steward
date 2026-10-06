@@ -6,6 +6,7 @@
 > **批次 A 落地范围**：清单按区域分组（V3-01）· 统计（V3-04）· 时间轴（V3-05）·
 > 同名合并（V3-06）· 盘点（V3-07）· 测试体系（V3-09）。
 > **V3-10（APK）**：debug 包已打出，构建环境与卡点见 §16；真机验证待补。
+> **V3-11（重打包）**：顶部间距修复已落包（见 §16.5），APK 时间戳 2026-10-06 23:14。
 
 ---
 
@@ -567,3 +568,16 @@ npm run apk             # = cd android && ./gradlew assembleDebug
 - `assembleDebug` → `BUILD SUCCESSFUL`，APK 内含 `assets/public/`（Web 产物）与 `AndroidManifest.xml`，
   经 zip 结构校验有效。
 - **未做**：真机 / 模拟器安装运行验证（本机无安卓设备）。debug 包用 debug key 签名，可直接 `adb install`。
+
+### 16.5 重打包 V3-11（顶部间距修复）
+
+用户反馈「App 顶部距离过低、贴边」。根因：主 Tab 三页顶部留白不一致——`StockView` 已有
+`h-4`（16px）内部占位，而 `ListView` / `MeView` 缺少该占位，导致清单/我的两页仅靠 `TabLayout`
+外壳的 12px 安全区占位，内容贴边。修复：两页各补一个与库存页同款的 `<div class="h-4" aria-hidden>`
+普通流占位（吸顶筛选条要求滚动容器 `pt-0`，故用普通流元素而非 padding 撑开）。
+
+- 改 `src/views/ListView.vue`、`src/views/MeView.vue`（各 +3 行占位）。
+- 重跑 `npm run build` → `npx cap sync android` → `assembleDebug`，APK 时间戳更新为 2026-10-06 23:14。
+- 已用 zip 校验：APK 内 `assets/public/assets/ListView-*.js` 与 `MeView-*.js` 均含 `h-4`，修复已落包。
+- 注：本会话 `gradlew` 需先 `cd android` 再执行（wrapper 以 CWD 为工程根，直接在仓库根跑会报
+  “does not contain a Gradle build”）；`JAVA_HOME` 需显式指向 Microsoft JDK 21。

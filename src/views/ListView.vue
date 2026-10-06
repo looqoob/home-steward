@@ -165,6 +165,9 @@ async function clearDone() {
 
 <template>
   <div>
+    <!-- 顶部 16px 间距，与库存页一致：滚动容器 pt-0（吸顶筛选条需要），间距改由普通流占位元素提供 -->
+    <div class="h-4" aria-hidden="true"></div>
+
     <!-- 与库存页保持同一套页头节奏：标题 + 右侧计数 -->
     <div class="flex items-baseline justify-between gap-2 mb-3">
       <h1 class="text-[20px] font-semibold leading-[1.2]">清单</h1>

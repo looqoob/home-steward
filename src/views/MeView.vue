@@ -57,6 +57,9 @@ const backupTip = computed(() =>
 
 <template>
   <div>
+    <!-- 顶部 16px 间距，与库存页一致：滚动容器 pt-0，间距改由普通流占位元素提供 -->
+    <div class="h-4" aria-hidden="true"></div>
+
     <div class="flex items-baseline justify-between gap-2 mb-3">
       <h1 class="text-[20px] font-semibold leading-[1.2]">我的</h1>
     </div>
