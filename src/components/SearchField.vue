@@ -25,17 +25,7 @@ function onInput(e: Event) {
   <div
     class="flex items-center gap-2 h-10 px-3 rounded-full bg-sunken border border-line transition-colors focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-50"
   >
-    <svg
-      class="flex-none text-ink-3"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.2"
-      stroke-linecap="round"
-      aria-hidden="true"
-    >
+    <svg class="icon icon-sm flex-none text-ink-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
       <circle cx="11" cy="11" r="7" />
       <line x1="16.4" y1="16.4" x2="21" y2="21" />
     </svg>

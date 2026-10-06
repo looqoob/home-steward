@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import SearchField from '@/components/SearchField.vue';
 import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog, ConsumeType } from '@/domain/types';
 import { fromEpoch, monthKey, todayStr, toDateStr } from '@/domain/dates';
+import { normalizePrice } from '@/domain/price';
 
 const router = useRouter();
+const route = useRoute();
 const items = useItemsStore();
 
 type RangeKey = 'all' | 'today' | '7d' | 'month' | 'year';
@@ -27,7 +29,14 @@ const cats: { key: CatKey; label: string }[] = [
 
 const range = ref<RangeKey>('all');
 const cat = ref<CatKey>('all');
-const kw = ref('');
+/**
+ * 关键词初值取自路由 `?name=`。
+ *
+ * 统计页的「最常浪费 Top 5」点进来就是靠它定位到某个名称 ——
+ * 与其新造一个 `/consume-log?name=x` 的路由分支，不如复用已有的搜索框，
+ * 用户进来后还能自己改、能看见自己被筛了什么。
+ */
+const kw = ref(typeof route.query.name === 'string' ? route.query.name : '');
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -69,10 +78,15 @@ function inRange(at: number, r: RangeKey, now: number): boolean {
   return true;
 }
 
-/** 金额 / 单价格式化：未填价格统一以「-」表示 */
+/**
+ * 金额 / 单价格式化：未填价格统一以「-」表示。
+ *
+ * 走 `normalizePrice` 而不是只判 `== null`：明细页是**唯一**直接把库里的金额喂给
+ * `.toFixed()` 的地方，值若是脏的（旧备份里的字符串、负数）会直接抛 TypeError 白屏。
+ */
 function money(n: number | null | undefined): string {
-  if (n == null) return '-';
-  return '¥' + n.toFixed(2);
+  const p = normalizePrice(n);
+  return p === null ? '-' : '¥' + p.toFixed(2);
 }
 
 const filtered = computed<ConsumeLog[]>(() => {
@@ -199,7 +213,7 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
 
     <div v-if="groups.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
       <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
           <line x1="9" y1="13" x2="15" y2="13" />

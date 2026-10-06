@@ -48,6 +48,17 @@ const quickAddOpen = computed(() => route.query.quickadd === '1');
  */
 const selectMode = computed(() => route.query.select === '1');
 
+/**
+ * 盘点态（`?check=1`）与多选态互斥，同样要隐藏 FAB、让出底部空间。
+ *
+ * 盘点页面底部没有常驻操作条（三个判定按钮在内容流里），所以只让 FAB 的位置即可，
+ * 不需要像多选那样留 132px。
+ */
+const stocktakeMode = computed(() => route.query.check === '1');
+
+/** FAB 在多选 / 盘点态下都隐藏，避免两个悬浮元素打架 */
+const fabHidden = computed(() => selectMode.value || stocktakeMode.value);
+
 function openQuickAdd() {
   router.push({ path: '/stock', query: { quickadd: '1' } });
 }
@@ -66,7 +77,11 @@ function closeScan() {
 
 /** 多选态下让出 FAB 与操作条占用的底部空间（操作条约 120px 高） */
 const padClass = computed(() => {
-  if (isStock.value) return selectMode.value ? 'pt-0 pb-[132px]' : 'pt-0 pb-[84px]';
+  if (isStock.value) {
+    if (selectMode.value) return 'pt-0 pb-[132px]';
+    if (stocktakeMode.value) return 'pt-0 pb-[84px]';
+    return 'pt-0 pb-[84px]';
+  }
   if (headerTitle.value) return 'pt-0 pb-0';
   return 'pt-4 pb-3';
 });
@@ -107,7 +122,7 @@ function go(path: string) {
         aria-label="库存"
         @click="go('/stock')"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2.5" y="3" width="19" height="5" rx="1.2" />
           <path d="M4.5 8v10.5a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5V8" />
           <path d="M10 12h4" />
@@ -121,7 +136,7 @@ function go(path: string) {
         aria-label="清单"
         @click="go('/list')"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="9" y1="6" x2="20" y2="6" />
           <line x1="9" y1="12" x2="20" y2="12" />
           <line x1="9" y1="18" x2="20" y2="18" />
@@ -138,7 +153,7 @@ function go(path: string) {
         aria-label="我的"
         @click="go('/me')"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
           <circle cx="12" cy="7" r="4" />
         </svg>
@@ -146,14 +161,14 @@ function go(path: string) {
       </button>
 
       <button
-        v-if="isStock && !selectMode"
+        v-if="isStock && !fabHidden"
         type="button"
         class="absolute right-4 bottom-[calc(100%+12px)] w-[52px] h-[52px] rounded-full bg-primary-600 text-white flex items-center justify-center shadow-pop z-25 hover:bg-primary-700"
         aria-label="快速入库"
         @click="openQuickAdd"
       >
         <!-- 用 SVG + currentColor 而不是全角「＋」字形：前者一定跟随按钮配色，笔画粗细也和其它图标一致 -->
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+        <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
           <line x1="12" y1="5.5" x2="12" y2="18.5" />
           <line x1="5.5" y1="12" x2="18.5" y2="12" />
         </svg>

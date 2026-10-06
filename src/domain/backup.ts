@@ -57,7 +57,14 @@ export function backupAdvice(
   const from = lastBackupAt ?? createdAt;
   // 设置刚创建、或时间戳异常（负数/未来）时不提醒，避免出现「已 -3 天未备份」
   const days = Math.floor((now - from) / DAY);
-  if (!Number.isFinite(days) || days < o.firstAfterDays) {
+  if (!Number.isFinite(days)) {
+    return { level: 'none', days: 0, text: '' };
+  }
+  // ⚠️ 两条门槛不能混用：从未备份走 firstAfterDays（新手宽限 7 天），
+  // 备份过走 remindEveryDays（30 天）。早先这里两种情况都用 firstAfterDays，
+  // 导致 `remindEveryDays` 成了死选项 —— 用户昨天刚导出、7 天后又被念一遍，很烦。
+  const gate = lastBackupAt === null ? o.firstAfterDays : o.remindEveryDays;
+  if (days < gate) {
     return { level: 'none', days: 0, text: '' };
   }
   const level: BackupLevel = days >= o.warnAfterDays ? 'warn' : 'info';

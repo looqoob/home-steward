@@ -29,6 +29,7 @@ const themeHint = computed(() => {
 });
 
 const links = computed(() => [
+  { label: '统计', to: '/stats', hint: '' },
   { label: '消耗明细', to: '/consume-log', hint: '' },
   { label: '位置管理', to: '/locations', hint: '' },
   { label: '保质期字典', to: '/dict', hint: '' },
@@ -39,7 +40,8 @@ const links = computed(() => [
     hint: barcodes.list.length > 0 ? `${barcodes.list.length} 条` : '',
   },
   { label: '外观与主题', to: '/appearance', hint: themeHint.value },
-  { label: '提醒设置', to: '/settings', hint: '' },
+  // 页面标题已改为「设置」：它现在同时承载「库存设置」与「提醒设置」两个分区
+  { label: '设置', to: '/settings', hint: '' },
   { label: '数据备份', to: '/backup', hint: '' },
 ]);
 /**
@@ -67,7 +69,7 @@ const backupTip = computed(() =>
       @click="router.push('/backup')"
     >
       <span class="flex items-center gap-2 min-w-0">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="flex-none" :class="backupTip.level === 'warn' ? 'text-danger' : 'text-ink-3'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon icon-sm flex-none" :class="backupTip.level === 'warn' ? 'text-danger' : 'text-ink-3'">
           <path d="M12 9v4" />
           <path d="M12 17h.01" />
           <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />

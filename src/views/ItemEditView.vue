@@ -11,6 +11,7 @@ import { computeExpiry, compareLocations } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP, type Item } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
+import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { useToast } from '@/composables/useToast';
 
 const route = useRoute();
@@ -23,10 +24,7 @@ const { show } = useToast();
 /** 常用单位快捷选择；下面的输入框仍可自由填写其它单位（与 QuickAddSheet 同一套） */
 const UNITS = ['个', '袋', '斤', '瓶', '盒'];
 
-/** 数量保留 2 位小数：0.5 斤这类值加减后不会浮出 0.30000000000000004 */
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+/** 数量保留 2 位小数：0.5 斤这类值加减后不会浮出 0.30000000000000004（与 domain/price 同一份实现） */
 
 const id = route.params.id as string;
 const isNew = id === 'new';
@@ -108,7 +106,7 @@ async function save() {
       quantity: draft.quantity,
       unit: draft.unit || '个',
       locationId: draft.locationId,
-      price: draft.price,
+      price: normalizePrice(draft.price),
       producedAt: draft.producedAt,
       manualShelfLife: draft.manualShelfLife,
       note: draft.note,
@@ -120,7 +118,7 @@ async function save() {
       name,
       quantity: draft.quantity,
       unit: draft.unit || '个',
-      price: draft.price,
+      price: normalizePrice(draft.price),
       producedAt: draft.producedAt,
       manualShelfLife: draft.manualShelfLife,
       note: draft.note,
@@ -200,7 +198,7 @@ async function removeItem() {
               aria-label="减少"
               @click="draft.quantity = Math.max(0.5, round2(draft.quantity - 1))"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
             <!-- 数字可直接输入：0.5 斤 / 1.5 袋这类值用 ±1 步进根本到不了 -->
             <input
@@ -219,7 +217,7 @@ async function removeItem() {
               aria-label="增加"
               @click="draft.quantity = round2(draft.quantity + 1)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
             <span class="flex-none text-[14px] text-ink-2">{{ draft.unit || '个' }}</span>
           </div>
@@ -330,17 +328,25 @@ async function removeItem() {
             />
           </div>
 
+          <!--
+            单价：**每 1 单位**的价格（元）。用它算「本次金额 = 单价 × 消耗数量」。
+            ⚠️ 口径必须走 `priceFromInput`：负数会把月度「浪费金额」拉成负数，`1e999` 会让它变 `¥Infinity`，
+            而 `min="0"` 只是 HTML 校验、挡不住手输。非法值归一为 `null`（= 没填价，不是 0）。
+          -->
           <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5">单价（元，可选）</label>
+            <label class="block text-[12px] text-ink-2 mb-1.5" for="item-price">单价（元 / {{ draft.unit || '个' }}，可选）</label>
             <input
+              id="item-price"
               :value="draft.price ?? ''"
               type="number"
               step="0.01"
               min="0"
+              inputmode="decimal"
               class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
-              placeholder="用于统计浪费金额"
-              @input="draft.price = ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null"
+              placeholder="每 1 {{ draft.unit || '个' }} 的价格，如 1.5（不是整盒 30）"
+              @input="draft.price = priceFromInput(($event.target as HTMLInputElement).value)"
             />
+            <div class="text-[12px] text-ink-3 mt-1.5 leading-relaxed">用于统计浪费金额。整份花了多少钱请除以数量再填。</div>
           </div>
 
           <div class="mb-3.5">
@@ -364,7 +370,7 @@ async function removeItem() {
               aria-label="减少"
               @click="consumeQty = Math.max(0.5, consumeQty - 1)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
             <span class="flex-1 min-w-0 text-center text-[15px] font-medium">{{ consumeQty }}</span>
             <button
@@ -373,7 +379,7 @@ async function removeItem() {
               aria-label="增加"
               @click="consumeQty = Math.min(remainQty, consumeQty + 1)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
             </div>
             <button

@@ -8,11 +8,14 @@
 import type { Item, Location, ShoppingItem } from './types';
 import type { NewItemInput } from './itemFactory';
 import { normalizeName } from './normalize';
+import { normalizePrice } from './price';
 
 export interface InboundDefaults {
   quantity: number;
   unit: string;
   locationId: string | null;
+  /** 上次同名称入库的单价；没买过或当时没填价则为 `null` */
+  price: number | null;
 }
 
 /** 只保留在库物品，按入库时间倒序（最近买的排最前） */
@@ -63,6 +66,10 @@ function firstEnabled(locations: Location[]): string | null {
  * - 数量：清单项自带 → 上次同名称入库的数量 → 1
  * - 单位：清单项自带 → 上次同名称的单位 → '个'
  * - 位置：清单项自带 → 上次同名称的位置 → 第一个启用位置
+ * - 单价：上次同名称的单价 → `null`（清单项本身没有价格字段，**不凭空给默认值**）
+ *
+ * 单价只做「带出来」：用户这次花的价格未必和上次一样，所以是可改的预填值而不是自动落库。
+ * 走 `normalizePrice` 是因为历史物品可能是旧备份导入的，单价未必是有限非负数。
  *
  * 清单项自带的值来自 `planShopping`（从消耗日志继承），所以「库存 0」类建议往往已经带好了位置。
  *
@@ -78,7 +85,7 @@ export function inboundDefaults(
   const quantity = s.quantity && s.quantity > 0 ? s.quantity : prev?.quantity ?? 1;
   const unit = (s.unit || prev?.unit || '个').trim() || '个';
   const locationId = s.locationId ?? prev?.locationId ?? firstEnabled(locations);
-  return { quantity, unit, locationId };
+  return { quantity, unit, locationId, price: normalizePrice(prev?.price) };
 }
 
 /**
@@ -92,6 +99,7 @@ export function inboundInput(
   quantity: number,
   locationId: string,
   overrideName?: string | null,
+  price?: number | null,
 ): NewItemInput {
   const name = (overrideName?.trim() || s.name).trim();
   return {
@@ -100,6 +108,7 @@ export function inboundInput(
     // 单位是必填字段：清单项没带就沿用「个」，不要写空串（写入后会显示成「2  盒」）
     unit: (s.unit || '个').trim() || '个',
     locationId,
+    price: normalizePrice(price),
   };
 }
 
@@ -122,7 +131,10 @@ export function inboundInputs(
   list: ShoppingItem[],
   items: Item[],
   locations: Location[],
-  opts: { overrides?: Map<string, { quantity: number; locationId: string }>; aliasKey?: AliasKeyResolver } = {},
+  opts: {
+    overrides?: Map<string, { quantity: number; locationId: string; price?: number | null }>;
+    aliasKey?: AliasKeyResolver;
+  } = {},
 ): { rows: InboundPlanRow[]; skipped: ShoppingItem[] } {
   const rows: InboundPlanRow[] = [];
   const skipped: ShoppingItem[] = [];
@@ -136,12 +148,14 @@ export function inboundInputs(
     const d = inboundDefaults(s, items, locations, opts.aliasKey);
     const quantity = ov?.quantity ?? d.quantity;
     const locationId = ov?.locationId ?? d.locationId;
+    // `undefined` = 没覆盖（用推断价）；`null` = 用户明确清空了价格，要尊重
+    const price = ov?.price !== undefined ? ov.price : d.price;
     // 位置为 null 说明所有位置都被停用了，无法入库
     if (!locationId) {
       skipped.push(s);
       continue;
     }
-    rows.push({ shoppingId: s.id, input: inboundInput(s, quantity, locationId, name) });
+    rows.push({ shoppingId: s.id, input: inboundInput(s, quantity, locationId, name, price) });
   }
   return { rows, skipped };
 }

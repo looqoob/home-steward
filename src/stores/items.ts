@@ -6,9 +6,12 @@ import { newId } from '@/domain/ids';
 import { todayStr } from '@/domain/dates';
 import { createItem, recomputeForLocation, type NewItemInput } from '@/domain/itemFactory';
 import { fallbackDays } from '@/domain/categories';
-import { lookupFood } from '@/data/dict';
+/** 金额口径的唯一来源：单价必须是有限非负数，否则记为「没填价」（null），不能当成 0 */
+import { normalizePrice } from '@/domain/price';
+import { lookupFood, foodKeyOf } from '@/data/dict';
 import { snoozeUntilOf } from '@/domain/todo';
-import { planBulkConsume, planBulkMove, planBulkRemove, type BulkOp } from '@/domain/bulk';
+import { planBulkConsume, planBulkMove, planBulkRemove, buildConsumeLog, type BulkOp } from '@/domain/bulk';
+import { planGroupConsume, findMergeTarget } from '@/domain/grouping';
 import { useDictStore } from './dict';
 import { useLocationsStore } from './locations';
 
@@ -64,6 +67,10 @@ export const useItemsStore = defineStore('items', () => {
    * 品类解析与单个 `add()` 完全一致（`lookupFood(name)?.category ?? null`），
    * 否则批量入库的卡片图标/品类会和单个入库对不上。
    *
+   * **同名同位置且到期日相差 ≤ 1 天时，数量并入既有记录**（不再新增行）。
+   * 那种情况下折叠展示与真合并对用户完全无感，保留两行只会让详情页多出无意义的行。
+   * 其它情况一律各存各的 —— 到期日不同就分属不同批次，合并会丢掉「哪一份先过期」。
+   *
    * @returns 落库后的完整 Item 列表，顺序与 `inputs` 一致
    */
   async function addMany(inputs: NewItemInput[]): Promise<Item[]> {
@@ -71,12 +78,33 @@ export const useItemsStore = defineStore('items', () => {
     const dict = useDictStore();
     const locs = useLocationsStore();
     const now = Date.now();
-    const rows = inputs.map((input) =>
+    const created = inputs.map((input) =>
       createItem(input, locs.envOf(input.locationId), dict.resolve, fallbackDays, now, lookupFood(input.name)?.category ?? null),
     );
-    await db.items.bulkPut(rows);
+
+    // 一次遍历同时算出「要写哪些行」和「每个 input 最终落在哪一行」。
+    //
+    // ⚠️ 多个 input 之间也会互相命中（「牛奶」+「牛奶」一次买两盒），
+    // 所以每合并一次就把目标换成合并后的那份，后面的 input 继续往它上面加。
+    // `landed[i]` 与 `inputs[i]` 严格一一对应 —— 调用方（清单入库的 `inboundItemId`
+    // 与「撤销入库」）靠这个对应关系反查，按名字 find 是靠不住的。
+    const byId = new Map<string, Item>();
+    const landed: Item[] = [];
+    for (const item of created) {
+      const hit = findMergeTarget(item, [...byId.values()], foodKeyOf);
+      if (hit) {
+        const next = { ...hit, quantity: round2(hit.quantity + item.quantity), updatedAt: now };
+        byId.set(hit.id, next);
+        landed.push(next);
+        continue;
+      }
+      byId.set(item.id, item);
+      landed.push(item);
+    }
+
+    await db.items.bulkPut([...byId.values()]);
     await load();
-    return rows;
+    return landed;
   }
 
   /**
@@ -84,7 +112,8 @@ export const useItemsStore = defineStore('items', () => {
    * ⚠️ 是 put 而非 patch：传入的对象缺失的字段会被写成上一次的值（调用方通常传展开后的完整 Item）。
    */
   async function save(item: Item) {
-    await db.items.put({ ...item, updatedAt: Date.now() });
+    // 写入前再归一一次：编辑页已经洗过，这层是兜住「从别处拼出来的 Item」不会把脏价格带进库
+    await db.items.put({ ...item, price: normalizePrice(item.price), updatedAt: Date.now() });
     await load();
   }
 
@@ -166,31 +195,9 @@ export const useItemsStore = defineStore('items', () => {
 
     const now = Date.now();
     const today = todayStr(now);
-    let overdueDays: number | null = null;
-    if (cur.expireAt) {
-      const d = Math.round((new Date(`${cur.expireAt}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000);
-      overdueDays = d < 0 ? -d : 0;
-    }
-    const log: ConsumeLog = {
-      id: newId(),
-      itemId: cur.id,
-      name: cur.name,
-      quantity: take,
-      unit: cur.unit,
-      locationId: cur.locationId,
-      type,
-      // Item.price 是单价，日志要记本次金额，否则「扔掉 2 个」会记成整份的钱
-      price: cur.price === null ? null : round2(cur.price * take),
-      // 单价快照：明细「单价」列用；与上面的「金额」是两个维度，别混
-      unitPrice: cur.price === null ? null : cur.price,
-      // 备注快照：明细「备注」列用。item.note 之后可能改，消耗时定格一份
-      note: cur.note ?? null,
-      expireAt: cur.expireAt,
-      overdueDays,
-      at: now,
-      createdAt: now,
-      deletedAt: null,
-    };
+    // ⚠️ 日志构造统一走 domain/bulk 的 `buildConsumeLog`（与批量、分组消耗同一份实现）。
+    // 这里曾自己拼一遍，后来明细页金额与本月统计对不上，根因就是两份实现漂移了。
+    const log: ConsumeLog = buildConsumeLog(cur, type, take, today, now);
     await db.logs.put(log);
     if (take >= remain) {
       await db.items.put({ ...cur, status: 'finished', updatedAt: now });
@@ -328,6 +335,42 @@ export const useItemsStore = defineStore('items', () => {
     });
   }
 
+  /**
+   * 从一组同名物品里消耗 `qty`（FEFO：先扣最早到期的那份，不够再顺延到下一份）。
+   *
+   * 与 `consume()` 的区别只在**作用范围**：后者作用单条记录，前者作用一整个折叠组。
+   * 日志字段、状态语义、撤销快照全部复用既有实现，不另起一套。
+   *
+   * @param memberIds 组内成员 id；**顺序无关**，内部会按到期日重排
+   * @param qty 本次消耗数量（按组合计数量钳制）
+   * @returns 供 toast 撤销的 `BulkOp`（跨多份时是一整批）；无可操作项时返回 `null`
+   * @example await items.consumeGroup(['a','b'], 'consumed', 2) // 先扣 10-08 那盒
+   */
+  async function consumeGroup(memberIds: string[], type: ConsumeType, qty?: number): Promise<BulkOp | null> {
+    const targets = pickActive(memberIds);
+    if (!targets.length) return null;
+    const total = round2(targets.reduce((s, i) => s + i.quantity, 0));
+    const take = qty === undefined ? total : Math.min(total, round2(qty));
+    if (take <= 0) return null;
+    const now = Date.now();
+    const before = targets.map((i) => ({ ...i }));
+    const plan = planGroupConsume(targets, take, type, now);
+    if (!plan.logs.length) return null;
+    await db.transaction(async () => {
+      await db.logs.bulkPut(plan.logs);
+      await db.items.bulkPut(plan.items);
+    });
+    await load();
+    return remember({
+      id: newId(),
+      kind: 'consume',
+      consumeType: type,
+      items: before,
+      logIds: plan.logs.map((l) => l.id),
+      createdAt: now,
+    });
+  }
+
   /** 批量换位置：按新位置重算到期日（手填保质期优先级不变） */
   async function bulkMoveTo(ids: string[], locationId: string): Promise<BulkOp | null> {
     const dict = useDictStore();
@@ -374,6 +417,6 @@ export const useItemsStore = defineStore('items', () => {
   return {
     list, logs, loaded, active, load, byId, add, addMany, save, moveTo, setManualShelfLife,
     snooze, unsnooze, consume, undoConsume, remove, restore, recomputeAll,
-    bulkConsume, bulkMoveTo, bulkRemove, undoBulk,
+    bulkConsume, consumeGroup, bulkMoveTo, bulkRemove, undoBulk,
   };
 });

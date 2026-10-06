@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useBarcodesStore } from '@/stores/barcodes';
+import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { useDictStore } from '@/stores/dict';
@@ -45,6 +46,23 @@ const newName = ref('');
 const newQty = ref(1);
 const newUnit = ref('个');
 const newLoc = ref<string | null>(null);
+/**
+ * 单价（元 / 单位），`null` = 没填价（**不是** 0）。
+ *
+ * 条码映射是最适合带价格的入口：一个条码往往就是「那款固定规格的商品」，
+ * 教一次就知道它大概多少钱，后面每次扫都不用再想。
+ */
+const newPrice = ref<number | null>(null);
+
+/**
+ * 合计 = 数量 × 单价。
+ *
+ * 与快速入库同一个理由：实时显示能兜住「把整箱总价当成单价填进来」。
+ */
+const newPriceTotal = computed(() => {
+  const p = normalizePrice(newPrice.value);
+  return p === null ? '' : `合计 ¥${round2(p * newQty.value).toFixed(2)}`;
+});
 
 const UNITS = ['个', '袋', '斤', '瓶', '盒'];
 
@@ -95,9 +113,16 @@ async function onScan(code: string) {
     newQty.value = 1;
     newUnit.value = '个';
     newLoc.value = locations.enabled[0]?.id ?? null;
+    newPrice.value = null;
     return;
   }
-  await doInbound(hit.name, hit.quantity ?? 1, hit.unit || '个', hit.locationId ?? locations.enabled[0]?.id ?? null);
+  await doInbound(
+    hit.name,
+    hit.quantity ?? 1,
+    hit.unit || '个',
+    hit.locationId ?? locations.enabled[0]?.id ?? null,
+    hit.price ?? null,
+  );
 }
 
 async function startScan() {
@@ -130,12 +155,18 @@ async function startScan() {
 }
 
 /** 映射已有 → 入库 */
-async function doInbound(name: string, quantity: number, unit: string, locationId: string | null) {
+async function doInbound(
+  name: string,
+  quantity: number,
+  unit: string,
+  locationId: string | null,
+  price: number | null = null,
+) {
   if (!locationId) {
     show('请先到「位置管理」启用一个位置');
     return;
   }
-  const [row] = await items.addMany([{ name, quantity, unit, locationId }]);
+  const [row] = await items.addMany([{ name, quantity, unit, locationId, price: normalizePrice(price) }]);
   if (!row) return;
   show(`已加入库存：${row.name} ${row.quantity}${row.unit}`, 2200, {
     text: '撤销',
@@ -160,20 +191,23 @@ async function saveNewMapping() {
     quantity: newQty.value,
     unit: newUnit.value,
     locationId: newLoc.value,
+    price: newPrice.value,
   });
-  await doInbound(name, newQty.value, newUnit.value, newLoc.value);
+  await doInbound(name, newQty.value, newUnit.value, newLoc.value, newPrice.value);
 }
 
 /** 只记映射不入库 */
 async function saveMappingOnly() {
   const name = newName.value.trim();
   if (!name || !pendingCode.value) return;
+  // 价格一样要记住：这次不入库，下次扫到就该用得上
   await barcodes.upsert({
     code: pendingCode.value,
     name,
     quantity: newQty.value,
     unit: newUnit.value,
     locationId: newLoc.value,
+    price: newPrice.value,
   });
   show(`已记住：${name}`);
   await stopScanner();
@@ -220,6 +254,7 @@ watch(
       // 关闭时必须停摄像头，否则灯一直亮
       await stopScanner();
       pendingCode.value = null;
+      newPrice.value = null;
       failed.value = '';
     }
   },
@@ -268,7 +303,7 @@ onBeforeUnmount(() => {
               aria-label="减少"
               @click="newQty = Math.max(0.5, Math.round((newQty - 0.5) * 100) / 100)"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
             <input
               v-model.number="newQty"
@@ -284,7 +319,7 @@ onBeforeUnmount(() => {
               aria-label="增加"
               @click="newQty = Math.round((newQty + 0.5) * 100) / 100"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
             </button>
           </div>
         </div>
@@ -320,6 +355,28 @@ onBeforeUnmount(() => {
             >
               <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
             </button>
+          </div>
+        </div>
+
+        <!--
+          单价：**每 1 单位**的价格（元），不是整份总价。右侧实时算合计兜住这个歧义。
+          口径走 `priceFromInput`：负数会污染月度统计，`1e999` 会变 `Infinity`。
+        -->
+        <div class="mb-3">
+          <label class="block text-[12px] text-ink-2 mb-1.5" for="bc-price">单价（元 / {{ newUnit || '个' }}，可选）</label>
+          <div class="flex items-center gap-2">
+            <input
+              id="bc-price"
+              :value="newPrice ?? ''"
+              type="number"
+              step="0.01"
+              min="0"
+              inputmode="decimal"
+              class="flex-1 min-w-0 h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+              placeholder="如 1.5（不是整箱 30）"
+              @input="newPrice = priceFromInput(($event.target as HTMLInputElement).value)"
+            />
+            <span v-if="newPriceTotal" class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ newPriceTotal }}</span>
           </div>
         </div>
 

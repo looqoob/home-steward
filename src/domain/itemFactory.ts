@@ -3,6 +3,7 @@ import { newId } from './ids';
 import { todayStr } from './dates';
 import { fallbackDays, guessCategory } from './categories';
 import { computeExpiry, type ShelfLifeResolver } from './shelfLife';
+import { normalizePrice } from './price';
 
 export interface NewItemInput {
   name: string;
@@ -42,7 +43,9 @@ export function createItem(
     icon: Array.from(name)[0] ?? '?',
     quantity: input.quantity,
     unit: input.unit,
-    price: input.price ?? null,
+    // 这是所有物品的**唯一诞生点**，价格口径在这里兜一次底：
+    // 负数 / NaN / Infinity / 字符串（备份导入）一律落成 null，绝不让脏值进库污染月度统计
+    price: normalizePrice(input.price),
     locationId: input.locationId,
     storedAt,
     producedAt: input.producedAt ?? null,

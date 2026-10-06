@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { ConsumeType, Item } from '@/domain/types';
+// 金额口径走 domain/price 的 amountOf：以前这里手抄了一版 `round2(price * qty)`，
+// 与 bulk.buildConsumeLog 是两份实现，迟早漂移；而且它只挡 null/undefined，
+// 挡不住旧备份带进来的脏值（字符串 / 负数 → NaN）。
+import { amountOf } from '@/domain/price';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -22,10 +26,8 @@ const max = computed(() => props.item?.quantity ?? 1);
 /** 剩余量不足 1（如 0.5 斤）时步长跟着变小，别让 stepper 一步跨过上限 */
 const step = computed(() => (max.value >= 2 ? 1 : 0.5));
 const min = computed(() => Math.min(step.value, max.value));
-/** 本次金额 = 单价 × 数量；没填单价时不显示 */
-const amount = computed(() =>
-  props.item?.price != null ? Math.round(props.item.price * qty.value * 100) / 100 : null,
-);
+/** 本次金额 = 单价 × 数量；没填单价 / 单价是脏值时返回 null（不显示这一行） */
+const amount = computed(() => amountOf(props.item?.price, qty.value));
 const quick = computed(() => [1, 2, 5].filter((n) => n <= max.value));
 
 function clamp(v: number): number {
@@ -98,7 +100,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           :aria-label="`减少 ${step}`"
           @click="setQty(qty - step)"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
         </button>
         <input
           :value="qty"
@@ -118,7 +120,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           :aria-label="`增加 ${step}`"
           @click="setQty(qty + step)"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
         </button>
       </div>
 

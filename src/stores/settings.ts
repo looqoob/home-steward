@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { db } from '@/data';
 import { normalizeHex } from '@/domain/accent';
-import { DEFAULT_SETTINGS, type Settings, type ThemeMode } from '@/domain/types';
+import { DEFAULT_SETTINGS, type Settings, type StockViewMode, type ThemeMode } from '@/domain/types';
 
 /**
  * 补齐后加的字段。
@@ -11,13 +11,26 @@ import { DEFAULT_SETTINGS, type Settings, type ThemeMode } from '@/domain/types'
  * ① 升级前已存在的 IndexedDB 记录；② 旧版本导出的备份 JSON（导入路径也会经过这里吗？——
  * 不会，导入直接 `db.settings.save()`，所以**备份导入后必须重新 `load()` 一次**）。
  * 缺字段时一律回落默认值，非法 hex 也回落默认色。
+ *
+ * `stockViewMode` 同理：v3 新增，旧记录与旧备份里是 `undefined`。
+ * ⚠️ 新增任何设置字段都要在这里加回落 —— 否则旧用户读到 `undefined`，
+ * 而 `StockView` 这类消费点如果直接裸读就会整个列表不渲染。
  */
 function normalizeSettings(raw: Settings): Settings {
   const mode: ThemeMode =
     raw.themeMode === 'light' || raw.themeMode === 'dark' || raw.themeMode === 'system'
       ? raw.themeMode
       : DEFAULT_SETTINGS.themeMode;
-  return { ...raw, themeMode: mode, accent: normalizeHex(raw.accent) ?? DEFAULT_SETTINGS.accent };
+  const stockViewMode: StockViewMode =
+    raw.stockViewMode === 'timeline' || raw.stockViewMode === 'flat' || raw.stockViewMode === 'group'
+      ? raw.stockViewMode
+      : DEFAULT_SETTINGS.stockViewMode;
+  return {
+    ...raw,
+    themeMode: mode,
+    accent: normalizeHex(raw.accent) ?? DEFAULT_SETTINGS.accent,
+    stockViewMode,
+  };
 }
 
 export const useSettingsStore = defineStore('settings', () => {

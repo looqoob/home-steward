@@ -10,6 +10,7 @@ import { computeExpiry } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
+import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { useToast } from '@/composables/useToast';
 
 const props = defineProps<{ modelValue: boolean }>();
@@ -28,10 +29,27 @@ const selected = ref<string | null>(null);
 const qty = ref(1);
 const unit = ref('个');
 const locId = ref<string | null>(null);
+/**
+ * 单价（元 / 单位）。快速入库以前**根本没有这个字段**，新建物品的价格恒为 `null`，
+ * 于是「浪费金额」统计永远是 0 —— 用户得回头进详情页一件件补，那条路径基本没人走。
+ * `null` = 没填价（不是 0）。
+ */
+const price = ref<number | null>(null);
 /** 自定义食材名：与九宫格共用 `selected`，非空时九宫格自动取消高亮 */
 const customName = ref('');
 
 const canAdd = computed(() => !!selected.value && !!locId.value);
+
+/**
+ * 合计 = 数量 × 单价。
+ *
+ * 实时显示是为了兜住「把整盒总价当成单价填进来」：20 个鸡蛋填 30 会立刻显示「合计 ¥600」，
+ * 比入库后再发现浪费金额虚高好得多。
+ */
+const priceTotal = computed(() => {
+  const p = normalizePrice(price.value);
+  return p === null ? '' : `合计 ¥${round2(p * qty.value).toFixed(2)}`;
+});
 
 /** 最近入库过的名称（在库 + 消耗日志），供一键复用，最多 8 个 */
 const recentNames = computed(() => {
@@ -81,6 +99,7 @@ watch(
       customName.value = '';
       qty.value = 1;
       unit.value = '个';
+      price.value = null;
       locId.value = locations.enabled[0]?.id ?? null;
     }
   },
@@ -96,12 +115,20 @@ function close() {
  */
 async function confirm(keepOpen = false) {
   if (!canAdd.value || !selected.value || !locId.value) return;
-  await items.add({ name: selected.value, quantity: qty.value, unit: unit.value || '个', locationId: locId.value });
+  await items.add({
+    name: selected.value,
+    quantity: qty.value,
+    unit: unit.value || '个',
+    locationId: locId.value,
+    price: normalizePrice(price.value),
+  });
   show(`已加入：${selected.value}`);
   if (keepOpen) {
     selected.value = null;
     customName.value = '';
     qty.value = 1;
+    // 单价也重置：连续录入的是**不同**商品，沿用上一件的价格多半是错的
+    price.value = null;
     return;
   }
   close();
@@ -190,7 +217,7 @@ function openScan() {
         <div class="flex gap-2 mb-3.5">
           <van-button class="flex-1" @click="openScan">
             <span class="inline-flex items-center gap-1.5">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
                 <path d="M3 5v14M7 5v14M11 5v10M15 5v14M19 5v14" />
               </svg>
               扫码入库
@@ -198,7 +225,7 @@ function openScan() {
           </van-button>
           <van-button class="flex-1" @click="goCustom">
             <span class="inline-flex items-center gap-1.5">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
               自定义食材
             </span>
           </van-button>
@@ -224,7 +251,7 @@ function openScan() {
                 aria-label="减少"
                 @click="qty = Math.max(0.5, Math.round((qty - 1) * 100) / 100)"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
               </button>
               <input
                 v-model.number="qty"
@@ -240,7 +267,7 @@ function openScan() {
                 aria-label="增加"
                 @click="qty = Math.round((qty + 1) * 100) / 100"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+                <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
               </button>
             </div>
             <div class="flex gap-1.5 flex-wrap mt-2">
@@ -286,9 +313,31 @@ function openScan() {
                 class="inline-flex items-center gap-1 whitespace-nowrap text-[13px] text-ink-3 bg-transparent border border-dashed border-line rounded-full px-3 py-1.5 cursor-pointer min-h-10"
                 @click="goLocations"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
                 新位置
               </button>
+            </div>
+          </div>
+
+          <!--
+            单价：**每 1 单位**的价格（元），不是整份总价。右侧实时算合计兜住这个歧义。
+            口径走 `priceFromInput`：负数会污染月度统计，`1e999` 会变 `Infinity`。
+          -->
+          <div class="mb-3.5">
+            <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-price">单价（元 / {{ unit || '个' }}，可选）</label>
+            <div class="flex items-center gap-2">
+              <input
+                id="qa-price"
+                :value="price ?? ''"
+                type="number"
+                step="0.01"
+                min="0"
+                inputmode="decimal"
+                class="flex-1 min-w-0 h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+                placeholder="如 1.5（不是整盒 30）"
+                @input="price = priceFromInput(($event.target as HTMLInputElement).value)"
+              />
+              <span v-if="priceTotal" class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ priceTotal }}</span>
             </div>
           </div>
 

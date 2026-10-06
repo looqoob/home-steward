@@ -8,6 +8,7 @@ import { foodKeyOf } from '@/data/dict';
 import { computeExpiry } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { todayStr } from '@/domain/dates';
+import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { ENV_MAP, type ShoppingItem } from '@/domain/types';
 
 /**
@@ -23,7 +24,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'inbound', quantity: number, locationId: string): void;
+  (e: 'inbound', quantity: number, locationId: string, price: number | null): void;
   (e: 'dismiss'): void;
   (e: 'undo'): void;
 }>();
@@ -38,6 +39,11 @@ const defaults = computed(() => inboundDefaults(props.item, items.list, location
 
 const qty = ref(1);
 const locId = ref<string | null>(null);
+/**
+ * 单价（元 / 单位）。预填「上次买这个的价格」，可改。
+ * `null` = 没填 —— 与 `0` 区分开，统计里「没填价」不能被当成「免费」。
+ */
+const price = ref<number | null>(null);
 
 watch(
   () => props.item.id,
@@ -45,6 +51,7 @@ watch(
     const d = defaults.value;
     qty.value = d.quantity;
     locId.value = d.locationId;
+    price.value = d.price;
   },
   { immediate: true },
 );
@@ -69,13 +76,25 @@ const preview = computed(() => {
   return `${props.item.name} · ${envLabel} · ${r.days} 天，到期日 ${r.expireAt.slice(5)}`;
 });
 
+/**
+ * 合计 = 数量 × 单价。
+ *
+ * 这一行不只是方便 —— 它是对「把整盒总价当成单价填进来」最直接的提醒：
+ * 20 个鸡蛋填 30 会立刻显示「合计 ¥600」，比填完再发现金额虚高好得多。
+ */
+const totalHint = computed(() => {
+  const p = normalizePrice(price.value);
+  if (p === null) return '未填价';
+  return `合计 ¥${round2(p * qty.value).toFixed(2)}`;
+});
+
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
 function submit() {
   if (!canSubmit.value || !locId.value) return;
-  emit('inbound', qty.value, locId.value);
+  emit('inbound', qty.value, locId.value, normalizePrice(price.value));
 }
 </script>
 
@@ -95,7 +114,7 @@ function submit() {
         aria-label="减少"
         @click="qty = Math.max(0.5, Math.round((qty - 0.5) * 100) / 100)"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
       </button>
       <input
         :value="qty"
@@ -112,9 +131,30 @@ function submit() {
         aria-label="增加"
         @click="qty = Math.round((qty + 0.5) * 100) / 100"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
       </button>
       <span class="text-[12px] text-ink-2 flex-none">{{ item.unit || '个' }}</span>
+    </div>
+
+    <!--
+      单价是**每 1 单位**的价格，不是整份总价。右侧实时算「合计 = 数量 × 单价」兜住这个歧义。
+      口径走 `priceFromInput`：负数会污染月度统计，`1e999` 会变 `Infinity`。
+    -->
+    <div class="flex items-center gap-2 mb-2.5">
+      <label class="text-[12px] text-ink-2 w-9 flex-none" for="sir-price">单价</label>
+      <input
+        id="sir-price"
+        :value="price ?? ''"
+        type="number"
+        step="0.01"
+        min="0"
+        inputmode="decimal"
+        class="flex-1 min-w-0 h-9 text-center text-[14px] font-medium text-ink-1 bg-card border border-line rounded-md px-2 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+        :placeholder="`元 / ${item.unit || '个'}`"
+        :aria-label="`单价，元每${item.unit || '个'}`"
+        @input="price = priceFromInput(($event.target as HTMLInputElement).value)"
+      />
+      <span class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ totalHint }}</span>
     </div>
 
     <div class="flex gap-1.5 flex-wrap mb-2.5">

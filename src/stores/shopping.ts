@@ -149,13 +149,17 @@ export const useShoppingStore = defineStore('shopping', () => {
    *
    * @returns 新建的物品；清单项已不存在时返回 `null`
    */
-  async function inboundOne(id: string, quantity: number, locationId: string): Promise<Item | null> {
+  async function inboundOne(id: string, quantity: number, locationId: string, price: number | null = null): Promise<Item | null> {
     const items = useItemsStore();
     const locs = useLocationsStore();
     const s = list.value.find((x) => x.id === id && !x.deletedAt);
     if (!s) return null;
     // 传别名解析器：「西红柿」也能命中历史里的「番茄」，否则每次都要手选位置
-    const { rows } = inboundInputs([s], items.list, locs.all, { aliasKey: foodKeyOf });
+    const { rows } = inboundInputs([s], items.list, locs.all, {
+      aliasKey: foodKeyOf,
+      // 用户这次实际填的价格优先于「上次同名称的单价」
+      overrides: new Map([[s.id, { quantity, locationId, price }]]),
+    });
     if (!rows.length) return null;
     const created = await items.addMany([rows[0].input]);
     const item = created[0];

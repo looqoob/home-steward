@@ -31,6 +31,12 @@ const router = createRouter({
           component: () => import('@/views/ConsumeLogView.vue'),
           meta: { header: '消耗明细' },
         },
+        // v3：统计（趋势 / Top 浪费 / 周转天数 / 品类分布）
+        {
+          path: 'stats',
+          component: () => import('@/views/StatsView.vue'),
+          meta: { header: '统计' },
+        },
       ],
     },
     // ⚠️ 不要再加静态的 '/item/new'：它会抢在 '/item/:id' 前面匹配，导致 route.params.id 为 undefined，

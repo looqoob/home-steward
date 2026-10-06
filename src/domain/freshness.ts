@@ -1,5 +1,5 @@
 import type { Item, Settings } from './types';
-import { diffDays } from './dates';
+import { diffDays, isDateStr } from './dates';
 
 export type FreshnessState = 'fresh' | 'soon' | 'urgent' | 'over' | 'warn' | 'none';
 
@@ -20,7 +20,12 @@ function clamp(v: number, min: number, max: number) {
 }
 
 export function freshnessOf(item: Item, today: string, settings: Pick<Settings, 'soonDays' | 'urgentDays'>): Freshness {
-  if (!item.expireAt) {
+  // ⚠️ 必须用 `isDateStr` 而不是 `!item.expireAt`：脏数据（`expireAt: 0`）为假值时
+  // 会被真值判断挡下（这里没事），但 `expireAt: 'abc'` 这种**真值**脏数据能穿过 `!x`，
+  // 接着在 `diffDays` → `parseDate` 里 `.split` 抛错 —— 而库存页是访问量最高的页面，
+  // 一抛错整页白屏，且数据只在本机无法回滚。备份导入已清洗（`data/backup/sanitize.ts`），
+  // 这里再挡一道兜住导入前就存在的脏数据。
+  if (!isDateStr(item.expireAt)) {
     if (item.notRecommended) {
       return { state: 'warn', label: '不建议存放', remainDays: null, progress: null, sortKey: SORT_LAST - 1 };
     }

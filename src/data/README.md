@@ -26,7 +26,8 @@ export const db: DataSources = createDexieSources();   // ← 换成 createSqlit
 | `dict/normalize.ts` | 食材名归一化 |
 | `backup/schema.ts` | 备份文件格式与校验 |
 | `backup/export.ts` | 导出 JSON / 触发下载 / 复制剪贴板 |
-| `backup/import.ts` | 导入（replace / merge 两种模式） |
+| `backup/import.ts` | 导入（replace / merge 两种模式），**写库前先过 `sanitize`** |
+| `backup/sanitize.ts` | **v3 新增**：记录级清洗（`sanitizeItems` / `Logs` / `Locations` / `Shopping`） |
 
 ---
 
@@ -236,6 +237,9 @@ export function validateBackup(raw: unknown): { ok: boolean; message: string };
 
 **校验策略：宽松**。只检查结构与关键字段，**不逐字段校验** —— 因为字典/实体的字段将来会扩展，严格校验会让旧备份无法导入。
 
+> ⚠️ 「宽松」是针对**信封**而言。**记录级**校验由 `sanitize.ts` 在写库前完成（见下），
+> 两者是互补的：schema 决定「这份文件能不能读」，sanitize 决定「读进来的记录能不能用」。
+
 拒绝条件（返回的 message 可直接展示给用户）：
 
 - 不是 JSON 对象 → `'文件内容不是有效的 JSON 对象'`
@@ -268,11 +272,16 @@ export interface ImportResult {
   ok: boolean;
   message: string;
   counts?: { items; locations; logs; shopping; dict };   // 本次「进入」的条数
+  /** v3：清洗结果，供 UI 如实告知用户丢弃/修正了多少条 */
+  sanitized?: { dropped: number; fixed: number };
 }
 
 export function parseBackup(text: string): { ok: true; data: BackupFile } | { ok: false; message: string };
 export async function importBackup(data: BackupFile, mode: ImportMode): Promise<ImportResult>;
 ```
+
+> ⚠️ v3 起 `importBackup` 在**写库之前**对四张表分别调 `sanitize`。
+> 顺序不能反 —— 先写进去再清洗就来不及了，脏数据已经在 `bulkPut` 里了。
 
 **两种模式**
 
@@ -313,10 +322,85 @@ await Promise.all([items.load(), locations.load()]);   // ★ 导入后必须刷
 
 ---
 
+## sanitize.ts — **v3**：记录级清洗
+
+### 为什么必须有它（这是 v3 修掉的一个严重问题）
+
+`validateBackup` 只校验信封，**记录一条都不校验**就 `bulkPut` 进库。而备份文件是纯 JSON、
+用户可以手改，也可能在传输中损坏。实测一条 `storedAt: 0` 就能让**「我的」「库存」双主 Tab
+永久白屏**：
+
+```
+monthStats   → monthKey(0)      → (0).slice is not a function
+freshnessOf  → diffDays(0, …)   → parseDate(0) → (0).split is not a function
+```
+
+而数据 100% 存本机、没有云端副本可回滚 —— 用户会发现自己既打不开应用、也换不回数据。
+
+**所以清洗必须发生在导入这个唯一入口**，而不是等到各个消费端到处加 `typeof` 防御
+（那样既漏又脏）。这是三层防御的第一层，另两层是 `dates.isDateStr` 与消费点的 `dateOf` 守卫。
+
+### 接口
+
+```ts
+export interface SanitizeResult<T> {
+  rows: T[];
+  dropped: number;   // 整条丢弃（缺 id 或 name，无法在 UI 里呈现）
+  fixed: number;     // 字段被修正过（数据还在，但值不合法）
+}
+
+export function sanitizeItems(input: unknown[], fallbackDate: string): SanitizeResult<Item>;
+export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog>;
+export function sanitizeLocations(input: unknown[]): SanitizeResult<Location>;
+export function sanitizeShopping(input: unknown[]): SanitizeResult<ShoppingItem>;
+```
+
+### 三条原则
+
+| 原则 | 具体做法 |
+| --- | --- |
+| **能修的修** | 日期非法 → `storedAt` 替换成导入当天、`expireAt` / `producedAt` 置 `null`；数量非有限正数 → 归 1；`status` 非法 → `in_stock`；`type` 非法 → `consumed`；`env` / `reason` 非法 → 各自兜底值 |
+| **修不了的丢** | 没有 `id` 或 `name`（非字符串 / 空串）的记录直接丢 —— 它在 UI 里无法呈现 |
+| **绝不静默** | 计数随 `ImportResult.sanitized` 返回，由 `BackupView` 如实告知用户 |
+
+> 为什么「能修就修」优先于「脏的就丢」：丢数据比显示错数据更糟 —— 用户宁可看到一个空日期，
+> 也不愿自己的记录凭空消失。真正无法呈现的才丢。
+
+### ⚠️ 为什么不直接 `JSON.parse` 后原样写入
+
+- `locationId` / `unit` 被列表按字符串用，非字符串会在渲染时炸掉 → 强制兜底为 `''` / `'个'`；
+- `sort` 非数字会让位置管理页排序错乱 → 归 `999`（排最后）；
+- `ShoppingItem.locationId` 是脏值会让「按位置分组」（`groupShoppingByLocation`）把它塞进
+  错误的位置桶。
+
+### 为什么 `isDateStr` 住在 domain
+
+`sanitize.ts` 从 `@/domain/dates` **转出** `isDateStr`，不自己实现一份。理由与
+`normalizeName` 当初从 `data/dict/normalize.ts` 迁到 domain 完全一样：
+**data 可以依赖 domain，反之不行。** `freshnessOf` 与 `stats` 也要用同一个守卫，
+谁定义都不能有两份。
+
+### 边界条件
+
+- `sanitizeItems` **丢非法 `status`**：合并两种消耗状态会直接算错「在库」与浪费统计，
+  宁可这条不进统计。
+- `sanitizeLogs` 的 `at` 非法（非有限数或 ≤ 0）时补 `Date.now()` 并计 `fixed`。
+- `sanitizeLocations` 只丢缺 `id` 的（位置没有 `name` 也能显示「未命名位置」）。
+- `sanitizeShopping` 丢缺 `id` / `name` 的；`reason` 非法归 `'manual'`。
+- 输入是 `unknown[]`，所以对非对象元素（`null` / 数字 / 数组）也有分支，不会抛错。
+
+### 配套的测试
+
+`src/data/backup/__tests__/sanitize.test.ts`（22 例）。它虽然是 data 层测试，但仍然是
+纯函数、node 环境，可以直接跑。`vitest.config.ts` 的 `include` 是 `src/**/*.test.ts`。
+
+---
+
 ## 新增实现 / 改接口的检查清单
 
 - [ ] 改了 `repository.ts` 的签名 → 同步更新本 README 的契约表格
 - [ ] 改了 Dexie 表/索引 → 升 version + 升 `SCHEMA_VERSION` + 补兼容读取
 - [ ] 新增了内置食材 → 确认 `-1` 项都配了 `reason`
 - [ ] 改了备份格式 → 升 `SCHEMA_VERSION` 并更新 `docs/ARCHITECTURE.md` 的数据流说明
+- [ ] **新增了 `BackupFile` 里的实体表 → `import.ts` 的 sanitize 调用与 `schema.ts` 的接口同步加**
 - [ ] 同步更新了根 `AGENTS.md`（尤其是 §11 改动导航）

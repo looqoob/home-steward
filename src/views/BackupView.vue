@@ -99,7 +99,18 @@ async function runImport(f: File) {
     if (res.ok) {
       await reloadStores();
       const c = res.counts;
-      show(c ? `${res.message}（物品${c.items} 位置${c.locations} 日志${c.logs}）` : res.message);
+      let msg = c ? `${res.message}（物品${c.items} 位置${c.locations} 日志${c.logs}）` : res.message;
+      // 清洗了脏数据必须说出来：静默丢记录会让用户以为导入很完美，
+      // 等发现少了几件时已经无从查证（数据只在本机，没有第二份可以对比）。
+      const s = res.sanitized;
+      if (s && (s.dropped > 0 || s.fixed > 0)) {
+        const parts: string[] = [];
+        if (s.dropped > 0) parts.push(`丢弃 ${s.dropped} 条无法识别的记录`);
+        if (s.fixed > 0) parts.push(`修正 ${s.fixed} 条异常字段`);
+        msg += `；${parts.join('，')}`;
+      }
+      // 提示时长随内容长度调整：太长的文案在 Toast 里只显示 2.2s，读不完就没了
+      show(msg, msg.length > 40 ? 6000 : 2200);
     } else {
       show(res.message);
     }

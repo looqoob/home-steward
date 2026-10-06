@@ -83,15 +83,17 @@ home-steward/
     │
     ├── domain/               # 【第 1 层】纯函数，零依赖
     │   ├── types.ts          # 全部实体类型、枚举、常量（ENV_MAP 等）
-    │   ├── dates.ts          # 本地日期字符串工具
+    │   ├── dates.ts          # 本地日期字符串工具 + isDateStr 合法性守卫
     │   ├── ids.ts            # ID 生成、稳定哈希
     │   ├── categories.ts     # 品类默认值 + 关键词猜品类
     │   ├── freshness.ts      # 新鲜度状态机（核心概念）
     │   ├── shelfLife.ts      # 保质期解析与到期日计算
     │   ├── itemFactory.ts    # 商品对象构造
     │   ├── locationRules.ts  # 位置删除/计数/排序规则
-    │   ├── shoppingRules.ts  # 购物清单自动生成规则
-    │   ├── stats.ts          # 月度统计、位置分布
+    │   ├── shoppingRules.ts  # 购物清单自动生成规则 + 按位置分组
+    │   ├── stats.ts          # 月度统计、位置分布、浪费趋势/Top/周转/品类
+    │   ├── grouping.ts       # v3：同名折叠 + FEFO 排序与消耗
+    │   ├── timeline.ts       # v3：到期日时间轴分桶
     │   ├── accent.ts         # 主题色：预设色板 + 对比度校正 + 色阶派生（纯函数）
     │   └── README.md
     │
@@ -107,9 +109,10 @@ home-steward/
     │   │   ├── index.ts      # 四级兜底查询解析
     │   │   └── normalize.ts  # 名称归一化（全角/括号/别名）
     │   ├── backup/
-    │   │   ├── schema.ts     # 备份文件格式 + 校验
+    │   │   ├── schema.ts     # 备份文件格式 + 校验（只校验信封）
     │   │   ├── export.ts     # 导出
-    │   │   └── import.ts     # 导入（replace / merge）
+    │   │   ├── import.ts     # 导入（replace / merge），写库前先 sanitize
+    │   │   └── sanitize.ts   # v3：记录级清洗（脏备份的防线）
     │   └── README.md
     │
     ├── stores/               # 【第 3 层】Pinia 薄层
@@ -131,20 +134,24 @@ home-steward/
     ├── router/index.ts       # 全部路由，懒加载导入
     │
     ├── views/                # 页面级组件（一个路由一个）
-    │   ├── StockView.vue         # 库存（默认页）
-    │   ├── ListView.vue          # 购物清单
-    │   ├── MeView.vue            # 我的 / 统计
+    │   ├── StockView.vue         # 库存（默认页；分组/时间轴、多选、盘点三种模式）
+    │   ├── ListView.vue          # 购物清单（按原因 / 按位置两种分组）
+    │   ├── MeView.vue            # 我的
+    │   ├── StatsView.vue         # v3：统计（趋势 / Top 浪费 / 周转天数 / 品类分布）
     │   ├── ConsumeLogView.vue    # 消耗明细（逐条消耗记录，从「我的」进入；顶栏由 meta.header 交给外壳渲染）
     │   ├── ItemEditView.vue      # 商品新建/编辑
     │   ├── LocationManageView.vue# 位置管理
     │   ├── DictView.vue          # 保质期字典
     │   ├── AppearanceView.vue    # 外观与主题（深浅模式 + 主题色 + 自定义取色）
     │   ├── SettingsView.vue      # 设置（提醒）
-    │   ├── BackupView.vue        # 备份导出导入
+    │   ├── BackupView.vue        # 备份导出导入（含清洗结果上报）
     │   └── README.md
     │
     ├── components/           # 可复用 UI 组件
     │   ├── ItemCard.vue
+    │   ├── ItemGroupCard.vue    # v3：同名折叠组卡（库存列表主体）
+    │   ├── GroupConsumeSheet.vue# v3：多份选份弹层（FEFO 默认 + 越序警告）
+    │   ├── StocktakePanel.vue   # v3：盘点模式面板（还在 / 用掉了 / 扔掉了）
     │   ├── LocationChipBar.vue
     │   ├── NavBar.vue            # 子页顶栏（含返回）
     │   ├── SearchField.vue       # 列表页搜索框（原生 input + 放大镜，40px 胶囊）
@@ -256,6 +263,46 @@ export const db: DataSources = createDexieSources();  // ← 换成 createSqlite
 
 注意 `ConsumeLog` **没有** `updatedAt` 字段 —— 写通用工具函数时不能用 `updatedAt` 做硬约束（这是踩过的坑）。
 
+### 5.6 同名折叠与 FEFO（v3）
+
+**数据层一条记录 = 一个批次，永不合并。** 两份牛奶 10-08 / 10-15 到期，合并成一行就必然
+丢掉「哪一份先过期」，而这恰恰是避免浪费的唯一依据。所以 v3 只在**展示层**把同名同位置
+折叠成一张组卡（`ItemGroupCard`），消耗时按 **FEFO**（最早到期先出）选份。
+
+| 层 | 做法 |
+| --- | --- |
+| 数据层 | 永不合并（`stores/items.addMany` 只在**入库时**且到期日相差 ≤ 1 天才真合并） |
+| 展示层 | `domain/grouping.foldItems` 折叠成 `ItemGroup` |
+| 消耗层 | `planGroupConsume` / `fefoSlices` 按 FEFO 分配 |
+
+四条必须记住的口径：
+
+1. **折叠键 = `locationId | 名称键`**，名称键三级回退 `item.dictKey` → `aliasKey?.(name)`
+   （`data/dict` 的 `foodKeyOf`，依赖注入）→ `normalizeName(name)`。
+2. **组卡的状态色 / 排序 / 进度条一律取 `lead`**（组内最早到期那份）。
+3. **待办 / 提醒 / 统计一律按「份」，只有库存列表按组折叠**（段头计数也按份）。
+4. **折叠必须在分段之前**：`foldItems → sortByFreshness → groupByFreshness`。
+   反过来会把同名组切到两段，同一物品重复出现 —— 这是最不能接受的错。
+
+详见 `src/domain/README.md#groupingts--v3同名折叠与-fefo` 与 `docs/V3-CHANGELOG.md`。
+
+### 5.7 外部数据必须过 `isDateStr`（v3）
+
+`Item.expireAt` / `storedAt` / `ConsumeLog.at` 都可能来自**用户手改过的备份 JSON**。
+一个 `storedAt: 0` 就会穿透 `diffDays` → `parseDate` → `'(0)'.split` 抛错，
+把「我的」「库存」双主 Tab 打成**永久白屏**，而数据 100% 在本机、没有副本可回滚。
+
+三层防御，缺一不可：
+
+| 层 | 位置 | 作用 |
+| --- | --- | --- |
+| 入口清洗 | `data/backup/sanitize.ts` | 写库**前**修掉/丢弃脏记录，并计数上报 |
+| 类型守卫 | `domain/dates.isDateStr` | `freshnessOf` 的判定条件、`stats` 的 `dateOf()` |
+| 消费点 | 各聚合函数 | 脏日期那一项当「无日期」跳过，不让整个页面炸 |
+
+`isDateStr` 住在 `domain/dates` 而不是 `data/backup/sanitize`（data 可以依赖 domain，
+反之不行）—— 与 `normalizeName` 当初从 data 迁上来是同一回事。
+
 ---
 
 ## 6. UI / 交互约定（视觉必须 1:1 复刻原型）
@@ -344,6 +391,8 @@ npm install
 | --- | --- |
 | `npm run dev` | 开发服务器（默认 5173） |
 | `npm run typecheck` | **类型检查**（`vue-tsc --noEmit`），不产出文件 |
+| `npm test` | **单元测试**（`vitest run`），当前覆盖 `src/domain/` 全部纯函数 |
+| `npm run test:watch` | 测试 watch 模式 |
 | `npm run build` | 生产构建 → `dist/`（含 PWA + Service Worker） |
 | `npm run preview` | 本地预览构建产物（4173），**用于验证 PWA/SW 行为** |
 | `npm run icons` | 重新生成图标到 `public/icons/` |
@@ -355,10 +404,24 @@ npm install
 ### ⚠️ 提交前的双验（必做）
 
 ```bash
-npm run typecheck && npm run build
+npm run typecheck && npm test && npm run build
 ```
 
-`npm run build` 成功 **不保证** 类型正确（Vite 不做全量类型检查）。两条都要过。
+`npm run build` 成功 **不保证** 类型正确（Vite 不做全量类型检查）。三条都要过。
+
+### 测试约定（v3 起）
+
+- 配置文件是**独立的 `vitest.config.ts`**（不是 `vite.config.ts`）：`environment: 'node'`，只注册 `@` 别名，
+  `include: ['src/**/*.test.ts']`。只测**纯函数**——不依赖 Vue / Dexie / 浏览器 API。
+  `data/backup/sanitize.ts` 虽然在 data 层，但同样是纯函数，可以直接测（22 例）。
+- 夹具统一放 `src/domain/__tests__/fixtures.ts`（`mkItem` / `mkLocation` / `mkShopping` / `TODAY` / `NOW` / `SETTINGS`）。
+  时间基准固定在 `Date.UTC(2026, 9, 5)`，**不要用 `Date.now()`**，否则用例会随日子变化而红。
+- 新增领域函数 → 同步补 `src/domain/__tests__/*.test.ts`。
+- ⚠️ **夹具里不要用 `s.category ?? 'vegetable'` 兜底**：`category` 允许显式传 `null`，
+  `??` 会把 `null` 吞掉，「无品类」这条路径永远测不到。要用
+  `s.category === undefined ? 'vegetable' : s.category`。
+- ⚠️ 用例挂了先怀疑**自己写的期望值**对不对，别急着改产品代码。已发生过两次把正确行为误判成 bug
+  （`urgentDays: 3` 时剩 2 天本来就该进待办）。真 bug 要用独立用例单独钉死，别顺手改掉断言。
 
 ### 最短可靠验证流程
 
@@ -463,6 +526,27 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 29 | 快速入库弹层滚到底，「加入」按钮下方仍露出滚动内容 | 吸底按钮条是 `sticky`，被钳制在包含块（滚动容器**内容盒**）内；容器自己的 `padding-bottom` 让按钮条永远差一个 pb 到不了弹层底边 | 滚动容器**不给**与 sticky 元素同侧的 padding，留白由 sticky 条自己的 pb 承担（见 `QuickAddSheet`） |
 | 30 | 多选态（`?select=1`）分组头悬在距顶 ~55px：上方漏卡片、下方盖住第一张卡的顶部 | 分组头吸顶偏移用的是筛选条实测高度，但多选态筛选条已被 `v-if` 移除，偏移量没跟着变 | 吸顶偏移的**邻居被 v-if 掉时偏移必须同步变**：`groupTop` 在 `selectMode` 下返回 `-1px`（见 `StockView`） |
 | 31 | 清单写「西红柿」、历史里存「番茄」，入库默认值还是落到第一个位置 | 以为 `normalizeName` 能等同义词——它只做全角 / 括号 / 空格 / 大小写的归一，**没有同义词表** | 需要别名匹配就给 `domain/inbound` 传 `AliasKeyResolver`（调用方传 `data/dict` 的 `foodKeyOf`）；domain 不得反向依赖 data，与 `ShelfLifeResolver` 同一套路 |
+| 32 | 选项对象里声明了却**从没被读**的参数（`remindEveryDays` 就是这样躺了两个版本：备份提醒两种情况都走 `firstAfterDays`，用户 7 天被念一次） | 加了参数就当实现了，没有用例约束；也没有人回头读一遍函数体 | ① 新增可配参数时补一条**专门验证它被用到**的用例（如「备份过走 30 天门槛、未备份走 7 天」）；② 改纯函数前先读一遍函数体，确认每个参数都真的参与了计算 |
+| 33 | 一条脏备份记录（`storedAt: 0`）就让「我的」「库存」双主 Tab **永久白屏**，且数据 100% 在本机、无副本可回滚 | `validateBackup` 只校验信封（app 名/版本/数组在不在），记录一条不校验就 `bulkPut`；`storedAt: 0` 穿透到 `monthKey(0)` → `(0).slice is not a function` | **三层防御**：① `data/backup/sanitize.ts` 在写库前清洗（能修的修、缺 id/name 的丢、**计数上报**）；② `domain/dates.isDateStr` 守卫；③ 各消费点脏值跳过。见 §5.7。**新增按日期聚合的函数时照抄 `dateOf()` 守卫** |
+| 34 | 同一物品在库存列表里出现两次 | 先按新鲜度分段、再折叠同名组 → 同名组被切到「临期」和「新鲜」两段 | **顺序固定为 `foldItems → sortByFreshness → groupBy*`**，绝不能反。见 §5.6 |
+| 35 | 折叠后「名字是西红柿、颜色按番茄」 | 组卡逐份算新鲜度再合并/取最优 | 状态色 / 徽标 / 进度条**一律取 `group.lead`**（`freshnessOf(group.lead, …)`） |
+| 36 | `bg-over-bar` 工具类**不报错但静默失效**（柱状图透明） | `--state-*-bar` 没注册进 `index.css` 的 `@theme inline`，Tailwind 不会为它生成工具类 | 用 `var(--state-over-bar)` 引用；要用工具类就先在 `@theme inline` 注册。同理 `--sunken` 不存在，正确名是 `var(--bg-sunken)` |
+| 37 | 趋势图看起来「每月各有高峰」，读不出在变好还是变坏 | 每根柱子各自归一化（`amount / 该月最大值`），等于把一张图拆成几张互不相干的图 | 同一组柱子**共用一个全局分母**（`Math.max(...points.map(p => p.amount))`） |
+| 38 | 盘点时刚判过的物品又冒出来 | 队列实时读 `items.active`，而每判定一次就消耗掉一件，列表越判越短 | `StocktakePanel` 的 `queue` 是**进入时的快照**（`props.rows.map(r => r.item.id)`），不跟 store 走 |
+| 39 | 点「还在」之后统计里多出一堆「消耗 1 个」的假记录 | 盘点三个动作都走 `consume` 写日志 | 「还在」**只推进游标，绝不写日志**。盘点里绝大多数结果都是「还在」 |
+| 40 | 组卡取代 `ItemCard` 后，长按多选静默消失 | 折叠后列表主体换成了新组件，长按入口没跟着搬 | `ItemGroupCard` 完整复制 500ms + 10px 位移容差那套；**替换列表主体组件时先核对旧组件的交互清单** |
+| 41 | 单份物品卡上出现「共 1 份」 | `dueSummary` 对所有组统一写份数 | 单份组：有日期写日期、无日期写**空串**。写「共 1 份」是噪音，还会让「牛奶 1 盒」看起来像被合并过 |
+| 42 | 新设置项在旧数据上读到 `undefined`，页面白屏或分支全走默认 | `Settings` 上新增了字段，但旧 IndexedDB 记录与旧备份里没有它 | 两条路二选一：**可选字段**就 `?? 默认值`（坑位 #28）；**必填字段**（如 `stockViewMode`）就在 `normalizeSettings` 里**白名单校验后回落** `DEFAULT_SETTINGS`，别裸读 `raw.xxx` |
+| 43 | 视图偏好做成两个布尔开关后互相打架 | 「分组」和「时间轴」是同一份列表的两种切法，互斥 | 互斥的视图偏好用**一个枚举**（`StockViewMode = 'group' \| 'timeline' \| 'flat'`），两个布尔会出现「都开 / 都关」两种无意义状态；「都不启用」本身就是枚举的一档 |
+| 44 | 图标和旁边文字看着**没对齐**（图标整体下沉一截） | SVG 是 inline 元素，默认 `vertical-align: baseline`，浏览器把图标**底边**压在文本基线上，父容器 `items-baseline` 只会把图标一起拖走 | `.icon` 里的 `display: block` 不能删；对齐交给 `.it-icon`（`height: calc(1em * var(--it-lh))` + 内部居中）。见 `docs/ICON-TEXT-SPEC.md` §4 |
+| 45 | 同一尺寸的图标在不同页面粗细不一样 | `stroke-width` 逐图标手写，改尺寸时忘记同步 | 描边**恒定 `--icon-stroke: 2.4`（viewBox 单位）**，不随尺寸缩放；SVG 上不再写 `width/height/stroke-width`，改由 `.icon .icon-{档位}` 给。改尺寸只换类，不同步数字 |
+| 46 | 「浪费金额」长期是 **¥0**，看起来像「我没浪费钱」 | 三个入库入口（快速入库 / 扫码 / 清单行内）**都不传 `price`**，新建物品单价恒为 `null`；用户得回头进详情页一件件补，那条路径基本没人走 | 入库表单一律带单价输入，并实时显示「合计 = 数量 × 单价」兜住「把整份总价当单价填」的歧义。**新增入库入口时检查它有没有 price** |
+| 47 | 金额口径在四处各写一份，最后一份直接漏了物品侧 | `bulk` / `ConsumeSheet` / `GroupConsumeSheet` / `sanitize` 各有一份规则，而 `sanitizeItems` 靠展开原样穿透 —— 手改过的备份里 `"price": "12.5"` 进库后 `price × 数量 = NaN`，整月统计烂掉 | **金额规则只有 `domain/price` 一份**：`normalizePrice` 归一、`amountOf(单价, 数量)` 算本次金额、表单走 `priceFromInput`。`null` = 没填价 ≠ `0` = 真的免费 |
+| 48 | 累加金额时直接 `+= l.price ?? 0` | `?? 0` 只挡 `null`/`undefined`，挡不住字符串 —— `"5" + 5` 是**字符串拼接**，结果 `"55"` 再 `round2` 就是 `NaN` | 累加前先 `normalizePrice(l.price) ?? 0`（见 `domain/stats.ts` 三处） |
+| 49 | `cap add android` 后 Gradle 配置阶段直接报 `Your project path contains non-ASCII characters` | 本机用户名是中文（`C:\Users\陆乔冰\...`），AGP 默认拒绝含非 ASCII 的工程路径（Windows 中文用户名是重灾区） | `android/gradle.properties` 加 `android.overridePathCheck=true`（AGP 官方开关，issuetracker 227627607）。这只是绕过检查，**真正修法是把工程 / SDK / Gradle 缓存都挪到纯 ASCII 路径**——但本机全在中文用户名下，靠下面 #51/#52 的编码修法兜底 |
+| 50 | `./gradlew` 卡在 `Downloading gradle-8.x-all.zip` 然后 `SocketTimeoutException` | 本机网络到 `services.gradle.org` 不通 / 极慢 | `android/gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl` 改腾讯镜像 `https://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip`（`-bin` 不带 docs，路径更短，避免 Windows 超长路径解压失败） |
+| 51 | 配了 `HTTPS_PROXY` 环境变量，Gradle 还是 `Connect to repo.maven.apache.org:443 … timed out` | **Java/Gradle 不读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量**，只能从 `gradle.properties` 的 `systemProp.*` 拿代理 | 在**全局** `GRADLE_USER_HOME/gradle.properties`（本机 `C:\Users\陆乔冰\.gradle\gradle.properties`）写 `systemProp.https.proxyHost=127.0.0.1` + `systemProp.https.proxyPort=<会话代理端口>` + `nonProxyHosts=localhost\|127.0.0.1`。⚠️ 代理端口是会话级的（`echo $HTTPS_PROXY` 拿），换会话要改；**别写进仓库的 `android/gradle.properties`**，否则换机器就炸 |
+| 52 | 依赖都下完了，kotlinc 却报 `source file or directory not found: C:\Users\u9646u4E54u51B0\…DateMatch.kt`（一堆 .kt 找不到），连 `android.jar` 都标 `non-existent location` | 路径里的中文用户名在 Gradle→kotlinc worker 传参（argfile）时被按非 UTF-8 编码写/读，变成乱码 `陆乔冰`→`\u9646…`，文件自然找不到 | 全局 `gradle.properties` 给 daemon 强制 UTF-8：`org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8`（外加 `kotlin.daemon.jvmargs` 同款）。这样工程 / SDK / Gradle 缓存三条含中文路径都能正确寻址 |
 
 ---
 
@@ -476,7 +560,13 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 新鲜度阈值 / 颜色 | `src/domain/freshness.ts` + `src/styles/index.css` |
 | 到期日算法 | `src/domain/shelfLife.ts` |
 | 购物清单自动生成规则 | `src/domain/shoppingRules.ts` |
+| 清单按位置分组的顺序 | `src/domain/shoppingRules.ts`（`groupShoppingByLocation`） |
+| 同名折叠 / FEFO 消耗 / 入库真合并 | `src/domain/grouping.ts` |
+| 库存列表的分组顺序 | `src/domain/freshness.ts`（`groupByFreshness`）；**折叠必须在此之前**，见 §5.6 |
+| 时间轴分桶 | `src/domain/timeline.ts` |
 | 统计口径 | `src/domain/stats.ts` |
+| 备份导入的脏数据清洗 | `src/data/backup/sanitize.ts` |
+| 金额口径（单价 / 本次金额） | `src/domain/price.ts`（**唯一定义**，别在别处再拼一遍） |
 | 换个数据库 | `src/data/index.ts`（一行）+ 新增 sources 实现 |
 | 数据库表/索引 | `src/data/dexie/db.ts`（改后**必须**升 `SCHEMA_VERSION` 并在 import 处做版本兼容） |
 | 备份文件格式 | `src/data/backup/schema.ts`（改后**必须**升 `SCHEMA_VERSION`） |
@@ -510,10 +600,13 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 改完代码，逐条打勾：
 
 - [ ] `npm run typecheck` 通过
+- [ ] **`npm test` 通过**（v3 起是提交前双验之一）
 - [ ] `npm run build` 通过
 - [ ] 涉及 UI/路由/弹框的改动：跑过 `npm run preview` 并在浏览器里点过（含**安卓返回键**行为）
 - [ ] 没有引入 `any`（确需时已用 `unknown` 收窄并注释）
-- [ ] 没有违反分层依赖方向（`domain/` 里没有 Dexie / Pinia / Vue）
+- [ ] 没有违反分层依赖方向（`domain/` 里没有 Dexie / Pinia / Vue / `data/`）
+- [ ] **消费外部数据（备份）的日期字段时过了 `isDateStr`**，见 §5.7
+- [ ] **改动列表主体组件时核对了旧组件的交互清单**（长按多选等不能静默消失），见坑位 #40
 - [ ] 业务代码没有直接 import `data/dexie/db.ts`
 - [ ] 新增/修改的公共函数有 JSDoc（参数、返回值、边界条件、示例）
 - [ ] **新增/删除/重命名了模块 → 已更新对应目录 `README.md`**
@@ -530,6 +623,8 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | --- | --- |
 | `README.md` | 产品简介、快速开始、GitHub 首页 |
 | `docs/V2-CHANGELOG.md` | **v2 变更说明**：新概念、一致性约束、备份升版同步清单（改 v2 相关代码前先看） |
+| `docs/V3-CHANGELOG.md` | **v3 变更说明**：同名折叠/FEFO 语义、备份清洗三层防御、盘点与统计口径（改 v3 相关代码前先看） |
+| `docs/ICON-TEXT-SPEC.md` | **图标 + 文本排版规范**：尺寸档位、描边、间距、垂直对齐换算、迁移清单（动图标前先看） |
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |
 | `src/domain/README.md` | 领域层全部纯函数 API 参考 |
 | `src/data/README.md` | 持久化接口、表结构、备份格式 |

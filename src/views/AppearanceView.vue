@@ -104,7 +104,7 @@ onBeforeUnmount(() => theme.refresh());
               @click="setAccent(p.hex)"
             >
               <!-- 对勾用白色：resolveAccent 保证白字在主色上 ≥4.5:1 -->
-              <svg v-if="p.hex === accent" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="icon icon-md" v-if="p.hex === accent" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </button>
@@ -123,13 +123,13 @@ onBeforeUnmount(() => theme.refresh());
               :aria-pressed="isCustom"
               @click="openPicker"
             >
-              <svg v-if="!isCustom" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="icon icon-sm" v-if="!isCustom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-3.9-4-7.2-9-7.2z" />
                 <circle cx="7.5" cy="11" r="1" fill="currentColor" />
                 <circle cx="11" cy="7.5" r="1" fill="currentColor" />
                 <circle cx="15.5" cy="9" r="1" fill="currentColor" />
               </svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg class="icon icon-md" v-else viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </button>

@@ -50,6 +50,25 @@
   --shadow-pop: 0 6px 24px rgba(20, 30, 25, 0.12);
   --ease: 200ms ease;
 
+  /*
+   * 图标排版 token（规范见 docs/ICON-TEXT-SPEC.md）。
+   *
+   * 尺寸只留四档：14 / 16 / 20 / 24，外加 26 的空状态插画（不与文字竞争，是特例）。
+   * 描边**恒定 2.4**（viewBox 24 单位），不随尺寸缩放 —— 与字号同理，图标放大时线条等比变粗，
+   * 视觉重量才一致。改尺寸不用改描边，这是本套规范能「只记一个数」的关键。
+   */
+  --ic-xs: 14px;   /* 12px 小字旁、chip 内 */
+  --ic-sm: 16px;   /* 13–14px 正文/行内（默认） */
+  --ic-md: 20px;   /* 独立图标按钮、导航栏 */
+  --ic-lg: 24px;   /* FAB */
+  --ic-ill: 26px;  /* 空状态插画（特例，描边另降到 1.6） */
+  --icon-stroke: 2.4;
+
+  /* 图标 ↔ 文本间距：约等于图标尺寸的 0.4 倍，取整后 4 / 6 / 8 */
+  --ic-gap-xs: 4px;
+  --ic-gap-sm: 6px;
+  --ic-gap-md: 8px;
+
   --env-chilled: #4a8fd4;
   --env-frozen: #5b87be;
   --env-cool: #8c7fa6;
@@ -157,6 +176,92 @@ html[data-theme='dark'] {
   .van-switch:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  /* ==========================================================================
+   * 图标 + 文本排版（规范见 docs/ICON-TEXT-SPEC.md）
+   * ========================================================================== */
+
+  /*
+   * 所有内联 SVG 的基类。
+   *
+   * `display: block` 是这套规范的**第一要义**：SVG 默认 inline，`vertical-align: baseline`
+   * 会把图标的**底边**压在文本基线上（而不是让它的光学中心对齐文字），图标因此整体下沉 ——
+   * 这就是「图标和旁边文字没对齐」的根因。改成 block 后基线不再参与，对齐交给下面的 .it-icon。
+   */
+  .icon {
+    display: block;
+    flex: none;
+    width: var(--icon-size, var(--ic-sm));
+    height: var(--icon-size, var(--ic-sm));
+    /* CSS 属性优先于 SVG 的 stroke-width 呈现属性，所以加了类就不必再写内联描边 */
+    stroke-width: var(--icon-stroke);
+  }
+  .icon-xs { --icon-size: var(--ic-xs); }
+  .icon-sm { --icon-size: var(--ic-sm); }
+  .icon-md { --icon-size: var(--ic-md); }
+  .icon-lg { --icon-size: var(--ic-lg); }
+  /* 空状态插画：26px 下 2.4 的描边会糊成一团，且它不与文字竞争，单独降一档 */
+  .icon-ill { --icon-size: var(--ic-ill); --icon-stroke: 1.6; }
+
+  /*
+   * 图标 + 文本容器。
+   *
+   * `--it-lh` 同时喂给两处：文本的 line-height 和 .it-icon 的 height。
+   * 于是「图标盒高度」恒等于「文本行盒高度」，图标在其中居中 →
+   * **图标光学中心 = 文本行盒中心**，与字号无关，不需要为每个字号手写 margin-top。
+   * 这就是行高与文字基线的换算关系：改行高只改 --it-lh 一个数。
+   */
+  .it {
+    --it-lh: 1.6;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--it-gap, var(--ic-gap-sm));
+    line-height: var(--it-lh);
+  }
+  /* 多行文本：图标不能被拉到整块中间，改为顶部对齐（此时它仍对齐第一行） */
+  .it-top { align-items: flex-start; }
+
+  /* 图标盒：高度 = 1em × 行高倍数，图标在其中垂直居中 */
+  .it-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    height: calc(1em * var(--it-lh));
+  }
+  .it-text { min-width: 0; }
+
+  /*
+   * 纯图标按钮：32×32 的盒子，热区靠 ::before 撑到 44×44（WCAG 2.5.5）。
+   * 用伪元素而不是改盒子尺寸，是为了**不改布局尺寸** —— 一行里并排时不会被撑高。
+   */
+  .icon-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    color: var(--text-3);
+    cursor: pointer;
+  }
+  .icon-btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px; /* 32 + 6 × 2 = 44 */
+  }
+
+  /* 工具栏里的「图标 + 文字」按钮：统一 32px 高，横向内边距只为加大热区 */
+  .tool-btn {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    min-height: 32px;
+    padding-inline: 4px;
+    font-size: 13px;
+    cursor: pointer;
   }
 }
 

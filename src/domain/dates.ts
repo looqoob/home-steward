@@ -6,6 +6,24 @@
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
+ * 判断是否为格式合法的日期字符串 `'YYYY-MM-DD'`（**只查格式，不查真实性**）。
+ *
+ * 存在的理由：外部数据（本机 IndexedDB 里的历史记录、用户导入的备份 JSON）不受 TS 类型保护，
+ * 一次手滑或文件损坏就能让 `storedAt` 变成数字 `0`。而 `monthKey` / `parseDate` 都直接
+ * `.slice` / `.split`，遇到这种值会抛错 —— 抛在**主 Tab** 上就是白屏，
+ * 且数据只在本机、没有副本可回滚。所以在所有「外部数据 → 日期计算」的边界上先过一道这个判断。
+ *
+ * 2 月 31 日这类不存在的日期仍算合法（`parseDate` 会归一到 3 月），因为「判断真假日期」
+ * 需要另一套历法校验，而这里的目的是防崩溃，不是防脏数据。
+ *
+ * @example isDateStr('2026-10-05') // true
+ * @example isDateStr(20261005)      // false
+ */
+export function isDateStr(v: unknown): v is string {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
+/**
  * Date → 本地日期字符串。
  * @example toDateStr(new Date(2026, 8, 29)) // '2026-09-29'
  */

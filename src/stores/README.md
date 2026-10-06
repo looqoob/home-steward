@@ -262,7 +262,7 @@ const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
 | `remove` | `(id) => Promise<ShoppingItem \| undefined>` | 删除，**返回删除前快照**（撤销要用）。**自动项**：软删 + 设 `dismissedUntil = now + 7 天`（7 天内不再自动重生）；**手动项**：直接软删 |
 | `restore` | `(snapshot: ShoppingItem) => Promise<void>` | 撤销删除：清掉 `deletedAt` 与 `dismissedUntil` 后整条写回 |
 | `clearDone` | `() => Promise<void>` | 清除已勾选项（同样是软删 + dismissedUntil） |
-| `inboundOne` | `(id, quantity, locationId) => Promise<Item \| null>` | **v2**：单项入库，走 `items.addMany` |
+| `inboundOne` | `(id, quantity, locationId, price = null) => Promise<Item \| null>` | **v2**：单项入库，走 `items.addMany`。**v3**：第 4 参是单价（`null` = 没填） |
 | `inboundAll` | `(ids, overrides?) => Promise<{ count, skipped }>` | **v2**：批量入库。`skipped` 必须如实告知用户，不能静默丢弃 |
 | `undoInbound` | `(id) => Promise<Item \| undefined>` | **v2**：撤销入库，返回被删物品的快照 |
 
@@ -273,6 +273,9 @@ const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
   中途失败最坏结果是清单项没勾上但物品已入库（数据只多不少，不会丢），比事务回滚更安全。
 - 入库时写入 `inboundItemId`，`undoInbound` 据此反查并删掉物品。旧数据没有这个字段，
   读取时按 `?? null` 处理（视作未入库）。
+- **v3**：入库路径全部要带 `price`。三个入口（快速入库 / 扫码 / 清单行内）以前都不传，
+  新建物品价格恒为 `null`，于是「浪费金额」统计长期是 0 —— 用户得回头进详情页一件件补，
+  那条路径基本没人走。单价口径统一走 `domain/price.normalizePrice`。
 
 ### 边界条件
 
@@ -373,7 +376,7 @@ const urgentDays = computed({
 | `load` | `() => Promise<void>` | |
 | `lookup` | `(code: string) => Promise<BarcodeEntry \| undefined>` | 按条码查。内存没有时兜底查一次库 |
 | `upsert` | `(input: BarcodeInput) => Promise<BarcodeEntry \| undefined>` | 同条码**覆盖**（扫错了要能改），不报重复错误 |
-| `update` | `(id, patch: Partial<BarcodeInput>) => Promise<void>` | 管理页改名用 |
+| `update` | `(id, patch: Partial<BarcodeInput>) => Promise<void>` | 管理页改名用。**v3**：`price` 不传 = 保留旧值，传 `null` = 清掉 |
 | `remove` | `(id) => Promise<void>` | 软删 |
 
 ### ⚠️ `code` 必须是 `string`

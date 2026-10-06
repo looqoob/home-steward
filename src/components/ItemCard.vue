@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import type { Item, Location } from '@/domain/types';
 import { ENV_MAP } from '@/domain/types';
 import { barColor, freshnessOf } from '@/domain/freshness';
+import { unitPriceText } from '@/domain/price';
 import { useSettingsStore } from '@/stores/settings';
 import { todayStr } from '@/domain/dates';
 
@@ -29,6 +30,12 @@ const today = todayStr();
 
 const f = computed(() => freshnessOf(props.item, today, settings.settings));
 const env = computed(() => (props.location ? ENV_MAP[props.location.env] : null));
+/**
+ * 单价展示：`¥1.5/斤`。**没填价就什么都不显示** —— 卡片已经很密，
+ * 「未填价」这三个字会抢走到期日的注意力，而它的信息量是零。
+ */
+const priceText = computed(() => unitPriceText(props.item.price, props.item.unit));
+
 const qty = computed(() => {
   const q = props.item.quantity;
   const s = Number.isInteger(q) ? String(q) : String(Math.round(q * 100) / 100);
@@ -127,7 +134,7 @@ function onClick() {
     <button
       type="button"
       class="flex-1 min-w-0 flex gap-3 items-start bg-transparent border-0 p-0 text-left text-[14px] text-ink-1 cursor-pointer"
-      :aria-label="`${props.item.name}，${qty}，${f.label}`"
+      :aria-label="`${props.item.name}，${qty}${priceText ? '，' + priceText : ''}，${f.label}`"
       @click="onClick"
     >
       <span class="w-10 h-10 rounded-md flex-none flex items-center justify-center text-[15px] font-medium text-primary-700 bg-primary-50">
@@ -140,6 +147,7 @@ function onClick() {
         </span>
         <span class="flex items-center gap-1.5 text-[12px] text-ink-3 flex-wrap mt-0.5">
           <span>{{ qty }}</span>
+          <span v-if="priceText" class="tabular-nums">{{ priceText }}</span>
           <span v-if="props.location" class="inline-flex items-center gap-1 text-[12px] text-ink-2 bg-sunken px-1.5 py-0.5 rounded">
             <i class="w-1.5 h-1.5 rounded-full block" :style="{ background: env?.color }"></i>{{ props.location.name }}
           </span>

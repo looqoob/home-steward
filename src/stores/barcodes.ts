@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { db } from '@/data';
 import type { BarcodeEntry } from '@/domain/types';
 import { newId } from '@/domain/ids';
+import { normalizePrice } from '@/domain/price';
 
 export interface BarcodeInput {
   /** ⚠️ 必须 string：EAN-13 有前导 0，传数字会丢 */
@@ -11,6 +12,8 @@ export interface BarcodeInput {
   quantity?: number | null;
   unit?: string | null;
   locationId?: string | null;
+  /** 单价（元 / 单位）；不传 = 沿用旧值，`null` = 清掉 */
+  price?: number | null;
 }
 
 /**
@@ -60,6 +63,8 @@ export const useBarcodesStore = defineStore('barcodes', () => {
       quantity: input.quantity ?? prev?.quantity ?? null,
       unit: (input.unit ?? prev?.unit ?? null) || null,
       locationId: input.locationId ?? prev?.locationId ?? null,
+      // 单价走同一口径：非法值（负数 / Infinity / 字符串）一律存 null，别写进库
+      price: normalizePrice(input.price ?? prev?.price ?? null),
       createdAt: prev?.createdAt ?? now,
       updatedAt: now,
       deletedAt: null,
@@ -80,6 +85,7 @@ export const useBarcodesStore = defineStore('barcodes', () => {
       quantity: patch.quantity === undefined ? cur.quantity : patch.quantity,
       unit: (patch.unit === undefined ? cur.unit : patch.unit) || null,
       locationId: patch.locationId === undefined ? cur.locationId : patch.locationId,
+      price: patch.price === undefined ? normalizePrice(cur.price) : normalizePrice(patch.price),
       updatedAt: Date.now(),
     };
     await db.barcodes.put(next);

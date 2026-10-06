@@ -91,6 +91,32 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - 阴影：`shadow-card`（`0 1px 2px rgba(20,30,25,.06)`）、`shadow-pop`（`0 6px 24px rgba(20,30,25,.12)`）。
 - 动效：`--ease` = `200ms ease`。
 
+### 图标排版（`--ic-*`，完整规范见 `docs/ICON-TEXT-SPEC.md`）
+
+| 变量 | 值 | 对应类 | 用在哪 |
+| --- | --- | --- | --- |
+| `--ic-xs` | 14px | `.icon-xs` | 12px 小字旁、chip 内 |
+| `--ic-sm` | 16px | `.icon-sm`（默认） | **与文字同排**的图标（13–14px 文字） |
+| `--ic-md` | 20px | `.icon-md` | 独立图标按钮、导航栏 |
+| `--ic-lg` | 24px | `.icon-lg` | FAB |
+| `--ic-ill` | 26px | `.icon-ill` | 空状态插画（描边另降到 1.6） |
+| `--icon-stroke` | 2.4 | — | viewBox 单位，**恒定，不随尺寸缩放** |
+| `--ic-gap-xs/sm/md` | 4 / 6 / 8px | — | 图标 ↔ 文本间距 |
+
+配套类（都在 `@layer components`）：
+
+| 类 | 作用 |
+| --- | --- |
+| `.icon` | 所有内联 SVG 的基类。**`display: block` 不能删** —— 否则 inline 的 `vertical-align: baseline` 会把图标底边压在文本基线上，图标整体下沉 |
+| `.it` | 图标 + 文本容器。`--it-lh` 同时喂给文本 `line-height` 与 `.it-icon` 的 `height`，两边恒等 → 图标光学中心 = 文本行盒中心，**与字号无关** |
+| `.it-top` | 多行文本时图标顶部对齐（对齐第一行） |
+| `.it-icon` / `.it-text` | 图标盒（`height: calc(1em * var(--it-lh))` 内居中）/ 文本（`min-width: 0`） |
+| `.icon-btn` | 纯图标按钮：32×32 盒，`::before { inset: -6px }` 撑 44×44 热区，**不改布局尺寸** |
+| `.tool-btn` | 工具栏「图标 + 文字」按钮：32px 高 + 4px 横向内边距，与 `.icon-btn` 同高 |
+
+> SVG 上**不再写** `width` / `height` / `stroke-width`，尺寸与粗细由 `.icon .icon-{档位}` 给。
+> 改了文本的 `leading-*` 就要同步改 `--it-lh`（`IconText` 组件传 `:lh`），否则图标会偏。
+
 ### 环境色（`--env-*`，位置圆点）
 
 | 变量 / 工具类 | 值 | 环境 | 对白底对比度 |

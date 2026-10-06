@@ -10,6 +10,7 @@ import type { ShelfLifeResolver } from './shelfLife';
 import { computeExpiry } from './shelfLife';
 import { newId } from './ids';
 import { diffDays, todayStr } from './dates';
+import { amountOf, normalizePrice } from './price';
 
 export type BulkKind = 'consume' | 'move' | 'remove';
 
@@ -31,16 +32,21 @@ export interface BulkOp {
   createdAt: number;
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
 function activeOnly(items: Item[]): Item[] {
   return items.filter((i) => !i.deletedAt && i.status === 'in_stock' && i.quantity > 0);
 }
 
-/** 构造消耗日志；字段与 `stores/items.consume` 保持完全一致，避免明细页对不上账 */
-function buildLog(item: Item, type: ConsumeType, take: number, today: string, now: number): ConsumeLog {
+/**
+ * 构造消耗日志。
+ *
+ * ⚠️ **全项目只有这一份实现**：`stores/items.consume`、`domain/bulk.planBulkConsume`、
+ * `domain/grouping.planGroupConsume` 都调它。写第二份就一定会漂移——
+ * 漂移的表现是「明细页的金额和本月统计对不上」，而且极难排查。
+ *
+ * @param take 本次消耗数量（已钳到 `(0, item.quantity]`）
+ * @param today 'YYYY-MM-DD'，用于算 `overdueDays`
+ */
+export function buildConsumeLog(item: Item, type: ConsumeType, take: number, today: string, now: number): ConsumeLog {
   let overdueDays: number | null = null;
   if (item.expireAt) {
     const d = diffDays(item.expireAt, today);
@@ -54,9 +60,10 @@ function buildLog(item: Item, type: ConsumeType, take: number, today: string, no
     unit: item.unit,
     locationId: item.locationId,
     type,
-    // Item.price 是单价，日志记「本次金额」，否则「扔掉 2 个」会算成整份的钱
-    price: item.price === null ? null : round2(item.price * take),
-    unitPrice: item.price ?? null,
+    // Item.price 是单价，日志记「本次金额」，否则「扔掉 2 个」会算成整份的钱。
+    // 走 domain/price 的 amountOf：金额口径只有那一份实现，不要在这里再拼一遍。
+    price: amountOf(item.price, take),
+    unitPrice: normalizePrice(item.price),
     note: item.note ?? null,
     expireAt: item.expireAt,
     overdueDays,
@@ -89,7 +96,7 @@ export function planBulkConsume(
   const out: Item[] = [];
   for (const it of activeOnly(items)) {
     const take = it.quantity;
-    logs.push(buildLog(it, type, take, today, now));
+    logs.push(buildConsumeLog(it, type, take, today, now));
     out.push({ ...it, status: 'finished', updatedAt: now });
   }
   return { logs, items: out };

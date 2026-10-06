@@ -82,7 +82,7 @@ async function submitCreate() {
           class="bg-transparent border-0 text-primary-600 text-[13px] cursor-pointer p-0 inline-flex items-center gap-1"
           @click="startCreate"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+          <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
           新建
         </button>
       </div>
@@ -135,7 +135,7 @@ async function submitCreate() {
         :class="{ 'opacity-60': !l.enabled }"
       >
         <div class="w-5 text-ink-3 flex-none cursor-grab flex items-center justify-center" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
         </div>
         <div class="w-8 h-8 rounded-md flex-none flex items-center justify-center text-[13px] font-medium text-ink-2 bg-sunken">{{ l.icon }}</div>
         <div class="flex-1 min-w-0">
@@ -168,7 +168,7 @@ async function submitCreate() {
           @click="askRemove(l)"
         >
           <!-- 不用 🗑 emoji：它会渲染成彩色图形，和项目的单色图标语言不一致 -->
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 6h18" />
             <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
             <path d="M10 11v6M14 11v6" />

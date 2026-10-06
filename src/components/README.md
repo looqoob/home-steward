@@ -12,21 +12,171 @@
 
 | 组件 | 用途 | 使用页面 |
 | --- | --- | --- |
-| `ItemCard.vue` | 商品卡片：图标、名称、新鲜度徽章、数量、位置标签、进度条 | StockView |
+| `ItemCard.vue` | 商品卡片：图标、名称、新鲜度徽章、数量、位置标签、进度条 | StockView、ItemEditView |
+| `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体 | StockView |
 | `LocationChipBar.vue` | 位置横滑筛选 chips（含「全部」「管理」） | StockView |
 | `NavBar.vue` | 子页顶栏：标题 + 返回按钮 | 独立子页 + `meta.header` 页面（由 TabLayout 渲染） |
 | `SearchField.vue` | 列表页搜索框：胶囊外框 + 放大镜 + 原生 input | StockView、ConsumeLogView |
 | `QuickAddSheet.vue` | 快速入库底部弹框 | TabLayout |
 | `ConfirmSheet.vue` | 二次确认弹层：标题 + 说明 + 取消/确认，危险操作用实心红 | ItemEditView、LocationManageView、BackupView |
 | `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（默认 1，含「全部」） | StockView、ItemEditView、TodayTodo |
+| `GroupConsumeSheet.vue` | **v3**：一组多份时的「选份」弹层（FEFO 默认选中最早到期那份 + 越序警告） | StockView |
+| `StocktakePanel.vue` | **v3**：盘点模式面板（逐张核对：还在 / 用掉了 / 扔掉了） | StockView |
 | `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」 | StockView |
-| `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/位置/到期日预览） | ListView |
+| `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/单价/位置/到期日预览）。**v3**：单价预填「上次买这个的价格」 | ListView |
 | `BulkActionBar.vue` | **v2**：多选态吸底操作条（用掉/扔掉/换位置/删除） | StockView |
 | `LocationPickerSheet.vue` | **v2**：选择存放位置的弹层，带到期日预览 | StockView |
-| `ScanSheet.vue` | **v2**：扫码入库弹层（动态加载 html5-qrcode） | TabLayout |
+| `ScanSheet.vue` | **v2**：扫码入库弹层（动态加载 html5-qrcode）。**v3**：教一次时顺带记住单价，下次扫到自动带出 | TabLayout |
 | `BarcodeManageView.vue` | **v2**：条码映射的查看/改名/删除（路由 `/barcodes`） | 独立路由 |
 
-> v2 组件的坑位与设计取舍见 [`docs/V2-CHANGELOG.md`](../../docs/V2-CHANGELOG.md)。
+> v2 组件的坑位与设计取舍见 [`docs/V2-CHANGELOG.md`](../../docs/V2-CHANGELOG.md)；
+> v3 组件见 [`docs/V3-CHANGELOG.md`](../../docs/V3-CHANGELOG.md)。
+
+---
+
+## ItemGroupCard.vue — **v3**：同名折叠组卡
+
+v3 起库存列表的**主体卡片**（`ItemCard` 退居详情页 / 待办里的单份场景）。
+数据来自 `domain/grouping` 的 `ItemGroup`：一组 = 同名 + 同位置 + 多个批次。
+
+### Props
+
+| 名 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `group` | `ItemGroup` | ✅ | — | 折叠组（`foldItems` 的产物） |
+| `location` | `Location` | ❌ | `undefined` | 传入则显示位置标签（灰底 + 环境色圆点） |
+| `selectable` | `boolean` | ❌ | `false` | 多选模式。左侧出现复选框、右侧快捷按钮隐藏 |
+| `selected` | `boolean` | ❌ | `false` | 是否已选中（描边 + 浅色环） |
+
+### Emits
+
+| 事件 | 载荷 | 触发时机 |
+| --- | --- | --- |
+| `open` | `(item: Item)` | 点击卡头进详情页（进的是 `group.lead`）。`selectable` 时改为切换选中 |
+| `consume-group` | `(group, type)` | **v3**：只有一份时点右侧 ✓/✕，一步完成 |
+| `consume-one` | `(item, type)` | **v3**：多份时点某一行的 ✓/✕，只扣那一份 |
+| `select` | `(group)` | `selectable` 时点击卡头切换整组选中 |
+| `longpress` | `(group)` | `selectable` 时长按 500ms 进入多选并**全选整组** |
+
+### ★ 三个必须保持的口径
+
+1. **状态色 / 徽标 / 进度条一律取 `leadFresh`（`freshnessOf(group.lead, …)`）**，
+   不逐份算完再平均或取最优 —— 否则会出现「名字是西红柿、颜色按番茄」。
+2. **长按 500ms + 10px 位移容差**（与 `ItemCard` 同一套手感）。组卡取代 `ItemCard`
+   之后这个入口**必须跟着搬过来**，否则 v2 的「长按多选」会静默消失。
+3. **`dueSummary` 单份组不写「共 1 份」**。绝大多数物品没有同名邻居，写「共 1 份」是纯
+   噪音，还会让「牛奶 1 盒」看起来像是被合并过：
+
+   | 情况 | 文案 |
+   | --- | --- |
+   | 单份 · 有到期日 | `10-08 到期` |
+   | 单份 · 无到期日 | **空串**（什么都不写） |
+   | 多份 · 全部有日期且同一天 | `10-08 到期` |
+   | 多份 · 全部有日期但不同 | `最早 10-08 到期` |
+   | 多份 · 部分无日期 | `共 3 份`（「最早」无从谈起） |
+
+### 单价：多份给区间，不取平均
+
+| 情况 | 文案 |
+| --- | --- |
+| 全部没填价 | **空串**（什么都不写，与 `ItemCard` 同口径） |
+| 各份单价一致 | `¥1.5/个` |
+| 各份单价不同 | `¥1.5–2/个` |
+
+展开后的**每份各自显示自己的单价** —— 两次买入价格不同很正常，混成一个数反而失真。
+多份时给区间而不是取平均或取 lead：平均会算出一个谁都没买过的价格，
+取 lead 会让后面几份的价格凭空消失。
+
+### 展开策略
+
+```ts
+const expanded = ref(props.group.members.length <= 2);
+```
+
+**≤ 2 份默认展开**（两份一眼能看完），**> 2 份默认折叠**（先看卡头再决定要不要展开）；
+全部展开会把长列表撑爆，全部折叠则多一次无谓点击。
+
+⚠️ 展开状态**不持久化**（刷新回默认），避免多一个要同步的本地状态。
+
+### 结构
+
+```
+<article>                                 ← 外层不能是 <button>：内部还有展开按钮
+  <button class="card-hit">…组卡头…</button>   ← 缩略图 + 名称 + 份数 + 摘要 + 进度条
+  <div class="card-actions">
+    <button class="act consume">✓</button>   ← 单份时一步完成；多份时开 GroupConsumeSheet
+    <button class="act waste">✕</button>
+  </div>
+  <div v-if="expanded && members.length > 1">…各份明细行（每行带 ✓/✕）…</div>
+</article>
+```
+
+- `card-hit` 内部一律用 `<span>`（button 只应包含 phrasing content）。
+- 两个 `.act` 视觉 36px、`gap: 10px`，`tap-target(44px)` 的热区才不互相重叠。
+- 展开区用 `border-t border-line` 与卡头分隔，`aria-expanded` 标在展开按钮上。
+
+### 示例
+
+```vue
+<ItemGroupCard
+  v-for="row in foldedRows"
+  :key="row.group.key"
+  :group="row.group"
+  :location="locMap[row.group.locationId]"
+  @open="router.push(`/item/${$event.id}`)"
+  @consume-group="confirmGroupConsume"
+  @consume-one="(item, type) => items.consume(item.id, type)"
+/>
+```
+
+---
+
+## IconText.vue — 图标 + 文本排版原语
+
+把「图标 + 文本」的尺寸、间距、垂直对齐收成一个可复用单元。
+**完整规范在 `docs/ICON-TEXT-SPEC.md`**，这里只讲用法。
+
+### Props
+
+| 名称 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `lh` | `number` | `1.6` | 文本行高倍数，**必须与文本实际 `line-height` 一致** |
+| `gap` | `number` | `6` | 图标与文本间距（px） |
+| `top` | `boolean` | `false` | 多行文本时图标顶部对齐（对齐第一行） |
+
+### Slots
+
+| 名称 | 说明 |
+| --- | --- |
+| `icon` | 图标。必须自带档位类（`.icon .icon-sm` 等），组件不猜尺寸 |
+| default | 文本 |
+
+### ★ 三个必须保持的点
+
+1. **`lh` 必须等于文本实际行高。** 它同时喂给文本的 `line-height` 和图标盒的 `height`，
+   两边相等才能保证「图标光学中心 = 文本行盒中心」。外部挂了 `leading-[1.2]` 就要传 `:lh="1.2"`。
+2. **与文字同排用 `sm`(16)，独立成按钮用 `md`(20)。** 所以同一行工具栏里齿轮是 `md`、
+   「盘点」「选择」的图标是 `sm` —— 这是有意的。
+3. **多行文本必须传 `top`。** 默认 `align-items: center` 会让图标相对整块内容居中。
+
+### 示例
+
+```vue
+<button type="button" class="tool-btn text-ink-3" :disabled="total === 0" @click="enterStocktake">
+  <IconText>
+    <template #icon>
+      <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4.5" y="4.5" width="15" height="16" rx="2" />
+        <path d="M8.6 12.6l2.2 2.2 4.6-4.6" />
+      </svg>
+    </template>
+    盘点
+  </IconText>
+</button>
+```
+
+不用组件时，直接挂 `.it` / `.it-icon` / `.it-text` 三个类，规则完全相同。
 
 ---
 
@@ -52,10 +202,16 @@
 | `select` | `(item: Item)` | **v2**：`selectable` 时点击卡片切换选中 |
 | `longpress` | `(item: Item)` | **v2**：`selectable` 时长按 500ms 进入多选并选中该项 |
 
+### v3：单卡显示单价
+
+数量后面跟一句 `¥1.5/斤`，文案由 `domain/price.unitPriceText` 统一生成。
+
+⚠️ **没填价时什么都不显示**（返回空串）。卡片已经很密，「未填价」三个字会抢走到期日
+的注意力，而它的信息量是零。需要区分「没填价 vs 真的免费」的是统计页，那里靠脚注说明。
+
 ### ★ 长按防误触（v2）
 
 进入多选的第二条路径是长按，但**必须同时监听 `pointermove`**：
-
 ```
 pointerdown → 启动 500ms 计时
 pointermove → 位移 > 10px 则取消计时（用户想滚动，不是想选中）
@@ -267,8 +423,12 @@ function goLocations(){ router.replace('/locations'); }   // ✅
 - 数量 stepper 的**中间是 `<input type="number" step="0.5">`**，因此能直接输入 `0.5 斤` 这类值；± 步进用 `Math.round(x*100)/100` 消除浮点尾数。
 - 单位：常用单位 chips（`个/袋/斤/瓶/盒`）+ 仍可自由输入的输入框。
 - **底部主操作吸底**（`.sheet-foot`，`position: sticky; bottom: 0`），内容再长也不用滚到底才能点。
-- `confirm(keepOpen)` 支持**连续录入**：`keepOpen = true` 时保留已选位置，只重置食材与数量，弹框不关。
+- `confirm(keepOpen)` 支持**连续录入**：`keepOpen = true` 时保留已选位置，只重置食材、数量**与单价**（连续录入的是不同商品，沿用上一件的价格多半是错的），弹框不关。
 - `canAdd` 为 false 时两个按钮都不可用（必须选了食材 + 位置）。
+- **v3：单价**（`price: number | null`，元 / 单位）。以前这个弹框根本没有价格字段，
+  新建物品单价恒为 `null` → 「浪费金额」统计永远是 ¥0。右侧 `priceTotal` 实时显示
+  「合计 = 数量 × 单价」，用来兜住「把整盒总价当成单价填进来」。
+  输入框口径走 `priceFromInput`（`min="0"` 挡不住手输 `-5`，`1e999` 会变 `Infinity`）。
 
 ### 示例
 
@@ -361,6 +521,112 @@ function goLocations(){ router.replace('/locations'); }   // ✅
   @confirm="doConsume"
 />
 ```
+
+---
+
+## GroupConsumeSheet.vue — **v3**：多份选份弹层
+
+一组里有多个批次时，「用掉」必须让用户知道**用的是哪一份** —— 这正是 v3 不做真合并
+要保住的信息（见 `domain/grouping`）。
+
+### Props
+
+| 名 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `modelValue` | `boolean` | ✅ | 是否显示 |
+| `group` | `ItemGroup \| null` | ✅ | 为 `null` 时不渲染内容 |
+| `type` | `'consumed' \| 'wasted'` | ✅ | 决定标题文案（用掉 / 扔掉） |
+
+### Emits
+
+| 事件 | 载荷 | 触发时机 |
+| --- | --- | --- |
+| `update:modelValue` | `(v: boolean)` | 点取消 / 点蒙层 / 确认后关闭 |
+| `confirm` | `(items: Item[], quantity: number)` | 点确认。`items` 通常是 1 份；该份不够时由父级顺延到下一份 |
+
+### 行为细节
+
+- **打开时 `pickedId` 重置为 `group.lead.id`**（FEFO 首份，最早到期）——
+  默认就是「下一份该吃的」，多数情况下用户直接点确认即可。
+- **`fefoWarning`**：只在「选中的是非 FEFO 首份」**且**「首份还剩着」时出现：
+  > 还有更早到期的：第 1 份 · 10-08 到期
+  「你正在喝 10-15 那盒，而 10-08 那盒还剩 1 盒」这件事必须说出来，否则折叠就白做了。
+  - 无日期的组不显示这条（`formatMD('')` 会输出空串），改用组内序号表述。
+- 数量步长 `max >= 2 ? 1 : 0.5` —— 剩余量 0.5 斤时步长跟着变小，别让 stepper 一步跨过上限。
+- 本次金额 = 选中那份的 `price × qty`，`price === null` 时不显示金额区。
+- **用局部 `ref` 驱动**（与 `ConsumeSheet` 一致），不用路由 query —— 它挂在页面组件内，
+  返回键随组件卸载。
+
+### ★ 结构约束：滚动区与按钮条必须是兄弟节点
+
+```html
+<div class="flex flex-col h-full">
+  <div class="flex-1 min-h-0 overflow-y-auto">…份列表…</div>
+  <div class="flex-none">…取消 / 确认…</div>
+</div>
+```
+
+按钮条**不能**放在滚动容器内部用 `sticky bottom-0`（会重演坑位 #29：
+容器 padding 让它永远差一个 pb 到不了弹层底边）。`flex-1 min-h-0` 也不能少 ——
+没有 `min-h-0`，flex 子项的默认 `min-height: auto` 会让滚动区撑开而不是收缩。
+
+### 示例
+
+```vue
+<GroupConsumeSheet
+  v-model="groupSheetOpen"
+  :group="consumeTarget"
+  :type="consumeType"
+  @confirm="confirmGroupConsume"
+/>
+```
+
+---
+
+## StocktakePanel.vue — **v3**：盘点模式
+
+进入盘点后**一屏一卡**、三个按钮走完整个冰箱。入口是 `StockView` 的「盘点」按钮
+（`?check=1`），所以 `TabLayout` 也会据此隐藏 FAB。
+
+### Props / Emits
+
+| 名 | 类型 | 说明 |
+| --- | --- | --- |
+| `rows` | `{ item, f }[]` | 当前**筛选结果**。盘点只判这些，避免判到看不见的项 |
+| `exit` (emit) | `()` | 全部判完或用户主动退出 |
+
+### ★ 队列必须是快照
+
+```ts
+const queue = ref(props.rows.map((r) => r.item.id));   // 进入时拍一次
+const cursor = ref(0);
+```
+
+**不能实时读 `props.rows` / `items.active`**：每判定一张就会消耗掉一件，
+`items.active` 随之缩短，列表会一边判定一边往前缩，用户会看到「刚判过的又冒出来」。
+
+### 三个动作的语义
+
+| 按钮 | 行为 | 写日志？ |
+| --- | --- | --- |
+| **还在** | 只推进游标 | ❌ **绝不写** |
+| **用掉了** | 整件消耗（`items.consumeGroup([id], 'consumed')`） | ✅ |
+| **扔掉了** | 整件消耗（`items.consumeGroup([id], 'wasted')`） | ✅ 计入浪费 |
+
+- 「还在」不写日志是**刻意的**：盘点里绝大多数物品的结果都是「还在」，
+  让它走 `consume` 会平白造出一堆「消耗 1 个」的日志，把统计彻底污染。
+- 数量 > 1 也**全量消耗、不弹数量选择**：盘点追求「十秒过完整个冰箱」；
+  需要部分数量的人退出盘点用普通消耗即可（判定本身幂等，不怕多点一次）。
+
+### 撤销与收尾
+
+- 所有判定共用一个 `mergedOp()` 汇总 → toast 上一个「撤销」按钮**整批回滚**。
+- 收尾文案：`核对 N 件，M 件已不在（用掉 X · 扔掉 Y）`；一件没少则
+  `核对 N 件，东西都在`（时长 2200ms，带撤销时 4000ms）。
+- 进度显示写「3 / 12」而不只是百分比：这是个会走神的长流程，用户需要随时知道还剩几件。
+- **中途退出不保留进度**（`queue` / `cursor` / `ops` 都是纯内存 ref，没有落盘）。
+  代价是重来一遍，换来的是不用处理「三天前盘了一半的进度到底还算不算」这个 corner case。
+- 筛选结果变化（换位置/关键词）就 `watch` 重置队列，否则进度会指向别的集合。
 
 ---
 

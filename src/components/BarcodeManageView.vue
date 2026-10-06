@@ -56,7 +56,7 @@ async function doDelete() {
 
       <div v-if="list.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
         <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 5v14M7 5v14M11 5v10M15 5v14M19 5v14" />
           </svg>
         </div>

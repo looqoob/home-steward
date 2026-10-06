@@ -189,6 +189,13 @@ export interface BarcodeEntry {
   unit: string | null;
   /** 默认存放位置；`null` 表示每次手选 */
   locationId: string | null;
+  /**
+   * 该条码对应商品的**单价**（元 / 单位），扫码入库时带出来。
+   *
+   * **可选**字段（v2 那条老规矩）：旧记录没有它，读取处一律 `?? null`，
+   * 不写数据库迁移。写法见 `domain/price.normalizePrice`。
+   */
+  price?: number | null;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -228,6 +235,21 @@ export interface ShoppingItem {
  */
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+/**
+ * 库存列表的展示方式（`Settings.stockViewMode`）。
+ *
+ * 三选一而不是「分组开关 + 时间轴开关」两个独立布尔：
+ * 分组与时间轴是**同一份列表的两种切法**，互斥。做成两个开关会出现
+ * 「都开 / 都关」这两种无意义状态（`flat` 就是「都不启用」的那一档）。
+ *
+ * | 取值 | 含义 |
+ * | --- | --- |
+ * | `group` | 按新鲜度分组：紧急待吃 / 临期 / 新鲜 / 未设保质期 |
+ * | `timeline` | 按到期时间分桶：已过期 / 今天 / 明天 / 2–7 天 / 更晚 / 无到期日 |
+ * | `flat` | **不分段**，平铺列表（仍按新鲜度排序） |
+ */
+export type StockViewMode = 'group' | 'timeline' | 'flat';
+
 export interface Settings {
   id: 'singleton';
   schemaVersion: number;
@@ -243,6 +265,8 @@ export interface Settings {
   themeMode: ThemeMode;
   /** 外观：主题色（`#rrggbb`）。非法值由 `domain/accent.ts` 兜底为 `DEFAULT_ACCENT` */
   accent: string;
+  /** 库存：列表展示方式（见 `StockViewMode`）。旧数据无此字段，由 `normalizeSettings` 回落 */
+  stockViewMode: StockViewMode;
   createdAt: number;
   updatedAt: number;
 }
@@ -260,6 +284,7 @@ export const DEFAULT_SETTINGS: Omit<Settings, 'createdAt' | 'updatedAt'> = {
   lastBackupAt: null,
   themeMode: 'system',
   accent: '#228055',
+  stockViewMode: 'group',
 };
 
 export const SCHEMA_VERSION = 2;
