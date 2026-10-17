@@ -9,6 +9,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     BarcodeManageView: typeof import('./components/BarcodeManageView.vue')['default']
+    BottomSheet: typeof import('./components/BottomSheet.vue')['default']
     BulkActionBar: typeof import('./components/BulkActionBar.vue')['default']
     ConfirmSheet: typeof import('./components/ConfirmSheet.vue')['default']
     ConsumeSheet: typeof import('./components/ConsumeSheet.vue')['default']
