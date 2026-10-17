@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import BottomSheet from '@/components/BottomSheet.vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { fallbackDays } from '@/domain/categories';
@@ -26,7 +27,6 @@ const locations = useLocationsStore();
 const dict = useDictStore();
 
 const picked = ref<string | null>(null);
-const confirmBtn = ref<HTMLButtonElement | null>(null);
 
 const enabled = computed(() => locations.enabled);
 
@@ -60,38 +60,22 @@ function confirm() {
   emit('update:modelValue', false);
 }
 
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') cancel();
-}
-
+/** 焦点、Esc、遮罩点击由 BottomSheet 统一处理，这里只保留「打开时回显选中位置」 */
 watch(
   () => props.modelValue,
-  async (open) => {
-    if (open) {
-      picked.value = props.selected ?? enabled.value[0]?.id ?? null;
-      await nextTick();
-      confirmBtn.value?.focus();
-      window.addEventListener('keydown', onKey);
-    } else {
-      window.removeEventListener('keydown', onKey);
-    }
+  (open) => {
+    if (open) picked.value = props.selected ?? enabled.value[0]?.id ?? null;
   },
 );
-
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <div v-if="modelValue">
-    <div class="absolute inset-0 bg-mask z-28" @click="cancel"></div>
-    <div
-      class="absolute left-0 right-0 bottom-0 bg-card rounded-t-3xl pt-2 px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] z-29 max-h-[86%] overflow-y-auto overscroll-contain no-scrollbar"
-      role="dialog"
-      aria-modal="true"
-      aria-label="选择存放位置"
-    >
-      <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
-      <h3 class="text-[16px] font-semibold mb-1">移到哪个位置</h3>
+  <BottomSheet
+    :model-value="modelValue"
+    title="移到哪个位置"
+    title-spacing="tight"
+    @update:model-value="(v) => emit('update:modelValue', v)"
+  >
       <p class="text-[12px] text-ink-2 mb-3.5 leading-relaxed">
         <template v-if="count && count > 1">将移动 {{ count }} 件物品，</template>换位置会按新环境重算到期日。
       </p>
@@ -123,12 +107,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <van-button class="flex-1" @click="cancel">取消</van-button>
         <van-button
           v-if="enabled.length > 0"
-          ref="confirmBtn"
+          data-autofocus
           class="flex-1"
           type="primary"
           @click="confirm"
         >移到此处</van-button>
       </div>
-    </div>
-  </div>
+  </BottomSheet>
 </template>

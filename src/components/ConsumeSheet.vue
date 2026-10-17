@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ConsumeType, Item } from '@/domain/types';
+import BottomSheet from '@/components/BottomSheet.vue';
 // 金额口径走 domain/price 的 amountOf：以前这里手抄了一版 `round2(price * qty)`，
 // 与 bulk.buildConsumeLog 是两份实现，迟早漂移；而且它只挡 null/undefined，
 // 挡不住旧备份带进来的脏值（字符串 / 负数 → NaN）。
@@ -21,7 +22,9 @@ const emit = defineEmits<{
 }>();
 
 const qty = ref(1);
-const confirmBtn = ref<HTMLButtonElement | null>(null);
+
+/** 标题与无障碍名称共用一份文案，避免两处各写一遍三元表达式 */
+const titleText = computed(() => (props.type === 'consumed' ? '用掉了多少' : '扔掉了多少'));
 
 const max = computed(() => props.item?.quantity ?? 1);
 /** 剩余量不足 1（如 0.5 斤）时步长跟着变小，别让 stepper 一步跨过上限 */
@@ -51,39 +54,24 @@ function confirm() {
   emit('update:modelValue', false);
 }
 
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') cancel();
-}
-
+/** 焦点、Esc、遮罩点击由 BottomSheet 统一处理，这里只保留「打开时重置数量」 */
 watch(
   () => props.modelValue,
-  async (open) => {
-    if (open) {
-      // 默认 1（不够就取上限），不默认「全部」——大多时候是部分消耗
-      qty.value = clamp(1);
-      await nextTick();
-      confirmBtn.value?.focus();
-      window.addEventListener('keydown', onKey);
-    } else {
-      window.removeEventListener('keydown', onKey);
-    }
+  (open) => {
+    // 默认 1（不够就取上限），不默认「全部」——大多时候是部分消耗
+    if (open) qty.value = clamp(1);
   },
 );
-
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <div v-if="modelValue && item">
-    <div class="absolute inset-0 bg-mask z-28" @click="cancel"></div>
-    <div
-      class="absolute left-0 right-0 bottom-0 bg-card rounded-t-3xl pt-2 px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] z-29 max-h-[86%] overflow-y-auto overscroll-contain no-scrollbar"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="type === 'consumed' ? '用掉了多少' : '扔掉了多少'"
-    >
-      <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
-      <h3 class="text-[16px] font-semibold mb-3.5">{{ type === 'consumed' ? '用掉了多少' : '扔掉了多少' }}</h3>
+  <BottomSheet
+    v-if="item"
+    :model-value="modelValue"
+    :title="titleText"
+    :aria-label="titleText"
+    @update:model-value="(v) => emit('update:modelValue', v)"
+  >
       <p class="text-[13px] text-ink-2 leading-relaxed mb-4">
         {{ item.name }} · 在库 {{ fmtQty(item.quantity) }}{{ item.unit }}
         <template v-if="amount !== null"> · 本次约 ¥{{ amount.toFixed(2) }}</template>
@@ -149,7 +137,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="flex gap-2">
         <van-button class="flex-1" @click="cancel">取消</van-button>
         <van-button
-          ref="confirmBtn"
+          data-autofocus
           class="flex-1"
           :type="type === 'wasted' ? 'danger' : 'primary'"
           @click="confirm"
@@ -157,6 +145,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmtQty(qty) }}{{ item.unit }}
         </van-button>
       </div>
-    </div>
-  </div>
+  </BottomSheet>
 </template>

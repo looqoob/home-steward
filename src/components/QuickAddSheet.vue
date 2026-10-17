@@ -12,6 +12,7 @@ import { ENV_MAP } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { useToast } from '@/composables/useToast';
+import BottomSheet from '@/components/BottomSheet.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
@@ -157,22 +158,12 @@ function openScan() {
 </script>
 
 <template>
-  <div v-if="modelValue">
-    <div class="absolute inset-0 bg-mask z-28" @click="close"></div>
-    <!--
-      弹层 = flex 列：**滚动区**与**操作区**是兄弟，不是父子。
-
-      为什么不用「滚动容器 + sticky 底栏」：sticky 的活动范围被钳制在包含块（内容盒）内，
-      容器的 padding-bottom 会让底栏永远差一个 pb 到不了弹层底边，缝隙里能看到滚动中的内容
-      （真机还要再叠一层安全区）。拆成两块后，滚动区物理上结束于底栏上沿，
-      内容不可能出现在按钮下方，也不依赖 sticky 的浏览器实现细节。
-    -->
-    <div class="absolute left-0 right-0 bottom-0 bg-card rounded-t-3xl z-29 max-h-[86%] flex flex-col">
-      <!-- min-h-0 必须写：否则 flex 子项不会收缩到内容高度以下，滚动条永远不会出现 -->
-      <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar pt-2 px-4">
-        <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
-        <h3 class="text-[16px] font-semibold mb-3.5">快速入库</h3>
-
+  <BottomSheet
+    :model-value="modelValue"
+    title="快速入库"
+    fixed-footer
+    @update:model-value="(v) => emit('update:modelValue', v)"
+  >
         <div v-if="recentNames.length > 0" class="mb-3.5">
           <div class="text-[12px] text-ink-2 mb-1.5">最近入库</div>
           <div class="flex gap-1.5 flex-wrap">
@@ -342,22 +333,13 @@ function openScan() {
           <div class="tip mb-3.5">{{ note }}</div>
         </template>
 
-      <!-- 关闭滚动区 -->
-      </div>
-
-      <!--
-        操作区：**普通流元素**，永远停在弹层底部（不是 sticky，不受包含块钳制）。
-        bg-card 不透明，滚动中的内容从它上方经过、绝不会透到它下面。
-        底部留白 = 20px + 4px + 安全区，与拆结构前一致。
-      -->
-      <div class="flex-none bg-card px-4 pt-3 pb-[calc(24px+env(safe-area-inset-bottom,0px))] border-t border-line">
-        <van-button block type="primary" :disabled="!canAdd" class="mb-2" @click="confirm(true)">
-          加入并继续
-        </van-button>
-        <van-button block :disabled="!canAdd" @click="confirm(false)">
-          加入
-        </van-button>
-      </div>
-    </div>
-  </div>
+    <template #footer>
+      <van-button block type="primary" :disabled="!canAdd" class="mb-2" @click="confirm(true)">
+        加入并继续
+      </van-button>
+      <van-button block :disabled="!canAdd" @click="confirm(false)">
+        加入
+      </van-button>
+    </template>
+  </BottomSheet>
 </template>

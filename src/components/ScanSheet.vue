@@ -10,6 +10,7 @@ import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { todayStr } from '@/domain/dates';
 import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
+import BottomSheet from '@/components/BottomSheet.vue';
 import type { Item } from '@/domain/types';
 // 仅类型导入：运行时代码走动态 import，不会让 html5-qrcode 进主包
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -264,16 +265,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="modelValue">
-    <div class="absolute inset-0 bg-mask z-28" @click="close"></div>
-    <div
-      class="absolute left-0 right-0 bottom-0 bg-card rounded-t-3xl pt-2 px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] z-29 max-h-[86%] overflow-y-auto overscroll-contain no-scrollbar"
-      role="dialog"
-      aria-modal="true"
-      aria-label="扫码入库"
-    >
-      <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
-      <h3 class="text-[16px] font-semibold mb-1">扫码入库</h3>
+  <BottomSheet
+    :model-value="modelValue"
+    title="扫码入库"
+    aria-label="扫码入库"
+    title-spacing="tight"
+    @update:model-value="(v) => emit('update:modelValue', v)"
+  >
       <p class="text-[12px] text-ink-2 mb-3.5 leading-relaxed">
         条码与名称只保存在本机，不联网查询。首次遇到新条码会让你手动记一次。
       </p>
@@ -421,6 +419,5 @@ onBeforeUnmount(() => {
 
         <van-button block plain class="mt-3" @click="close">关闭</van-button>
       </template>
-    </div>
-  </div>
+  </BottomSheet>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { ConsumeType, Item } from '@/domain/types';
+import BottomSheet from '@/components/BottomSheet.vue';
 import { barColor, freshnessOf } from '@/domain/freshness';
 import type { ItemGroup } from '@/domain/grouping';
 import { formatMD } from '@/domain/dates';
@@ -32,7 +33,13 @@ const today = todayStr();
 /** 当前选中的那份，默认 FEFO 的第一份（最早到期） */
 const pickedId = ref<string | null>(null);
 const qty = ref(1);
-const confirmBtn = ref<HTMLButtonElement | null>(null);
+
+/** 标题与无障碍名称共用一份文案 */
+const titleText = computed(() => {
+  const g = props.group;
+  if (g && g.members.length > 1) return `用掉「${g.name}」的哪一份`;
+  return props.type === 'consumed' ? '用掉了多少' : '扔掉了多少';
+});
 
 const picked = computed<Item | null>(() => {
   const g = props.group;
@@ -83,48 +90,29 @@ function confirm() {
   emit('update:modelValue', false);
 }
 
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') cancel();
-}
-
+/** 焦点、Esc、遮罩点击由 BottomSheet 统一处理，这里只保留「打开时重置到 FEFO 首份」 */
 watch(
   () => props.modelValue,
-  async (open) => {
+  (open) => {
     if (open && props.group) {
       // 每次打开都重置到 FEFO 首份：默认值必须是「该先吃的那份」，不能是上次选过的
       pickedId.value = props.group.lead.id;
       qty.value = clamp(1);
-      await nextTick();
-      confirmBtn.value?.focus();
-      window.addEventListener('keydown', onKey);
-    } else {
-      window.removeEventListener('keydown', onKey);
     }
   },
 );
-
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <div v-if="modelValue && group && picked">
-    <div class="absolute inset-0 bg-mask z-28" @click="cancel"></div>
-    <div
-      class="absolute left-0 right-0 bottom-0 bg-card rounded-t-3xl z-29 max-h-[86%] flex flex-col"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="type === 'consumed' ? '用掉了多少' : '扔掉了多少'"
-    >
-      <!--
-        滚动区与按钮条是**兄弟节点**，不是「滚动区 + sticky 按钮条」。
-        sticky 会被包含块（滚动容器的内容盒）钳制，容器的 padding 又会把按钮条
-        整体朝内推，缝里会漏出滚动内容 —— 这是 QuickAddSheet 踩过的坑，别改回去。
-      -->
-      <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar pt-2 px-4">
-        <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
-        <h3 class="text-[16px] font-semibold mb-1">
-          {{ group.members.length > 1 ? `用掉「${group.name}」的哪一份` : (type === 'consumed' ? '用掉了多少' : '扔掉了多少') }}
-        </h3>
+  <BottomSheet
+    v-if="group && picked"
+    :model-value="modelValue"
+    :title="titleText"
+    :aria-label="titleText"
+    fixed-footer
+    title-spacing="tight"
+    @update:model-value="(v) => emit('update:modelValue', v)"
+  >
         <p class="text-[13px] text-ink-2 leading-relaxed mb-3">
           共 {{ group.members.length }} 份，合计 {{ fmtQty(group.totalQuantity) }}{{ group.unit }}
           <template v-if="amount !== null"> · 本次约 ¥{{ amount.toFixed(2) }}</template>
@@ -210,21 +198,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             @click="qty = clamp(max)"
           >这一份全部</button>
         </div>
-      </div>
 
-      <div class="flex-none bg-card px-4 pt-3 pb-[calc(20px+env(safe-area-inset-bottom,0px))] border-t border-line">
-        <div class="flex gap-2">
-          <van-button class="flex-1" @click="cancel">取消</van-button>
-          <van-button
-            ref="confirmBtn"
-            class="flex-1"
-            :type="type === 'wasted' ? 'danger' : 'primary'"
-            @click="confirm"
-          >
-            {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmtQty(qty) }}{{ picked.unit }}
-          </van-button>
-        </div>
+    <template #footer>
+      <div class="flex gap-2">
+        <van-button class="flex-1" @click="cancel">取消</van-button>
+        <van-button
+          data-autofocus
+          class="flex-1"
+          :type="type === 'wasted' ? 'danger' : 'primary'"
+          @click="confirm"
+        >
+          {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmtQty(qty) }}{{ picked.unit }}
+        </van-button>
       </div>
-    </div>
-  </div>
+    </template>
+  </BottomSheet>
 </template>
