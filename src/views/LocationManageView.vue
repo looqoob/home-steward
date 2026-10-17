@@ -5,6 +5,7 @@ import NavBar from '@/components/NavBar.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import FormField from '@/components/FormField.vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { ENV_LIST, ENV_MAP, type EnvType, type Location } from '@/domain/types';
@@ -90,12 +91,10 @@ async function submitCreate() {
       </div>
 
       <div v-if="creating" class="card card-lg p-4 mb-3 shadow-card">
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">名称（≤6 字）</label>
-          <input v-model="form.name" maxlength="6" class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50" placeholder="如 酒柜" />
-        </div>
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">图标</label>
+        <FormField label="名称（≤6 字）">
+          <input v-model="form.name" maxlength="6" class="field-input" placeholder="如 酒柜" />
+        </FormField>
+        <FormField label="图标">
           <div class="grid grid-cols-6 gap-2">
             <button
               v-for="c in ICONS"
@@ -108,9 +107,8 @@ async function submitCreate() {
               @click="form.icon = c"
             >{{ c }}</button>
           </div>
-        </div>
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">环境类型</label>
+        </FormField>
+        <FormField label="环境类型">
           <PillGroup>
             <Pill
               v-for="e in ENV_LIST"
@@ -119,7 +117,7 @@ async function submitCreate() {
               @click="form.env = e.key"
             >{{ e.label }}</Pill>
           </PillGroup>
-        </div>
+        </FormField>
         <div class="flex gap-2">
           <van-button class="flex-1" @click="creating = false">取消</van-button>
           <van-button class="flex-1" type="primary" @click="submitCreate">保存</van-button>

@@ -15,6 +15,7 @@ import { normalizePrice, priceFromInput } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { useToast } from '@/composables/useToast';
 import QtyStepper from '@/components/QtyStepper.vue';
+import FormField from '@/components/FormField.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 
@@ -188,13 +189,11 @@ async function removeItem() {
       </div>
 
       <template v-else>
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">名称</label>
-          <input v-model="draft.name" class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50" placeholder="如 西红柿 / 牛奶" />
-        </div>
+        <FormField label="名称">
+          <input v-model="draft.name" class="field-input" placeholder="如 西红柿 / 牛奶" />
+        </FormField>
 
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="item-qty">数量 / 单位</label>
+        <FormField label="数量 / 单位" for-id="item-qty">
           <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
             <QtyStepper
               v-model="draft.quantity"
@@ -214,14 +213,13 @@ async function removeItem() {
           </PillGroup>
           <input
             v-model="draft.unit"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 mt-2 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input mt-2"
             placeholder="其它单位，如 把 / 根"
             aria-label="其它单位"
           />
-        </div>
+        </FormField>
 
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">存放位置（切换即时重算到期日）</label>
+        <FormField label="存放位置（切换即时重算到期日）">
           <PillGroup>
             <Pill
               v-for="l in locations.all"
@@ -231,7 +229,7 @@ async function removeItem() {
               @click="draft.locationId = l.id"
             >{{ l.name }}</Pill>
           </PillGroup>
-        </div>
+        </FormField>
 
         <div
           class="tip mb-3.5"
@@ -284,30 +282,31 @@ async function removeItem() {
         </div>
 
         <div v-show="moreOpen">
-          <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5">生产日期（可选）</label>
-            <input v-model="draft.producedAt" type="date" class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50" />
-          </div>
+          <FormField label="生产日期（可选）">
+            <input v-model="draft.producedAt" type="date" class="field-input" />
+          </FormField>
 
-          <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5">手填保质期（天，覆盖自动推算）</label>
+          <FormField label="手填保质期（天，覆盖自动推算）">
             <input
               :value="draft.manualShelfLife ?? ''"
               type="number"
               min="1"
-              class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+              class="field-input"
               placeholder="留空则按字典/品类自动推算"
               @input="draft.manualShelfLife = ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null"
             />
-          </div>
+          </FormField>
 
           <!--
             单价：**每 1 单位**的价格（元）。用它算「本次金额 = 单价 × 消耗数量」。
             ⚠️ 口径必须走 `priceFromInput`：负数会把月度「浪费金额」拉成负数，`1e999` 会让它变 `¥Infinity`，
             而 `min="0"` 只是 HTML 校验、挡不住手输。非法值归一为 `null`（= 没填价，不是 0）。
           -->
-          <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5" for="item-price">单价（元 / {{ draft.unit || '个' }}，可选）</label>
+          <FormField
+            :label="`单价（元 / ${draft.unit || '个'}，可选）`"
+            for-id="item-price"
+            hint="用于统计浪费金额。整份花了多少钱请除以数量再填。"
+          >
             <input
               id="item-price"
               :value="draft.price ?? ''"
@@ -315,17 +314,15 @@ async function removeItem() {
               step="0.01"
               min="0"
               inputmode="decimal"
-              class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
-              placeholder="每 1 {{ draft.unit || '个' }} 的价格，如 1.5（不是整盒 30）"
+              class="field-input"
+              :placeholder="`每 1 ${draft.unit || '个'} 的价格，如 1.5（不是整盒 30）`"
               @input="draft.price = priceFromInput(($event.target as HTMLInputElement).value)"
             />
-            <div class="text-[12px] text-ink-3 mt-1.5 leading-relaxed">用于统计浪费金额。整份花了多少钱请除以数量再填。</div>
-          </div>
+          </FormField>
 
-          <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5">备注（可选）</label>
-            <textarea v-model="draft.note" class="w-full min-h-[72px] border border-line-strong rounded-md p-2.5 text-[14px] bg-card text-ink-1 resize-y focus:outline-none focus:border-primary-500" placeholder="如 买的第二袋"></textarea>
-          </div>
+          <FormField label="备注（可选）">
+            <textarea v-model="draft.note" class="field-textarea" placeholder="如 买的第二袋"></textarea>
+          </FormField>
         </div>
 
         <div class="tip mb-3.5">入库日期：{{ storedAt }}</div>
@@ -334,8 +331,7 @@ async function removeItem() {
 
         <template v-if="!isNew">
           <div class="section-label">处理这件物资</div>
-          <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5">本次数量（在库 {{ remainQty }}{{ draft.unit }}）</label>
+          <FormField :label="`本次数量（在库 ${remainQty}${draft.unit}）`">
             <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
               <QtyStepper
                 v-model="consumeQty"
@@ -349,7 +345,7 @@ async function removeItem() {
               class="bg-transparent border-0 text-primary-600 text-[13px] cursor-pointer p-0 mt-1.5"
               @click="consumeQty = remainQty"
             >全部（{{ remainQty }}{{ draft.unit }}）</button>
-          </div>
+          </FormField>
           <div class="flex gap-2 mb-2">
             <van-button class="flex-1" @click="consume('consumed')">
               用掉了{{ consumeQty >= remainQty ? '' : ` ${consumeQty}${draft.unit}` }}

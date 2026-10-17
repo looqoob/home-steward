@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import FormField from '@/components/FormField.vue';
 import { useSettingsStore } from '@/stores/settings';
 
 const router = useRouter();
@@ -94,37 +95,38 @@ async function toggleRemind() {
         <van-switch :model-value="settings.settings.remindEnabled" @change="toggleRemind" />
       </div>
 
-      <div class="mb-3.5 mt-1.5">
-        <label class="block text-[12px] text-ink-2 mb-1.5" for="remind-time">每日提醒时间（原生 App 会在此时推送；网页版需当天打开过一次）</label>
+      <FormField
+        class="mt-1.5"
+        label="每日提醒时间（原生 App 会在此时推送；网页版需当天打开过一次）"
+        for-id="remind-time"
+      >
         <input
           id="remind-time"
           v-model="timeStr"
           type="time"
-          class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+          class="field-input"
         />
-      </div>
+      </FormField>
 
-      <div class="mb-3.5">
-        <label class="block text-[12px] text-ink-2 mb-1.5" for="soon-days">临期阈值（剩余 ≤ N 天）</label>
+      <FormField label="临期阈值（剩余 ≤ N 天）" for-id="soon-days">
         <input
           id="soon-days"
           v-model="soonDays"
           type="number"
           min="1"
-          class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+          class="field-input"
         />
-      </div>
+      </FormField>
 
-      <div class="mb-3.5">
-        <label class="block text-[12px] text-ink-2 mb-1.5" for="urgent-days">紧急 / 待吃阈值（剩余 ≤ N 天）</label>
+      <FormField label="紧急 / 待吃阈值（剩余 ≤ N 天）" for-id="urgent-days">
         <input
           id="urgent-days"
           v-model="urgentDays"
           type="number"
           min="0"
-          class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+          class="field-input"
         />
-      </div>
+      </FormField>
 
       <div class="tip">
         网页（PWA）版本没有可靠的后台定时，会在你每次打开 App 时检查并发通知；安装到手机桌面或改用 APK 可获得更稳定的本地定时提醒。

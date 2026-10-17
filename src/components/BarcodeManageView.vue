@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
+import FormField from '@/components/FormField.vue';
 import { useBarcodesStore } from '@/stores/barcodes';
 import { useToast } from '@/composables/useToast';
 import type { BarcodeEntry } from '@/domain/types';
@@ -97,15 +98,14 @@ async function doDelete() {
         class="bg-card border border-primary-600 rounded-md p-3 mb-2"
       >
         <div class="text-[12px] text-ink-2 mb-1.5 font-mono">{{ editing.code }}</div>
-        <div class="mb-2">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="bc-rename">新名称</label>
+        <FormField label="新名称" for-id="bc-rename" spacing="tight">
           <input
             id="bc-rename"
             v-model="editName"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input"
             @keyup.enter="saveEdit"
           />
-        </div>
+        </FormField>
         <div class="flex gap-2">
           <van-button class="flex-1" @click="editing = null">取消</van-button>
           <van-button class="flex-1" type="primary" :disabled="!editName.trim()" @click="saveEdit">保存</van-button>

@@ -14,6 +14,7 @@ import BottomSheet from '@/components/BottomSheet.vue';
 import QtyStepper from '@/components/QtyStepper.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import FormField from '@/components/FormField.vue';
 import type { Item } from '@/domain/types';
 // 仅类型导入：运行时代码走动态 import，不会让 html5-qrcode 进主包
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -283,15 +284,14 @@ onBeforeUnmount(() => {
       <template v-if="pendingCode">
         <div class="tip mb-3">新条码 {{ pendingCode }}</div>
 
-        <div class="mb-3">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="bc-name">这是什么？</label>
+        <FormField label="这是什么？" for-id="bc-name" spacing="tight">
           <input
             id="bc-name"
             v-model="newName"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input"
             placeholder="如 纯牛奶"
           />
-        </div>
+        </FormField>
 
         <div class="mb-3">
           <div class="text-[12px] text-ink-2 mb-1.5">数量</div>
@@ -329,8 +329,7 @@ onBeforeUnmount(() => {
           单价：**每 1 单位**的价格（元），不是整份总价。右侧实时算合计兜住这个歧义。
           口径走 `priceFromInput`：负数会污染月度统计，`1e999` 会变 `Infinity`。
         -->
-        <div class="mb-3">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="bc-price">单价（元 / {{ newUnit || '个' }}，可选）</label>
+        <FormField :label="`单价（元 / ${newUnit || '个'}，可选）`" for-id="bc-price" spacing="tight">
           <div class="flex items-center gap-2">
             <input
               id="bc-price"
@@ -339,13 +338,13 @@ onBeforeUnmount(() => {
               step="0.01"
               min="0"
               inputmode="decimal"
-              class="flex-1 min-w-0 h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+              class="field-input flex-1 min-w-0"
               placeholder="如 1.5（不是整箱 30）"
               @input="newPrice = priceFromInput(($event.target as HTMLInputElement).value)"
             />
             <span v-if="newPriceTotal" class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ newPriceTotal }}</span>
           </div>
-        </div>
+        </FormField>
 
         <div v-if="expiryPreview" class="tip mb-3">{{ expiryPreview }}</div>
 
@@ -374,19 +373,18 @@ onBeforeUnmount(() => {
 
         <div v-if="scanning" class="text-[12px] text-ink-3 text-center mb-3">对准商品条码</div>
 
-        <div class="mb-2">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="bc-code">手动输入条码</label>
+        <FormField label="手动输入条码" for-id="bc-code" spacing="tight">
           <div class="flex gap-2">
             <input
               id="bc-code"
               v-model="manualCode"
-              class="flex-1 min-w-0 h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+              class="field-input flex-1 min-w-0"
               placeholder="如 6901234567892"
               @keyup.enter="submitManual"
             />
             <van-button type="primary" class="flex-none" @click="submitManual">查询</van-button>
           </div>
-        </div>
+        </FormField>
 
         <van-button block plain class="mt-3" @click="close">关闭</van-button>
       </template>

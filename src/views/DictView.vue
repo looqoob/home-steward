@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import FormField from '@/components/FormField.vue';
 import { useDictStore } from '@/stores/dict';
 import { allBuiltinFoods, shelfLifeText } from '@/data/dict';
 import { BUILTIN_FOODS } from '@/data/dict/builtin';
@@ -80,17 +81,15 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
 
       <div class="section-label">添加 / 覆盖自定义</div>
       <div class="card card-lg p-4 mb-3 shadow-card">
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-name">食材名称</label>
+        <FormField label="食材名称" for-id="dict-name">
           <input
             id="dict-name"
             v-model="form.name"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input"
             placeholder="如 西红柿"
           />
-        </div>
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5">环境</label>
+        </FormField>
+        <FormField label="环境">
           <PillGroup>
             <Pill
               v-for="e in ENV_LIST"
@@ -99,27 +98,25 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
               @click="form.env = e.key"
             >{{ e.label }}</Pill>
           </PillGroup>
-        </div>
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-days">保质期（天）</label>
+        </FormField>
+        <FormField label="保质期（天）" for-id="dict-days">
           <input
             id="dict-days"
             v-model="form.days"
             type="number"
             min="1"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input"
             placeholder="如 7"
           />
-        </div>
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-reason">备注</label>
+        </FormField>
+        <FormField label="备注" for-id="dict-reason">
           <input
             id="dict-reason"
             v-model="form.reason"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input"
             placeholder="如 冷藏易发芽"
           />
-        </div>
+        </FormField>
         <van-button block type="primary" @click="submitCustom">保存</van-button>
       </div>
 

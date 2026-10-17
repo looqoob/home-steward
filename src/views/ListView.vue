@@ -7,6 +7,7 @@ import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import ShoppingInboundRow from '@/components/ShoppingInboundRow.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import FormField from '@/components/FormField.vue';
 import { REASON_LABEL, groupShoppingByLocation } from '@/domain/shoppingRules';
 import type { ShopReason, ShoppingItem } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
@@ -195,19 +196,18 @@ async function clearDone() {
     </PillGroup>
 
     <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
-    <div class="mb-3.5">
-      <label class="block text-[12px] text-ink-2 mb-1.5" for="manual-name">手动添加</label>
+    <FormField label="手动添加" for-id="manual-name">
       <div class="flex gap-2">
         <input
           id="manual-name"
           v-model="manualName"
-          class="flex-1 min-w-0 h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+          class="field-input flex-1 min-w-0"
           placeholder="如 抽纸"
           @keyup.enter="addManual"
         />
         <van-button type="primary" class="flex-none" @click="addManual">添加</van-button>
       </div>
-    </div>
+    </FormField>
 
     <div v-if="shopping.visible.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
       <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">

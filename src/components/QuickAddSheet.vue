@@ -16,6 +16,7 @@ import BottomSheet from '@/components/BottomSheet.vue';
 import QtyStepper from '@/components/QtyStepper.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import FormField from '@/components/FormField.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
@@ -219,15 +220,14 @@ function openScan() {
           </van-button>
         </div>
 
-        <div class="mb-3.5">
-          <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-custom">或输入其它食材</label>
+        <FormField label="或输入其它食材" for-id="qa-custom">
           <input
             id="qa-custom"
             v-model="customName"
-            class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+            class="field-input"
             placeholder="如 鸭血 / 碱水面"
           />
-        </div>
+        </FormField>
 
         <template v-if="selected">
           <div class="mb-3.5">
@@ -244,11 +244,11 @@ function openScan() {
               >{{ u }}</Pill>
             </PillGroup>
             <div class="mt-2">
-              <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-unit">其它单位</label>
+              <label class="field-label" for="qa-unit">其它单位</label>
               <input
                 id="qa-unit"
                 v-model="unit"
-                class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+                class="field-input"
                 placeholder="如 把 / 根"
               />
             </div>
@@ -280,8 +280,7 @@ function openScan() {
             单价：**每 1 单位**的价格（元），不是整份总价。右侧实时算合计兜住这个歧义。
             口径走 `priceFromInput`：负数会污染月度统计，`1e999` 会变 `Infinity`。
           -->
-          <div class="mb-3.5">
-            <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-price">单价（元 / {{ unit || '个' }}，可选）</label>
+          <FormField :label="`单价（元 / ${unit || '个'}，可选）`" for-id="qa-price">
             <div class="flex items-center gap-2">
               <input
                 id="qa-price"
@@ -290,13 +289,13 @@ function openScan() {
                 step="0.01"
                 min="0"
                 inputmode="decimal"
-                class="flex-1 min-w-0 h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 placeholder:text-ink-3 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
+                class="field-input flex-1 min-w-0"
                 placeholder="如 1.5（不是整盒 30）"
                 @input="price = priceFromInput(($event.target as HTMLInputElement).value)"
               />
               <span v-if="priceTotal" class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ priceTotal }}</span>
             </div>
-          </div>
+          </FormField>
 
           <div class="tip mb-3.5">{{ note }}</div>
         </template>

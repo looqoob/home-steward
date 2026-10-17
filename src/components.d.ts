@@ -13,6 +13,7 @@ declare module 'vue' {
     BulkActionBar: typeof import('./components/BulkActionBar.vue')['default']
     ConfirmSheet: typeof import('./components/ConfirmSheet.vue')['default']
     ConsumeSheet: typeof import('./components/ConsumeSheet.vue')['default']
+    FormField: typeof import('./components/FormField.vue')['default']
     GroupConsumeSheet: typeof import('./components/GroupConsumeSheet.vue')['default']
     IconText: typeof import('./components/IconText.vue')['default']
     ItemCard: typeof import('./components/ItemCard.vue')['default']
