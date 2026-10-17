@@ -583,7 +583,7 @@ function exitStocktake() {
         此时改筛选只会让选中项「看不见」。
         （视图切换已从本页移到「设置 → 库存设置」，这里不再有那一行常驻按钮。）
       -->
-      <div v-if="!selectMode" class="flex items-center gap-2 mb-3.5">
+      <div v-if="!selectMode" class="flex items-center gap-2 mb-2.5">
         <div
           ref="filterEl"
           class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pt-1 pb-2 flex-1 min-w-0"
@@ -619,7 +619,7 @@ function exitStocktake() {
         -->
         <div
           v-if="sec.label"
-          class="group-head sticky z-[19] bg-page -mx-4 px-4 py-1.5 mt-3 mb-2 flex items-center gap-2 text-[13px] font-medium text-ink-1"
+          class="group-head sticky z-[19] bg-page -mx-4 px-4 py-1.5 mt-2.5 mb-2.5 flex items-center gap-2 text-[13px] font-medium text-ink-1"
           :style="{ top: groupTop }"
         >
           <span>{{ sec.label }}</span>
