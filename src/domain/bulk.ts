@@ -9,7 +9,7 @@ import type { ConsumeLog, ConsumeType, EnvType, Item } from './types';
 import type { ShelfLifeResolver } from './shelfLife';
 import { computeExpiry } from './shelfLife';
 import { newId } from './ids';
-import { diffDays, todayStr } from './dates';
+import { diffDays, todayStr, isDateStr } from './dates';
 import { amountOf, normalizePrice } from './price';
 
 export type BulkKind = 'consume' | 'move' | 'remove' | 'price';
@@ -48,7 +48,9 @@ function activeOnly(items: Item[]): Item[] {
  */
 export function buildConsumeLog(item: Item, type: ConsumeType, take: number, today: string, now: number): ConsumeLog {
   let overdueDays: number | null = null;
-  if (item.expireAt) {
+  // ⚠️ 与 freshnessOf 同款 isDateStr 兜底：只判 `item.expireAt` 真值会让数字 / 对象等脏值穿透，
+  // 随后 diffDays → parseDate 执行 .split() 时抛 TypeError，整条 consume 失败。
+  if (isDateStr(item.expireAt)) {
     const d = diffDays(item.expireAt, today);
     overdueDays = d < 0 ? -d : 0;
   }

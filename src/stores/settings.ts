@@ -15,6 +15,10 @@ import { DEFAULT_SETTINGS, type Settings, type StockViewMode, type ThemeMode } f
  * `stockViewMode` 同理：v3 新增，旧记录与旧备份里是 `undefined`。
  * ⚠️ 新增任何设置字段都要在这里加回落 —— 否则旧用户读到 `undefined`，
  * 而 `StockView` 这类消费点如果直接裸读就会整个列表不渲染。
+ *
+ * 数值字段（`remindHour` / `remindMinute` / `soonDays` / `urgentDays`）此前直接穿透 `...raw`，
+ * 脏数据（NaN / 负数 / 越界）会让提醒永久失效或新鲜度分类错乱。
+ * 这里对每个数值字段加范围校验，非法值回落默认。
  */
 function normalizeSettings(raw: Settings): Settings {
   const mode: ThemeMode =
@@ -25,11 +29,22 @@ function normalizeSettings(raw: Settings): Settings {
     raw.stockViewMode === 'timeline' || raw.stockViewMode === 'flat' || raw.stockViewMode === 'group'
       ? raw.stockViewMode
       : DEFAULT_SETTINGS.stockViewMode;
+  // 数值字段校验：非有限数 / 越界 → 回落默认
+  const clampNum = (v: unknown, lo: number, hi: number, fallback: number): number =>
+    typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : fallback;
+  const soonDays = clampNum(raw.soonDays, 1, 365, DEFAULT_SETTINGS.soonDays);
+  const urgentDays = clampNum(raw.urgentDays, 0, soonDays, DEFAULT_SETTINGS.urgentDays);
+  const remindHour = clampNum(raw.remindHour, 0, 23, DEFAULT_SETTINGS.remindHour);
+  const remindMinute = clampNum(raw.remindMinute, 0, 59, DEFAULT_SETTINGS.remindMinute);
   return {
     ...raw,
     themeMode: mode,
     accent: normalizeHex(raw.accent) ?? DEFAULT_SETTINGS.accent,
     stockViewMode,
+    soonDays,
+    urgentDays,
+    remindHour,
+    remindMinute,
   };
 }
 
@@ -56,8 +71,12 @@ export const useSettingsStore = defineStore('settings', () => {
    * @example await settings.patch({ remindEnabled: true, remindHour: 20, remindMinute: 30 })
    */
   async function patch(p: Partial<Settings>) {
-    settings.value = { ...settings.value, ...p, updatedAt: Date.now() };
-    await db.settings.save(settings.value);
+    // ⚠️ 先落库再改内存：此前先改内存后落库，若落库失败（Quota / IO）
+    // 内存里是新值、DB 还是旧值，UI 显示新设置但重开 App 后回退到旧值。
+    // 先落库则失败时内存不变，UI 与 DB 保持一致。
+    const next = normalizeSettings({ ...settings.value, ...p, updatedAt: Date.now() });
+    await db.settings.save(next);
+    settings.value = next;
   }
 
   return { settings, loaded, load, patch };

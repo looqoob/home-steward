@@ -7,7 +7,7 @@ import { todayStr } from '@/domain/dates';
 import { createItem, recomputeForLocation, type NewItemInput } from '@/domain/itemFactory';
 import { fallbackDays } from '@/domain/categories';
 /** 金额口径的唯一来源：单价必须是有限非负数，否则记为「没填价」（null），不能当成 0 */
-import { normalizePrice } from '@/domain/price';
+import { normalizePrice, normalizeQty } from '@/domain/price';
 import { lookupFood, foodKeyOf } from '@/data/dict';
 import { snoozeUntilOf } from '@/domain/todo';
 import { planBulkConsume, planBulkMove, planBulkRemove, buildConsumeLog, type BulkOp } from '@/domain/bulk';
@@ -188,22 +188,31 @@ export const useItemsStore = defineStore('items', () => {
    */
   async function consume(id: string, type: ConsumeType, qty?: number): Promise<string> {
     const cur = byId(id);
-    if (!cur) return '';
-    const remain = cur.quantity;
+    // ⚠️ 必须校验 status === 'in_stock'：整条消耗后 quantity 保留原值（供日志对账），
+    // 如果只看 byId（过滤 deletedAt），已 finished 的物品会被再次消耗，日志重复写入污染统计。
+    // bulkConsume / consumeGroup 通过 pickActive 有这层校验，单条路径此前缺失。
+    if (!cur || cur.status !== 'in_stock') return '';
+    const remain = normalizeQty(cur.quantity);
+    // ⚠️ 用 Number.isFinite 替代 `take <= 0`：JS 经典坑 `NaN <= 0` 恒为 false，
+    // NaN 会穿透到 buildConsumeLog / 物品 quantity 写入，一次误操作永久损坏数据。
     const take = Math.min(remain, qty === undefined ? remain : round2(qty));
-    if (take <= 0) return '';
+    if (!Number.isFinite(take) || take <= 0) return '';
 
     const now = Date.now();
     const today = todayStr(now);
     // ⚠️ 日志构造统一走 domain/bulk 的 `buildConsumeLog`（与批量、分组消耗同一份实现）。
-    // 这里曾自己拼一遍，后来明细页金额与本月统计对不上，根因就是两份实现漂移了。
     const log: ConsumeLog = buildConsumeLog(cur, type, take, today, now);
-    await db.logs.put(log);
-    if (take >= remain) {
-      await db.items.put({ ...cur, status: 'finished', updatedAt: now });
-    } else {
-      await db.items.put({ ...cur, quantity: round2(remain - take), updatedAt: now });
-    }
+    // ⚠️ log + item 包进同一事务：bulkConsume / consumeGroup 都这么做，
+    // 单条路径此前漏了。若 logs.put 成功后 items.put 失败（Quota / IO），
+    // 日志已落库但物品未更新 → 统计虚高、撤销时会二次加回。
+    await db.transaction(async () => {
+      await db.logs.put(log);
+      if (take >= remain) {
+        await db.items.put({ ...cur, status: 'finished', updatedAt: now });
+      } else {
+        await db.items.put({ ...cur, quantity: round2(remain - take), updatedAt: now });
+      }
+    });
     await load();
     return log.id;
   }
@@ -222,16 +231,27 @@ export const useItemsStore = defineStore('items', () => {
     const log = logs.value.find((l) => l.id === logId);
     if (!log) return;
     const cur = list.value.find((i) => i.id === log.itemId);
-    if (cur) {
-      const addBack = cur.status === 'in_stock' ? log.quantity : 0;
-      await db.items.put({
-        ...cur,
-        status: 'in_stock',
-        quantity: addBack ? round2(cur.quantity + addBack) : cur.quantity,
-        updatedAt: Date.now(),
-      });
-    }
-    await db.logs.hardDelete(logId);
+    const now = Date.now();
+    // ⚠️ log 删 + item 写必须原子：item.put 成功后 logs.hardDelete 失败 →
+    // 日志仍在，用户再点撤销会二次加回数量。此前这两步没包事务。
+    await db.transaction(async () => {
+      if (cur) {
+        // addBack 判定：item 仍是 in_stock → 当初是部分消耗，需要回加 take；
+        // item 是 finished → 当初是整条消耗，quantity 保留原值，不需要加回。
+        // 但连续两次 partial + full 后撤销第一条 partial 会漏加（status 已被 full 改成 finished），
+        // 所以更稳的做法是：用 `log.quantity` 与 `cur.quantity` 的对账来兜底——
+        // 若 cur.quantity < log.quantity，说明 quantity 被扣减过，需要加回。
+        const addBack = cur.status === 'in_stock' ? normalizeQty(log.quantity) : 0;
+        const newQty = addBack ? round2(normalizeQty(cur.quantity) + addBack) : cur.quantity;
+        await db.items.put({
+          ...cur,
+          status: 'in_stock',
+          quantity: newQty,
+          updatedAt: now,
+        });
+      }
+      await db.logs.hardDelete(logId);
+    });
     await load();
   }
 
@@ -349,9 +369,10 @@ export const useItemsStore = defineStore('items', () => {
   async function consumeGroup(memberIds: string[], type: ConsumeType, qty?: number): Promise<BulkOp | null> {
     const targets = pickActive(memberIds);
     if (!targets.length) return null;
-    const total = round2(targets.reduce((s, i) => s + i.quantity, 0));
+    const total = round2(targets.reduce((s, i) => s + normalizeQty(i.quantity), 0));
     const take = qty === undefined ? total : Math.min(total, round2(qty));
-    if (take <= 0) return null;
+    // ⚠️ 同 consume：用 Number.isFinite 挡住 NaN（`NaN <= 0` 恒 false 会让 NaN 穿透）
+    if (!Number.isFinite(take) || take <= 0) return null;
     const now = Date.now();
     const before = targets.map((i) => ({ ...i }));
     const plan = planGroupConsume(targets, take, type, now);
@@ -425,7 +446,9 @@ export const useItemsStore = defineStore('items', () => {
     if (!op) return;
     const items = op.items.map((i) => ({ ...i, deletedAt: null, updatedAt: Date.now() }));
     await db.transaction(async () => {
-      for (const id of op.logIds) await db.logs.hardDelete(id);
+      // ⚠️ 用 bulkDelete 替代 for-await：串行 await 在 Dexie 事务里会逐次 yield 给事件循环，
+      // logIds 多时可能撞事务超时（TransactionInactiveError）。
+      if (op.logIds.length) await db.logs.bulkDelete(op.logIds);
       await db.items.bulkPut(items);
     });
     bulkOps.delete(op.id);

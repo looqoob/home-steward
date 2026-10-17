@@ -3,7 +3,7 @@ import { CATEGORY_LABEL } from './types';
 import { diffDays, fromEpoch, monthKey, todayStr, isDateStr } from './dates';
 // 金额口径复用 domain/price：累加前先把脏值（字符串 / 负数 / Infinity）归成 null，
 // 否则一次 `+=` 字符串拼接就能把整月「浪费金额」变成 NaN。
-import { normalizePrice, amountOf } from './price';
+import { normalizePrice, normalizeQty, amountOf } from './price';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -60,9 +60,9 @@ export function monthStats(items: Item[], logs: ConsumeLog[], now: number = Date
   for (const l of logs) {
     if (l.deletedAt) continue;
     if (monthKey(fromEpoch(l.at)) !== key) continue;
-    if (l.type === 'consumed') consumed += l.quantity;
+    if (l.type === 'consumed') consumed += normalizeQty(l.quantity);
     else {
-      wastedCount += l.quantity;
+      wastedCount += normalizeQty(l.quantity);
       wastedAmount += normalizePrice(l.price) ?? 0;
     }
   }
@@ -189,7 +189,7 @@ export function wasteTrend(logs: ConsumeLog[], months = 6, now: number = Date.no
     if (!set.has(k)) continue;
     const cur = acc.get(k) ?? { amount: 0, count: 0 };
     cur.amount += normalizePrice(l.price) ?? 0;
-    cur.count += l.quantity;
+    cur.count += normalizeQty(l.quantity);
     acc.set(k, cur);
   }
   for (const v of acc.values()) if (v.count > 0) monthsWithData++;
@@ -273,7 +273,7 @@ export function topWasted(logs: ConsumeLog[], n = 5): WastedTop[] {
   for (const l of logs) {
     if (l.deletedAt || l.type !== 'wasted') continue;
     const cur = acc.get(l.name) ?? { name: l.name, count: 0, amount: 0 };
-    cur.count += l.quantity;
+    cur.count += normalizeQty(l.quantity);
     cur.amount += normalizePrice(l.price) ?? 0;
     acc.set(l.name, cur);
   }

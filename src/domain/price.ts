@@ -25,8 +25,10 @@
  *    `ConsumeLog.unitPrice` 是消耗当时的单价；事后改物品单价**不改历史日志**。
  */
 
-/** 两位小数取整（金额与数量共用；避免浮点累加出 `0.30000000000000004` 这种数） */
+/** 两位小数取整（金额与数量共用；避免浮点累加出 `0.30000000000000004` 这种数）。
+ *  对 NaN / Infinity 兜底返回 0，避免脏值在统计页渲染成 "NaN" / "Infinity"。 */
 export function round2(n: number): number {
+  if (!Number.isFinite(n)) return 0;
   return Math.round(n * 100) / 100;
 }
 
@@ -60,6 +62,21 @@ export function priceFromInput(raw: string): number | null {
 }
 
 /**
+ * 数量归一化：有限正数原样保留，**其余一律 0**。
+ *
+ * 与 `normalizePrice` 的区别：`normalizePrice` 对非法值返回 `null`（「没填价」有语义意义），
+ * 数量没有「没填」这个语义，非法一律塌成 0。挡的是 NaN / Infinity / 负数 / 字符串，
+ * 避免脏 `item.quantity` 经 `amountOf` / 统计累加放大成 NaN。
+ *
+ * @example normalizeQty(3)    // 3
+ * @example normalizeQty(NaN)  // 0
+ * @example normalizeQty(-1)   // 0
+ */
+export function normalizeQty(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
+/**
  * 本次金额 = 单价 × 数量。
  *
  * ⚠️ 乘以数量是**必须的**：`Item.price` 的语义是**单价**，直接拿它当金额的话，
@@ -74,7 +91,7 @@ export function priceFromInput(raw: string): number | null {
 export function amountOf(unitPrice: number | null | undefined, qty: number): number | null {
   const p = normalizePrice(unitPrice);
   if (p === null) return null;
-  return round2(p * qty);
+  return round2(p * normalizeQty(qty));
 }
 
 /**

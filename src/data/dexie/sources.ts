@@ -21,12 +21,20 @@ function base<T extends { id: string; deletedAt: number | null }>(table: Table<T
       await table.bulkPut(entities);
     },
     async softDelete(id: string) {
-      const r = await table.get(id);
-      if (!r) return;
-      await table.put({ ...r, deletedAt: Date.now() } as T);
+      // ⚠️ 用 table.update 而非 get+put：get 与 put 是两个独立事务，
+      // 中间可插入其它写入，put 会用旧值整条覆盖（lost-update）。
+      // update 是单事务 partial update，原子且只改目标字段。
+      // Dexie 的 UpdateSpec<T> 对泛型 T 约束过严，这里 as any 绕类型层，
+      // 运行时 update(key, changes) 接受任意 partial 对象。
+      await table.update(id, { deletedAt: Date.now(), updatedAt: Date.now() } as any);
     },
     async hardDelete(id: string) {
       await table.delete(id);
+    },
+    async bulkDelete(ids: string[]) {
+      // ⚠️ 一次性删，替代 for-await：串行 await 在 Dexie 事务里逐次 yield 事件循环，
+      // ids 多时可能撞事务超时（TransactionInactiveError）。
+      await table.bulkDelete(ids);
     },
     async clear() {
       await table.clear();

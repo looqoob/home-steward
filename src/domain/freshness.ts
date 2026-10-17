@@ -63,8 +63,11 @@ export function barColor(state: FreshnessState): string {
       return 'var(--state-soon-bar)';
     case 'urgent':
       return 'var(--state-urgent-bar)';
-    default:
+    case 'over':
       return 'var(--state-over-bar)';
+    // ⚠️ warn / none 此前走 default（= over 红色），组内成员色条会被误染成过期色
+    default:
+      return 'var(--ink-3)';
   }
 }
 

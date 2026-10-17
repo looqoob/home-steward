@@ -154,6 +154,8 @@ export const useShoppingStore = defineStore('shopping', () => {
     const locs = useLocationsStore();
     const s = list.value.find((x) => x.id === id && !x.deletedAt);
     if (!s) return null;
+    // ⚠️ 已入库的项短路：避免 await 期间连点「入库」按钮导致重复创建物品
+    if (s.inboundItemId) return null;
     // 传别名解析器：「西红柿」也能命中历史里的「番茄」，否则每次都要手选位置
     const { rows } = inboundInputs([s], items.list, locs.all, {
       aliasKey: foodKeyOf,
@@ -164,6 +166,10 @@ export const useShoppingStore = defineStore('shopping', () => {
     const created = await items.addMany([rows[0].input]);
     const item = created[0];
     if (item) await markInbound(id, item.id);
+    // ⚠️ 必须刷新 shopping.list：markInbound 只写 DB 不刷内存，
+    // 不刷新则 ListView 的 v-if="s.inboundItemId" 不命中、
+    // 「入库」按钮仍可点，连点会产生孤儿物品记录
+    await load();
     return item ?? null;
   }
 
@@ -197,6 +203,9 @@ export const useShoppingStore = defineStore('shopping', () => {
       const item = created[i];
       if (item) await markInbound(rows[i].shoppingId, item.id);
     }
+    // ⚠️ 同 inboundOne：markInbound 只写 DB 不刷内存，
+    // 不刷新则「全部入库」按钮仍可见，连点会再创建一批孤儿物品
+    await load();
     return { count: created.length, skipped };
   }
 

@@ -32,9 +32,12 @@ const UNITS = ['个', '袋', '斤', '瓶', '盒'];
 
 /** 数量保留 2 位小数：0.5 斤这类值加减后不会浮出 0.30000000000000004（与 domain/price 同一份实现） */
 
-const id = route.params.id as string;
-const isNew = id === 'new';
-const item = computed(() => (isNew ? undefined : items.byId(id)));
+/** 路由参数 id 改为 computed：此前是 `const id = route.params.id as string`，
+ *  非 reactive，从 /item/A 直接 push /item/B 时组件被复用，watch 触发 init
+ *  但 init 内读 item.value 仍走旧 id，draft 被填充成 A 的数据，保存会覆盖 B。 */
+const id = computed(() => route.params.id as string);
+const isNew = computed(() => id.value === 'new');
+const item = computed(() => (isNew.value ? undefined : items.byId(id.value)));
 
 const draft = reactive({
   name: '',
@@ -106,7 +109,7 @@ async function save() {
     notRecommended: r.notRecommended,
     notRecommendedReason: r.reason,
   };
-  if (isNew) {
+  if (isNew.value) {
     await items.add({
       name,
       quantity: draft.quantity,

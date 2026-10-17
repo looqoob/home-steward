@@ -36,12 +36,17 @@ const emit = defineEmits<{
  *
  * 折叠后组卡取代了 `ItemCard` 成为列表主体，长按入口必须跟着搬过来，
  * 否则「长按多选」这个从 v2 就有的能力会**静默消失**。
+ *
+ * ⚠️ 非多选态也要允许长按：用户在普通浏览态长按应该能进入多选，
+ * 此前 `if (!props.selectable) return;` 把入口彻底挡掉了。
  */
 const LONGPRESS_MS = 500;
 const MOVE_TOLERANCE = 10;
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 const pressing = ref(false);
+/** longpress 触发后设 true，抑制紧接着的 click 事件，避免反选刚选中的整组 */
+const suppressClick = ref(false);
 let startX = 0;
 let startY = 0;
 
@@ -52,15 +57,17 @@ function clearTimer() {
 }
 
 function onPointerDown(e: PointerEvent) {
-  if (!props.selectable) return;
+  // ⚠️ 删除 `if (!props.selectable) return;`：它把非多选态的长按入口彻底挡掉了
   if (e.pointerType === 'mouse' && e.button !== 0) return;
   startX = e.clientX;
   startY = e.clientY;
   pressing.value = true;
+  suppressClick.value = false;
   clearTimer();
   timer = setTimeout(() => {
     timer = null;
     pressing.value = false;
+    suppressClick.value = true;
     emit('longpress', props.group);
   }, LONGPRESS_MS);
 }
@@ -70,6 +77,16 @@ function onPointerMove(e: PointerEvent) {
   if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE) {
     clearTimer();
   }
+}
+
+/** click handler：longpress 后抑制一次，防止反选整组 */
+function onClick() {
+  if (suppressClick.value) {
+    suppressClick.value = false;
+    return;
+  }
+  if (props.selectable) emit('select', props.group);
+  else emit('open', props.group.lead);
 }
 
 onBeforeUnmount(clearTimer);
@@ -194,7 +211,7 @@ const dueSummary = computed(() => {
         class="flex-1 min-w-0 flex gap-3 items-start bg-transparent border-0 p-0 text-left text-[14px] text-ink-1"
         :class="selectable ? 'cursor-default' : 'cursor-pointer'"
         :aria-label="`${props.group.name}，共 ${props.group.members.length} 份，${dueSummary}`"
-        @click="selectable ? emit('select', props.group) : emit('open', props.group.lead)"
+        @click="onClick"
       >
         <span class="w-10 h-10 rounded-md flex-none flex items-center justify-center text-[15px] font-medium text-primary-700 bg-primary-50">
           {{ props.group.icon }}

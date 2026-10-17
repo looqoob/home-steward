@@ -118,6 +118,10 @@ export function fromEpoch(ms: number): string {
  * @example nextDailyAt(9, 0) // 今天已过 09:00 则返回明天 09:00
  */
 export function nextDailyAt(hour: number, minute: number, now: number = Date.now()): number {
+  // ⚠️ 校验 hour / minute：脏设置（NaN / 越界）会让 setHours 产生 Invalid Date，
+  // getTime() 返回 NaN，提醒调度拿到 NaN 永远不触发。
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) hour = 9;
+  if (!Number.isFinite(minute) || minute < 0 || minute > 59) minute = 0;
   const d = new Date(now);
   d.setHours(hour, minute, 0, 0);
   if (d.getTime() <= now) d.setDate(d.getDate() + 1);

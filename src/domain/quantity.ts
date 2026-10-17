@@ -12,7 +12,11 @@
  *
  * 为什么要四舍五入到两位：数量加减走 `round2`，但用户手输可能带出
  * 0.30000000000000004 这类浮点尾巴；显示前归一，视图层不再各自处理。
+ *
+ * 对 NaN / Infinity 兜底返回 `'0'`：上游如果因脏数据传入了非法数量，
+ * UI 不应该渲染出 "NaN 个" 这种字符串。
  */
 export function fmtQty(n: number): string {
+  if (!Number.isFinite(n)) return '0';
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }

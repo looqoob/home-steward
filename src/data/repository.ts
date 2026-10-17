@@ -12,6 +12,7 @@ export interface Repository<T extends { id: string }> {
   bulkPut(entities: T[]): Promise<void>;
   softDelete(id: string): Promise<void>;
   hardDelete(id: string): Promise<void>;
+  bulkDelete(ids: string[]): Promise<void>;
   clear(): Promise<void>;
 }
 
