@@ -262,8 +262,8 @@ async function removeItem() {
         </div>
 
         <div
-          class="text-[12px] rounded-md p-2.5 mb-3.5 leading-relaxed"
-          :class="currentPreview?.notRecommended ? 'bg-soon-bg text-soon-fg' : 'bg-sunken text-ink-2'"
+          class="tip mb-3.5"
+          :class="currentPreview?.notRecommended ? 'tip-soon' : ''"
         >
           <template v-if="currentPreview?.notRecommended">
             <b class="font-medium">不建议存放：</b>{{ currentPreview.reason }}
@@ -274,7 +274,7 @@ async function removeItem() {
           <template v-else>该位置未设置保质期，可手填。</template>
         </div>
 
-        <div class="text-[12px] text-ink-3 mt-2 mb-2">各位置到期日预览</div>
+        <div class="section-label">各位置到期日预览</div>
         <table class="w-full text-[12px] border-collapse">
           <thead>
             <tr><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">位置</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">环境</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">天数</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">到期日</th></tr>
@@ -301,7 +301,7 @@ async function removeItem() {
           </tbody>
         </table>
 
-        <div class="text-[12px] text-ink-3 mt-2 mb-2 flex justify-between items-center">
+        <div class="section-label flex justify-between items-center">
           <span>更多选项（可选）</span>
           <button
             type="button"
@@ -356,12 +356,12 @@ async function removeItem() {
           </div>
         </div>
 
-        <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">入库日期：{{ storedAt }}</div>
+        <div class="tip mb-3.5">入库日期：{{ storedAt }}</div>
 
         <van-button block type="primary" class="mb-2" @click="save">保存</van-button>
 
         <template v-if="!isNew">
-          <div class="text-[12px] text-ink-3 mt-2 mb-2">处理这件物资</div>
+          <div class="section-label">处理这件物资</div>
           <div class="mb-3.5">
             <label class="block text-[12px] text-ink-2 mb-1.5">本次数量（在库 {{ remainQty }}{{ draft.unit }}）</label>
             <div class="flex items-center gap-3 bg-card border border-line rounded-md px-2.5 py-1.5">

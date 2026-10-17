@@ -263,6 +263,56 @@ html[data-theme='dark'] {
     font-size: 13px;
     cursor: pointer;
   }
+
+  /* ==========================================================================
+   * 页面级重复件
+   *
+   * 下面三类在页面里曾各手抄 15–30 份同一串工具类，且已经出现漂移
+   * （字号 11/12 混用、提示盒外边距不一、卡片圆角 12/16 无规则）。
+   * 统一收进 components 层：utilities 层优先级更高，条件态
+   * （border-danger / mt-5 / bg-soon-bg 等）仍可在调用点覆盖。
+   * ========================================================================== */
+
+  /*
+   * 小节标题：12px ink-3，默认上下 8px。
+   * 需要更大间距的调用点追加 mt-* 工具类即可。
+   */
+  .section-label {
+    margin: 8px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-3);
+  }
+
+  /*
+   * 提示盒：sunken 底 + 12px 正文。
+   * 变体：.tip-danger（警示文字）/ .tip-urgent（紧急语义底）/ .tip-soon（临期语义底）。
+   * 外边距由调用点给（mb-3.5 / mt-3 等），本类只管盒子本身。
+   */
+  .tip {
+    padding: 10px;
+    border-radius: var(--radius-md);
+    background: var(--bg-sunken);
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1.625;
+  }
+  .tip-danger { color: var(--danger); }
+  .tip-urgent { background: var(--state-urgent-bg); color: var(--state-urgent-fg); }
+  .tip-soon { background: var(--state-soon-bg); color: var(--state-soon-fg); }
+
+  /*
+   * 卡片：白底 + 1px 描边 + 12px 圆角 + 轻阴影。
+   * 内边距与下外边距由调用点给（p-2.5 / p-3 / p-3.5…），不同场景节奏不同。
+   * 条件描边（如 border-danger）仍用工具类覆盖，utilities 层优先。
+   */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+  }
+  .card-lg { border-radius: var(--radius-lg); }
 }
 
 /*

@@ -141,7 +141,8 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - **基础组件用 Vant（按需）**：按钮 `van-button`、开关 `van-switch`、`van-config-provider`（深色模式）直接用 Vant。它们由 `vite.config.ts` 的 `Components({ resolvers: [VantResolver()] })` 在编译期自动按需导入，**无需手动 `import`**（见根 `AGENTS.md` §13）。
 - **表单类控件一律手写**：输入框用原生 `<input>` + 项目输入样式（`h-11 border border-line-strong rounded-md`，label 在上），搜索框用 `components/SearchField.vue`。**不要用 `van-field` / `van-search`**：它们由 `van-cell` 拼出来，自带两层固定行高与上下内边距，跟设计系统的 40/44px 高度对不齐（图标与占位文字不居中、整框偏高），只能靠一串 `--van-search-*` / `--van-cell-*` 变量去凑。
 - **高度自定义部分仍是手写 Tailwind**：`ItemCard.vue`、`LocationChipBar.vue`、`SearchField.vue`、`QuickAddSheet.vue` 的卡片/网格/步进器/底部弹框结构，以及各页面的布局、吸顶筛选、统计数字块等，全部用行内 Tailwind 工具类实现。
-- **保留的两个全局类**：`.no-scrollbar`（隐藏滚动条）、`.sr-only`（视觉隐藏但保留可访问性，用于隐藏的 file input）。需要 `padding` / `pseudo` / `keyframes` 的极少数场景才写 `<style scoped>`。
+- **页面级重复件收进 `@layer components`**：`.section-label`（12px ink-3 小节标题）、`.tip`（sunken 提示盒，变体 `.tip-danger` / `.tip-urgent` / `.tip-soon`）、`.card`（白底 + 1px 描边 + 12px 圆角 + 阴影，`.card-lg` 为 16px 圆角）。它们替代了此前在 8–19 个文件里各手抄一份的同一串工具类；**内边距 / 外边距仍由调用点的工具类给**（`p-3`、`mb-3.5` 等），条件态（`border-danger`、`mt-5`）因 utilities 层更高可正常覆盖。
+- **保留的全局类**：`.no-scrollbar`（隐藏滚动条）、`.sr-only`（视觉隐藏但保留可访问性，用于隐藏的 file input）。需要 `padding` / `pseudo` / `keyframes` 的极少数场景才写 `<style scoped>`。
 
 ---
 

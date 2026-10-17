@@ -115,7 +115,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         </button>
       </div>
 
-      <div v-if="preview" class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">
+      <div v-if="preview" class="tip mb-3.5">
         {{ preview }}
       </div>
 

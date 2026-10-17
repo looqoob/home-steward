@@ -160,7 +160,7 @@ const dueSummary = computed(() => {
 
 <template>
   <article
-    class="bg-card border rounded-md p-3 mb-2.5 shadow-card"
+    class="card p-3 mb-2.5 shadow-card"
     :class="[
       selectable ? '' : 'cursor-pointer',
       selected ? 'border-primary-600 ring-2 ring-primary-100' : 'border-line',

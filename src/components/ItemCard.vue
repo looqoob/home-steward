@@ -102,7 +102,7 @@ function onClick() {
 
 <template>
   <article
-    class="bg-card border rounded-md p-3 mb-2.5 shadow-card flex gap-3 items-start"
+    class="card p-3 mb-2.5 shadow-card flex gap-3 items-start"
     :class="[
       selectable ? 'cursor-default' : 'cursor-pointer',
       selected ? 'border-primary-600 ring-2 ring-primary-100' : 'border-line',

@@ -174,7 +174,7 @@ async function clearDone() {
       <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.visible.length }} 件</span>
     </div>
 
-    <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">
+    <div class="tip mb-3.5">
       清单根据库存与消耗自动生成；手动项不会被自动清理。
     </div>
 
@@ -229,7 +229,7 @@ async function clearDone() {
       <div
         v-for="s in g.items"
         :key="s.id"
-        class="bg-card border rounded-md p-3 mb-2 shadow-card"
+        class="card p-3 mb-2 shadow-card"
         :class="s.inboundItemId
           ? 'border-line'
           : openInboundId === s.id
@@ -302,7 +302,7 @@ async function clearDone() {
     -->
     <div
       v-if="shopping.done.length > 0"
-      class="flex items-center justify-between gap-2 bg-card border border-line rounded-md px-3 py-2.5 mt-3"
+      class="flex items-center justify-between gap-2 card px-3 py-2.5 mt-3"
     >
       <span class="text-[13px] text-ink-1 flex-none">已购 {{ shopping.done.length }} 件</span>
       <div class="flex gap-2 min-w-0">

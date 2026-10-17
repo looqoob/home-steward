@@ -65,9 +65,9 @@ async function toggleRemind() {
         分区标题用 ink-3 小字，与「我的」页 links 区的分组标题同一套视觉。
         库存相关设置统一收在这里，将来新增（如默认展开折叠组、是否显示进度条）往这一节加。
       -->
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">库存设置</div>
+      <div class="section-label">库存设置</div>
 
-      <div class="bg-card border border-line rounded-md px-3.5 py-3 mb-2">
+      <div class="card px-3.5 py-3 mb-2">
         <div class="text-[14px] mb-1">列表展示方式</div>
         <div class="text-[12px] text-ink-3 mb-2.5">决定库存列表是按新鲜度分组、按到期日排列，还是完全不分组。</div>
         <div class="flex gap-1" role="group" aria-label="库存列表展示方式">
@@ -88,9 +88,9 @@ async function toggleRemind() {
         </div>
       </div>
 
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">提醒设置</div>
+      <div class="section-label">提醒设置</div>
 
-      <div class="flex items-center justify-between bg-card border border-line rounded-md px-3.5 py-3.5 mb-2 text-[14px] cursor-default gap-3">
+      <div class="flex items-center justify-between card px-3.5 py-3.5 mb-2 text-[14px] cursor-default gap-3">
         <span>开启临期提醒</span>
         <van-switch :model-value="settings.settings.remindEnabled" @change="toggleRemind" />
       </div>
@@ -127,7 +127,7 @@ async function toggleRemind() {
         />
       </div>
 
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed">
+      <div class="tip">
         网页（PWA）版本没有可靠的后台定时，会在你每次打开 App 时检查并发通知；安装到手机桌面或改用 APK 可获得更稳定的本地定时提醒。
       </div>
     </div>

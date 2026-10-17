@@ -166,10 +166,10 @@ function submit() {
       </button>
     </div>
 
-    <div v-if="enabled.length === 0" class="text-[12px] text-danger bg-sunken rounded-md p-2.5 mb-2.5 leading-relaxed">
+    <div v-if="enabled.length === 0" class="tip tip-danger mb-2.5">
       所有位置都被停用了，请先到「位置管理」启用一个位置再入库。
     </div>
-    <div v-else class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-2.5 leading-relaxed">{{ preview }}</div>
+    <div v-else class="tip mb-2.5">{{ preview }}</div>
 
     <div class="flex gap-2">
       <button

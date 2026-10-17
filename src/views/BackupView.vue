@@ -148,20 +148,20 @@ async function doImport() {
     <NavBar title="数据备份" show-back @back="router.back()" />
 
     <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mb-3.5">
+      <div class="tip mb-3.5">
         所有数据仅存本机。导出为 JSON 文件可备份或迁移；导入可选择「合并」或「覆盖」。建议每次大改前导出一份。
       </div>
 
-      <div class="flex items-center justify-between bg-card border rounded-md px-3 py-2.5 mb-3.5">
+      <div class="flex items-center justify-between card px-3 py-2.5 mb-3.5">
         <span class="text-[12px] text-ink-2">上次备份</span>
         <span class="text-[13px] text-ink-1">{{ lastBackupLabel }}</span>
       </div>
 
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">导出</div>
+      <div class="section-label">导出</div>
       <van-button block type="primary" class="mb-2" @click="exportFile">导出 JSON（下载）</van-button>
       <van-button block class="mb-3.5" @click="copyJson">复制 JSON 到剪贴板</van-button>
 
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">导入</div>
+      <div class="section-label">导入</div>
       <div class="flex gap-1.5 mb-3">
         <button
           type="button"
@@ -180,7 +180,7 @@ async function doImport() {
           @click="mode = 'replace'"
         >覆盖</button>
       </div>
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mb-3.5">
+      <div class="tip mb-3.5">
         合并：按 id 取较新版本；覆盖：先清空本机再写入。
       </div>
       <!--
@@ -198,7 +198,7 @@ async function doImport() {
         @change="onFile"
       />
 
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mt-4">
+      <div class="tip mt-4">
         导入后本页会自动刷新各模块内存数据。若提示文件无效，请确认是从本应用导出的备份。
       </div>
 

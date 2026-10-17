@@ -159,7 +159,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
         <div
           v-if="fefoWarning"
-          class="text-[12px] text-urgent-fg bg-urgent-bg rounded-md px-2.5 py-2 mb-3 leading-relaxed"
+          class="tip tip-urgent mb-3"
         >{{ fefoWarning }}</div>
 
         <div class="flex items-center gap-2 my-1 mb-3">

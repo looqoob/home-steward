@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
 
       <!-- 情况一：首次见到这个条码 -->
       <template v-if="pendingCode">
-        <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3">新条码 {{ pendingCode }}</div>
+        <div class="tip mb-3">新条码 {{ pendingCode }}</div>
 
         <div class="mb-3">
           <label class="block text-[12px] text-ink-2 mb-1.5" for="bc-name">这是什么？</label>
@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="expiryPreview" class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3">{{ expiryPreview }}</div>
+        <div v-if="expiryPreview" class="tip mb-3">{{ expiryPreview }}</div>
 
         <div class="flex flex-col gap-2">
           <van-button block type="primary" :disabled="!newName.trim()" @click="saveNewMapping">记住并入库</van-button>
@@ -391,7 +391,7 @@ onBeforeUnmount(() => {
 
       <!-- 情况二：取景中 / 降级 -->
       <template v-else>
-        <div v-if="failed" class="text-[12px] text-danger bg-sunken rounded-md p-2.5 mb-3 leading-relaxed">
+        <div v-if="failed" class="tip tip-danger mb-3">
           {{ failed }}。可以改用下方手动输入条码数字。
         </div>
 

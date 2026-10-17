@@ -67,7 +67,7 @@ const backupTip = computed(() =>
     <button
       v-if="backupTip.level !== 'none'"
       type="button"
-      class="flex items-center justify-between gap-2 w-full text-left bg-card border rounded-md px-3 py-2.5 mb-3.5 cursor-pointer"
+      class="flex items-center justify-between gap-2 w-full text-left card px-3 py-2.5 mb-3.5 cursor-pointer"
       :class="backupTip.level === 'warn' ? 'border-danger' : 'border-line'"
       @click="router.push('/backup')"
     >
@@ -83,7 +83,7 @@ const backupTip = computed(() =>
     </button>
 
     <div class="grid grid-cols-3 gap-2 mb-3.5">
-      <div class="bg-card border border-line rounded-md p-2.5 text-center">
+      <div class="card p-2.5 text-center">
         <div class="block text-[20px] font-semibold leading-[1.2]">{{ ms.inbound }}</div>
         <div class="block text-[12px] text-ink-3 mt-0.5">本月入库</div>
       </div>
@@ -91,7 +91,7 @@ const backupTip = computed(() =>
            取决于工具类在 CSS 里的先后，会与其它两张卡不对齐 -->
       <button
         type="button"
-        class="bg-card border border-line rounded-md p-2.5 text-center cursor-pointer w-full"
+        class="card p-2.5 text-center cursor-pointer w-full"
         aria-label="查看消耗明细"
         @click="router.push('/consume-log')"
       >
@@ -99,7 +99,7 @@ const backupTip = computed(() =>
         <div class="block text-[12px] text-ink-3 mt-0.5">已消耗</div>
       </button>
       <div
-        class="bg-card border rounded-md p-2.5 text-center"
+        class="card p-2.5 text-center"
         :class="ms.wastedAmount > 0 ? 'border-danger' : 'border-line'"
       >
         <div class="block text-[20px] font-semibold leading-[1.2]" :class="ms.wastedAmount > 0 ? 'text-danger' : ''">¥{{ ms.wastedAmount.toFixed(0) }}</div>
@@ -107,7 +107,7 @@ const backupTip = computed(() =>
       </div>
     </div>
 
-    <div class="text-[12px] text-ink-3 mt-2 mb-2">位置分布</div>
+    <div class="section-label">位置分布</div>
     <div v-if="dist.length === 0" class="text-center py-6 px-6 text-[13px] text-ink-3">暂无在库物品</div>
     <div v-for="s in dist" :key="s.locationId" class="flex items-center gap-2.5 mb-2.5 text-[12px]">
       <span class="w-[60px] flex-none text-ink-2 truncate whitespace-nowrap overflow-hidden">{{ s.name }}</span>
@@ -117,12 +117,12 @@ const backupTip = computed(() =>
       <span class="w-9 text-right text-ink-2 flex-none">{{ s.count }}</span>
     </div>
 
-    <div class="text-[12px] text-ink-3 mt-2 mb-2">设置</div>
+    <div class="section-label">设置</div>
     <button
       v-for="l in links"
       :key="l.to"
       type="button"
-      class="flex items-center justify-between bg-card border border-line rounded-md px-3.5 py-3.5 mb-2 text-[14px] cursor-pointer gap-3 w-full text-left"
+      class="flex items-center justify-between card px-3.5 py-3.5 mb-2 text-[14px] cursor-pointer gap-3 w-full text-left"
       @click="router.push(l.to)"
     >
       <span>{{ l.label }}</span>
@@ -132,7 +132,7 @@ const backupTip = computed(() =>
       </span>
     </button>
 
-    <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mt-3">
+    <div class="tip mt-3">
       所有数据仅保存在本机（IndexedDB），无服务器、无账号。建议定期在「数据备份」导出 JSON 以防丢失。
     </div>
   </div>

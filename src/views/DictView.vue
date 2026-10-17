@@ -61,12 +61,12 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
     <NavBar title="保质期字典" show-back @back="router.back()" />
 
     <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">我的自定义</div>
+      <div class="section-label">我的自定义</div>
       <div v-if="dict.entries.length === 0" class="text-center py-5 px-5 text-[13px] text-ink-3">还没有自定义，点击下方添加</div>
       <div
         v-for="e in dict.entries"
         :key="e.id"
-        class="flex items-center gap-3 bg-card border border-line rounded-md p-3 mb-2 shadow-card"
+        class="flex items-center gap-3 card p-3 mb-2 shadow-card"
       >
         <div class="w-8 h-8 rounded-md flex-none flex items-center justify-center text-[13px] font-medium text-ink-2 bg-sunken">{{ e.displayName.slice(0, 1) }}</div>
         <div class="flex-1 min-w-0">
@@ -76,8 +76,8 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
         <button class="relative w-8 h-8 flex items-center justify-center rounded-md text-ink-3 cursor-pointer before:absolute before:content-[''] before:-inset-2" aria-label="恢复默认" @click="reset(e)">↺</button>
       </div>
 
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">添加 / 覆盖自定义</div>
-      <div class="bg-card border border-line rounded-lg p-4 mb-3 shadow-card">
+      <div class="section-label">添加 / 覆盖自定义</div>
+      <div class="card card-lg p-4 mb-3 shadow-card">
         <div class="mb-3.5">
           <label class="block text-[12px] text-ink-2 mb-1.5" for="dict-name">食材名称</label>
           <input
@@ -125,8 +125,8 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
         <van-button block type="primary" @click="submitCustom">保存</van-button>
       </div>
 
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">内置参考（{{ allBuiltinFoods().length }} 种）</div>
-      <div v-for="g in groups" :key="g.cat" class="bg-card border border-line rounded-lg p-3.5 mb-3 shadow-card">
+      <div class="section-label">内置参考（{{ allBuiltinFoods().length }} 种）</div>
+      <div v-for="g in groups" :key="g.cat" class="card card-lg p-3.5 mb-3 shadow-card">
         <h3 class="text-[13px] font-semibold mb-3.5">{{ g.label }}</h3>
         <div
           v-for="f in g.foods"
@@ -144,7 +144,7 @@ async function reset(entry: { dictKey: string; env: EnvType }) {
         </div>
       </div>
 
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed">
+      <div class="tip">
         点击任意内置食材可快速填到上方表单进行覆盖。字典未覆盖的组合会按品类 / 全局默认值兜底。
       </div>
     </div>

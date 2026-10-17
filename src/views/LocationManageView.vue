@@ -75,7 +75,7 @@ async function submitCreate() {
     <NavBar title="位置管理" show-back @back="router.back()" />
 
     <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <div class="text-[12px] text-ink-3 mt-2 mb-2 flex justify-between items-center">
+      <div class="section-label flex justify-between items-center">
         <span>共 {{ list.length }} 个位置</span>
         <button
           type="button"
@@ -87,7 +87,7 @@ async function submitCreate() {
         </button>
       </div>
 
-      <div v-if="creating" class="bg-card border border-line rounded-lg p-4 mb-3 shadow-card">
+      <div v-if="creating" class="card card-lg p-4 mb-3 shadow-card">
         <div class="mb-3.5">
           <label class="block text-[12px] text-ink-2 mb-1.5">名称（≤6 字）</label>
           <input v-model="form.name" maxlength="6" class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50" placeholder="如 酒柜" />
@@ -131,7 +131,7 @@ async function submitCreate() {
       <div
         v-for="(l, idx) in list"
         :key="l.id"
-        class="flex items-center gap-3 bg-card border border-line rounded-md p-3 mb-2 shadow-card transition-transform"
+        class="flex items-center gap-3 card p-3 mb-2 shadow-card transition-transform"
         :class="{ 'opacity-60': !l.enabled }"
       >
         <div class="w-5 text-ink-3 flex-none cursor-grab flex items-center justify-center" aria-hidden="true">
@@ -177,7 +177,7 @@ async function submitCreate() {
         </button>
       </div>
 
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mt-3">
+      <div class="tip mt-3">
         停用后仍保留物品数据，只是不显示在筛选与录入中；有在库物品的位置需先移出或停用才能删除。
       </div>
 

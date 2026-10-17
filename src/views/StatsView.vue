@@ -72,21 +72,21 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
 <template>
   <div>
     <!-- 本月概览：与「我的」页同一套数字来源（monthStats），口径不会打架 -->
-    <div class="text-[12px] text-ink-3 mt-2 mb-2">本月概览</div>
+    <div class="section-label">本月概览</div>
     <div class="grid grid-cols-4 gap-2 mb-5">
-      <div class="bg-card border border-line rounded-md p-2.5 text-center">
+      <div class="card p-2.5 text-center">
         <div class="block text-[18px] font-semibold leading-[1.2]">{{ ms.inbound }}</div>
         <div class="block text-[11px] text-ink-3 mt-0.5">入库</div>
       </div>
-      <div class="bg-card border border-line rounded-md p-2.5 text-center">
+      <div class="card p-2.5 text-center">
         <div class="block text-[18px] font-semibold leading-[1.2]">{{ ms.consumed }}</div>
         <div class="block text-[11px] text-ink-3 mt-0.5">用掉</div>
       </div>
-      <div class="bg-card border border-line rounded-md p-2.5 text-center">
+      <div class="card p-2.5 text-center">
         <div class="block text-[18px] font-semibold leading-[1.2]">{{ ms.wastedCount }}</div>
         <div class="block text-[11px] text-ink-3 mt-0.5">扔掉</div>
       </div>
-      <div class="bg-card border rounded-md p-2.5 text-center" :class="ms.wastedAmount > 0 ? 'border-danger' : 'border-line'">
+      <div class="card p-2.5 text-center" :class="ms.wastedAmount > 0 ? 'border-danger' : 'border-line'">
         <div class="block text-[18px] font-semibold leading-[1.2]" :class="ms.wastedAmount > 0 ? 'text-danger' : ''">
           ¥{{ ms.wastedAmount.toFixed(0) }}
         </div>
@@ -102,8 +102,8 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
       口径：**过期计入**（还没扔，钱已经花了，它就是还在），但过期金额单独标注，
       否则「在库 ¥86」会让人高估还能用的部分。
     -->
-    <div class="text-[12px] text-ink-3 mt-2 mb-2">在库物资</div>
-    <div class="bg-card border border-line rounded-md p-3.5 mb-5">
+    <div class="section-label">在库物资</div>
+    <div class="card p-3.5 mb-5">
       <div class="flex items-baseline gap-1.5">
         <span class="text-[22px] font-semibold leading-[1.2] tabular-nums">¥{{ value.total.toFixed(2) }}</span>
         <span class="text-[12px] text-ink-3">共 {{ value.priced }} 件有价</span>
@@ -117,8 +117,8 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
       理由很实际：这是 6 根柱子，chart.js 压缩后也有 200KB+，而整个应用现在才 ~880KB（预缓存），
       为了画 6 根条把首屏体积翻倍不划算。柱高用内联 style 而非 SVG，是为了能直接用状态色 token。
     -->
-    <div class="text-[12px] text-ink-3 mt-2 mb-2">近 6 个月浪费</div>
-    <div class="bg-card border border-line rounded-md p-3.5 mb-5">
+    <div class="section-label">近 6 个月浪费</div>
+    <div class="card p-3.5 mb-5">
       <template v-if="trend.length">
         <div class="flex items-end gap-2 h-28 mb-2">
           <div
@@ -151,8 +151,8 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
       Top 5 可点进明细页看该名称的历史。
       `?name=` 是消耗明细页已支持的筛选参数（见 ConsumeLogView），不新增跳转协议。
     -->
-    <div class="text-[12px] text-ink-3 mt-2 mb-2">最常浪费</div>
-    <div class="bg-card border border-line rounded-md p-3.5 mb-5">
+    <div class="section-label">最常浪费</div>
+    <div class="card p-3.5 mb-5">
       <template v-if="top.length">
         <button
           v-for="(t, i) in top"
@@ -178,7 +178,7 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
     </div>
 
     <div class="grid grid-cols-1 gap-4 mb-5">
-      <div class="bg-card border border-line rounded-md p-3.5">
+      <div class="card p-3.5">
         <div class="text-[12px] text-ink-3 mb-1.5">平均周转天数</div>
         <template v-if="turnover !== null">
           <div class="text-[22px] font-semibold leading-[1.2]">{{ turnover }} <span class="text-[13px] text-ink-3 font-normal">天</span></div>
@@ -187,7 +187,7 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
         <div v-else class="text-[13px] text-ink-3 py-1">{{ INSUFFICIENT }}（至少 5 件吃完才计算）</div>
       </div>
 
-      <div class="bg-card border border-line rounded-md p-3.5">
+      <div class="card p-3.5">
         <div class="text-[12px] text-ink-3 mb-2">在库品类分布</div>
         <template v-if="cats.length">
           <div v-for="c in cats" :key="c.category" class="flex items-center gap-2.5 mb-2 text-[12px]">
@@ -202,7 +202,7 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
       </div>
     </div>
 
-    <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed">
+    <div class="tip">
       统计只覆盖本机记录。样本不足时会直接写「数据不足」而不是画一条看起来很确定的曲线。
     </div>
   </div>

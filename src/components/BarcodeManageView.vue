@@ -50,7 +50,7 @@ async function doDelete() {
     <NavBar title="条码映射" show-back @back="router.back()" />
 
     <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">
+      <div class="tip mb-3.5">
         扫码入库时，条码只会匹配这里记录的名称。映射<strong>只存在本机</strong>，不联网查询任何商品库。
       </div>
 
@@ -66,7 +66,7 @@ async function doDelete() {
       <div
         v-for="b in list"
         :key="b.id"
-        class="bg-card border border-line rounded-md p-3 mb-2 flex items-center gap-3"
+        class="card p-3 mb-2 flex items-center gap-3"
       >
         <div class="flex-1 min-w-0">
           <div class="text-[14px] font-medium truncate text-ink-1">{{ b.name }}</div>

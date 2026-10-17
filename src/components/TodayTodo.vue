@@ -99,7 +99,7 @@ async function snooze(item: Item) {
   <section v-if="entries.length > 0" class="mb-3.5">
     <button
       type="button"
-      class="flex items-center justify-between gap-2 w-full text-left bg-card border border-line rounded-md px-3 py-2.5 cursor-pointer mb-2"
+      class="flex items-center justify-between gap-2 w-full text-left card px-3 py-2.5 cursor-pointer mb-2"
       :aria-expanded="!collapsed"
       @click="manualCollapsed = !manualCollapsed"
     >
@@ -162,7 +162,7 @@ async function snooze(item: Item) {
 
   <div
     v-else-if="props.showEmpty"
-    class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed"
+    class="tip mb-3.5"
   >
     今天没有待处理的物资。
   </div>

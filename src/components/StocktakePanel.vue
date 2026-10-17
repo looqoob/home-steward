@@ -134,7 +134,7 @@ function finish() {
       进度条：写「3 / 12」而不只是百分比。盘点是个会走神的长流程，
       用户需要随时知道「还剩几件」才能决定要不要先放着。
     -->
-    <div class="bg-card border border-line rounded-md px-3 py-2.5 mb-3.5">
+    <div class="card px-3 py-2.5 mb-3.5">
       <div class="flex items-baseline justify-between gap-2 mb-2">
         <span class="text-[13px] text-ink-1">
           已核对 <b class="font-medium">{{ Math.min(cursor, total) }}</b> / {{ total }} 件
@@ -165,7 +165,7 @@ function finish() {
         按钮做高等分（不是图标），因为在「我到底还剩几件」的压力下，
         读字比认符号快得多。
       -->
-      <div class="bg-card border border-line rounded-md p-3.5 mb-3 shadow-card">
+      <div class="card p-3.5 mb-3 shadow-card">
         <div class="flex items-start gap-3">
           <span class="w-11 h-11 rounded-md flex-none flex items-center justify-center text-[16px] font-medium text-primary-700 bg-primary-50">
             {{ current.icon || current.name.slice(0, 1) }}

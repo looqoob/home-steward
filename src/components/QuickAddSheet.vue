@@ -201,7 +201,7 @@ function openScan() {
               v-for="f in QUICK_FOODS"
               :key="f"
               type="button"
-              class="bg-card border border-line rounded-md py-3 px-1 text-center cursor-pointer min-h-[76px] flex flex-col items-center justify-center gap-1.5 transition-colors"
+              class="card py-3 px-1 text-center cursor-pointer min-h-[76px] flex flex-col items-center justify-center gap-1.5 transition-colors"
               :class="{ 'border-primary-600 bg-primary-50 ring-2 ring-primary-100': selected === f }"
               @click="pickFood(f)"
             >
@@ -339,7 +339,7 @@ function openScan() {
             </div>
           </div>
 
-          <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 mb-3.5 leading-relaxed">{{ note }}</div>
+          <div class="tip mb-3.5">{{ note }}</div>
         </template>
 
       <!-- 关闭滚动区 -->

@@ -65,7 +65,7 @@ onBeforeUnmount(() => theme.refresh());
 
     <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
       <!-- 主题模式：三档互斥（跟随系统 / 浅色 / 深色） -->
-      <div class="text-[12px] text-ink-3 mt-2 mb-2">主题模式</div>
+      <div class="section-label">主题模式</div>
       <div class="flex gap-1.5 bg-sunken p-1 rounded-full">
         <button
           v-for="m in THEME_MODES"
@@ -82,8 +82,8 @@ onBeforeUnmount(() => theme.refresh());
       </div>
 
       <!-- 主题色：6 个预设 + 自定义 -->
-      <div class="text-[12px] text-ink-3 mt-5 mb-2">主题色</div>
-      <div class="bg-card border border-line rounded-md p-3">
+      <div class="section-label mt-5">主题色</div>
+      <div class="card p-3">
         <!--
           选中态用「外层圆环 + 内层色块」两元素实现，不用 ring / ring-offset：
           ring-offset 的偏移色默认写死白色，深色模式下会在圆环与色块之间露出一道白边。
@@ -158,14 +158,14 @@ onBeforeUnmount(() => theme.refresh());
           >恢复默认</button>
         </div>
 
-        <div v-if="effective.adjusted" class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mt-2">
+        <div v-if="effective.adjusted" class="tip mt-2">
           你选的颜色偏浅或偏灰，已自动微调到 {{ effective.hex }}，以保证按钮上的白字与页面底色都有足够对比度。
         </div>
       </div>
 
       <!-- 实时预览：按钮 / 标签 / 徽章 / 开关 / 禁用态 -->
-      <div class="text-[12px] text-ink-3 mt-5 mb-2">预览</div>
-      <div class="bg-card border border-line rounded-md p-3.5">
+      <div class="section-label mt-5">预览</div>
+      <div class="card p-3.5">
         <div class="flex items-center gap-2 mb-3">
           <van-button type="primary" size="small">主按钮</van-button>
           <van-button size="small">次按钮</van-button>
@@ -182,7 +182,7 @@ onBeforeUnmount(() => theme.refresh());
         </div>
       </div>
 
-      <div class="text-[12px] text-ink-2 bg-sunken rounded-md p-2.5 leading-relaxed mt-3">
+      <div class="tip mt-3">
         主题色只影响主色系（按钮、选中态、强调文字、焦点环）；环境色（冷藏/冷冻/常温…）与新鲜度标签
         （新鲜/临期/紧急/过期）是语义色，不跟随主题色，以免失去辨识度。
       </div>

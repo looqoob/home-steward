@@ -161,16 +161,16 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
     <div class="h-5" aria-hidden="true"></div>
 
     <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
-      <div class="bg-card border border-line rounded-md p-2.5 text-center">
+      <div class="card p-2.5 text-center">
         <div class="block text-[20px] font-semibold leading-[1.2]">{{ totalCount }}</div>
         <div class="block text-[12px] text-ink-3 mt-0.5">笔数</div>
       </div>
-      <div class="bg-card border border-line rounded-md p-2.5 text-center">
+      <div class="card p-2.5 text-center">
         <div class="block text-[20px] font-semibold leading-[1.2]">{{ money(totalAmount) }}</div>
         <div class="block text-[12px] text-ink-3 mt-0.5">合计金额</div>
       </div>
       <div
-        class="bg-card border rounded-md p-2.5 text-center"
+        class="card p-2.5 text-center"
         :class="wastedAmount > 0 ? 'border-danger' : 'border-line'"
       >
         <div class="block text-[20px] font-semibold leading-[1.2]" :class="wastedAmount > 0 ? 'text-danger' : ''">{{ money(wastedAmount) }}</div>
