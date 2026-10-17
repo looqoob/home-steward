@@ -15,6 +15,8 @@ import { normalizePrice, priceFromInput } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { useToast } from '@/composables/useToast';
 import QtyStepper from '@/components/QtyStepper.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -202,18 +204,14 @@ async function removeItem() {
             />
           </div>
           <!-- 单位：常用 chips + 自定义，与快速入库（QuickAddSheet）保持同一套交互 -->
-          <div class="flex gap-1.5 flex-wrap mt-2">
-            <button
+          <PillGroup class="mt-2">
+            <Pill
               v-for="u in UNITS"
               :key="u"
-              type="button"
-              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-              :class="draft.unit === u
-                ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                : 'bg-card border-line text-ink-2'"
+              :selected="draft.unit === u"
               @click="draft.unit = u"
-            >{{ u }}</button>
-          </div>
+            >{{ u }}</Pill>
+          </PillGroup>
           <input
             v-model="draft.unit"
             class="w-full h-11 border border-line-strong rounded-md px-3 text-[14px] bg-card text-ink-1 mt-2 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-50"
@@ -224,20 +222,15 @@ async function removeItem() {
 
         <div class="mb-3.5">
           <label class="block text-[12px] text-ink-2 mb-1.5">存放位置（切换即时重算到期日）</label>
-          <div class="flex gap-1.5 flex-wrap">
-            <button
+          <PillGroup>
+            <Pill
               v-for="l in locations.all"
               :key="l.id"
-              type="button"
-              class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-              :class="draft.locationId === l.id
-                ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+              :selected="draft.locationId === l.id"
+              :dot-color="ENV_MAP[l.env].color"
               @click="draft.locationId = l.id"
-            >
-              <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
-            </button>
-          </div>
+            >{{ l.name }}</Pill>
+          </PillGroup>
         </div>
 
         <div

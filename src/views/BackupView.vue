@@ -3,6 +3,8 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
@@ -162,24 +164,10 @@ async function doImport() {
       <van-button block class="mb-3.5" @click="copyJson">复制 JSON 到剪贴板</van-button>
 
       <div class="section-label">导入</div>
-      <div class="flex gap-1.5 mb-3">
-        <button
-          type="button"
-          class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-          :class="mode === 'merge'
-            ? 'bg-primary-600 border-primary-600 text-white font-medium'
-            : 'bg-card border-line text-ink-2 hover:border-line-strong'"
-          @click="mode = 'merge'"
-        >合并</button>
-        <button
-          type="button"
-          class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-          :class="mode === 'replace'
-            ? 'bg-primary-600 border-primary-600 text-white font-medium'
-            : 'bg-card border-line text-ink-2 hover:border-line-strong'"
-          @click="mode = 'replace'"
-        >覆盖</button>
-      </div>
+      <PillGroup class="mb-3" role="group" aria-label="导入方式">
+        <Pill :selected="mode === 'merge'" @click="mode = 'merge'">合并</Pill>
+        <Pill :selected="mode === 'replace'" @click="mode = 'replace'">覆盖</Pill>
+      </PillGroup>
       <div class="tip mb-3.5">
         合并：按 id 取较新版本；覆盖：先清空本机再写入。
       </div>

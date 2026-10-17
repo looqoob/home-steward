@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import BottomSheet from '@/components/BottomSheet.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { fallbackDays } from '@/domain/categories';
@@ -84,20 +86,15 @@ watch(
         还没有启用的位置，请先到「位置管理」启用一个。
       </div>
 
-      <div v-else class="flex gap-1.5 flex-wrap mb-3.5">
-        <button
+      <PillGroup v-else gap="md" class="mb-3.5">
+        <Pill
           v-for="l in enabled"
           :key="l.id"
-          type="button"
-          class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-          :class="picked === l.id
-            ? 'bg-primary-600 border-primary-600 text-white font-medium'
-            : 'bg-card border-line text-ink-2'"
+          :selected="picked === l.id"
+          :dot-color="ENV_MAP[l.env].color"
           @click="picked = l.id"
-        >
-          <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
-        </button>
-      </div>
+        >{{ l.name }}</Pill>
+      </PillGroup>
 
       <div v-if="preview" class="tip mb-3.5">
         {{ preview }}

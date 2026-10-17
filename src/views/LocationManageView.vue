@@ -3,6 +3,8 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { ENV_LIST, ENV_MAP, type EnvType, type Location } from '@/domain/types';
@@ -109,18 +111,14 @@ async function submitCreate() {
         </div>
         <div class="mb-3.5">
           <label class="block text-[12px] text-ink-2 mb-1.5">环境类型</label>
-          <div class="flex gap-1.5 flex-wrap">
-            <button
+          <PillGroup>
+            <Pill
               v-for="e in ENV_LIST"
               :key="e.key"
-              type="button"
-              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-              :class="form.env === e.key
-                ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+              :selected="form.env === e.key"
               @click="form.env = e.key"
-            >{{ e.label }}</button>
-          </div>
+            >{{ e.label }}</Pill>
+          </PillGroup>
         </div>
         <div class="flex gap-2">
           <van-button class="flex-1" @click="creating = false">取消</van-button>

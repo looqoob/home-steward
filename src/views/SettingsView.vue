@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import NavBar from '@/components/NavBar.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import { useSettingsStore } from '@/stores/settings';
 
 const router = useRouter();
@@ -70,19 +72,16 @@ async function toggleRemind() {
       <div class="card px-3.5 py-3 mb-2">
         <div class="text-[14px] mb-1">列表展示方式</div>
         <div class="text-[12px] text-ink-3 mb-2.5">决定库存列表是按新鲜度分组、按到期日排列，还是完全不分组。</div>
-        <div class="flex gap-1" role="group" aria-label="库存列表展示方式">
-          <button
+        <PillGroup gap="xs" role="group" aria-label="库存列表展示方式">
+          <Pill
             v-for="o in STOCK_VIEW_OPTIONS"
             :key="o.value"
-            type="button"
-            class="flex-1 text-[13px] border rounded-full px-2 py-1 min-h-10 cursor-pointer"
-            :class="stockViewMode === o.value
-              ? 'bg-primary-600 border-primary-600 text-white font-medium'
-              : 'bg-card border-line text-ink-2'"
-            :aria-pressed="stockViewMode === o.value"
+            class="flex-1"
+            size="sm"
+            :selected="stockViewMode === o.value"
             @click="stockViewMode = o.value"
-          >{{ o.label }}</button>
-        </div>
+          >{{ o.label }}</Pill>
+        </PillGroup>
         <div class="text-[12px] text-ink-2 mt-2.5 leading-relaxed">
           {{ STOCK_VIEW_OPTIONS.find((o) => o.value === stockViewMode)?.hint }}
         </div>

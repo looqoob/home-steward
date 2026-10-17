@@ -12,6 +12,8 @@ import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
 import BottomSheet from '@/components/BottomSheet.vue';
 import QtyStepper from '@/components/QtyStepper.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import type { Item } from '@/domain/types';
 // 仅类型导入：运行时代码走动态 import，不会让 html5-qrcode 进主包
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -300,36 +302,27 @@ onBeforeUnmount(() => {
 
         <div class="mb-3">
           <div class="text-[12px] text-ink-2 mb-1.5">单位</div>
-          <div class="flex gap-1.5 flex-wrap">
-            <button
+          <PillGroup>
+            <Pill
               v-for="u in UNITS"
               :key="u"
-              type="button"
-              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-              :class="newUnit === u
-                ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                : 'bg-card border-line text-ink-2'"
+              :selected="newUnit === u"
               @click="newUnit = u"
-            >{{ u }}</button>
-          </div>
+            >{{ u }}</Pill>
+          </PillGroup>
         </div>
 
         <div class="mb-3">
           <div class="text-[12px] text-ink-2 mb-1.5">位置</div>
-          <div class="flex gap-1.5 flex-wrap">
-            <button
+          <PillGroup>
+            <Pill
               v-for="l in locations.enabled"
               :key="l.id"
-              type="button"
-              class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-              :class="newLoc === l.id
-                ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                : 'bg-card border-line text-ink-2'"
+              :selected="newLoc === l.id"
+              :dot-color="ENV_MAP[l.env].color"
               @click="newLoc = l.id"
-            >
-              <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
-            </button>
-          </div>
+            >{{ l.name }}</Pill>
+          </PillGroup>
         </div>
 
         <!--

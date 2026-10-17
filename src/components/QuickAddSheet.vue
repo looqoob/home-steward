@@ -14,6 +14,8 @@ import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { useToast } from '@/composables/useToast';
 import BottomSheet from '@/components/BottomSheet.vue';
 import QtyStepper from '@/components/QtyStepper.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
@@ -167,18 +169,14 @@ function openScan() {
   >
         <div v-if="recentNames.length > 0" class="mb-3.5">
           <div class="text-[12px] text-ink-2 mb-1.5">最近入库</div>
-          <div class="flex gap-1.5 flex-wrap">
-            <button
+          <PillGroup>
+            <Pill
               v-for="n in recentNames"
               :key="n"
-              type="button"
-              class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-              :class="selected === n
-                ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+              :selected="selected === n"
               @click="pickFood(n)"
-            >{{ n }}</button>
-          </div>
+            >{{ n }}</Pill>
+          </PillGroup>
         </div>
 
         <div class="mb-3.5">
@@ -237,18 +235,14 @@ function openScan() {
             <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
               <QtyStepper v-model="qty" size="sm" aria-label="数量" />
             </div>
-            <div class="flex gap-1.5 flex-wrap mt-2">
-              <button
+            <PillGroup class="mt-2">
+              <Pill
                 v-for="u in UNITS"
                 :key="u"
-                type="button"
-                class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-                :class="unit === u
-                  ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                  : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+                :selected="unit === u"
                 @click="unit = u"
-              >{{ u }}</button>
-            </div>
+              >{{ u }}</Pill>
+            </PillGroup>
             <div class="mt-2">
               <label class="block text-[12px] text-ink-2 mb-1.5" for="qa-unit">其它单位</label>
               <input
@@ -262,19 +256,15 @@ function openScan() {
 
           <div class="mb-3.5">
             <div class="text-[12px] text-ink-2 mb-1.5">存放位置</div>
-            <div class="flex gap-1.5 flex-wrap">
-              <button
+            <PillGroup>
+              <Pill
                 v-for="l in locations.enabled"
                 :key="l.id"
-                type="button"
-                class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-                :class="locId === l.id
-                  ? 'bg-primary-600 border-primary-600 text-white font-medium'
-                  : 'bg-card border-line text-ink-2 hover:border-line-strong'"
+                :selected="locId === l.id"
+                :dot-color="ENV_MAP[l.env].color"
                 @click="locId = l.id"
-              >
-                <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
-              </button>
+              >{{ l.name }}</Pill>
+              <!-- 「新位置」是动作入口，不是选项：虚线边框 + 无 aria-pressed -->
               <button
                 type="button"
                 class="inline-flex items-center gap-1 whitespace-nowrap text-[13px] text-ink-3 bg-transparent border border-dashed border-line rounded-full px-3 py-1.5 cursor-pointer min-h-10"
@@ -283,7 +273,7 @@ function openScan() {
                 <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
                 新位置
               </button>
-            </div>
+            </PillGroup>
           </div>
 
           <!--

@@ -5,6 +5,8 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import ShoppingInboundRow from '@/components/ShoppingInboundRow.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import { REASON_LABEL, groupShoppingByLocation } from '@/domain/shoppingRules';
 import type { ShopReason, ShoppingItem } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
@@ -182,19 +184,15 @@ async function clearDone() {
       分组维度切换（V3-01）。只有一项时也显示：让用户看到「还有另一种看法」，
       代价只是一行 28px 的按钮；藏起来的话这个功能等于不存在。
     -->
-    <div class="flex gap-1 mb-3" role="group" aria-label="清单分组方式">
-      <button
+    <PillGroup gap="xs" class="mb-3" role="group" aria-label="清单分组方式">
+      <Pill
         v-for="g in ([['reason', '按原因'], ['location', '按位置']] as const)"
         :key="g[0]"
-        type="button"
-        class="text-[13px] border rounded-full px-3 py-1 min-h-10 cursor-pointer"
-        :class="groupBy === g[0]
-          ? 'bg-primary-600 border-primary-600 text-white font-medium'
-          : 'bg-card border-line text-ink-2'"
-        :aria-pressed="groupBy === g[0]"
+        size="sm"
+        :selected="groupBy === g[0]"
         @click="groupBy = g[0]"
-      >{{ g[1] }}</button>
-    </div>
+      >{{ g[1] }}</Pill>
+    </PillGroup>
 
     <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
     <div class="mb-3.5">

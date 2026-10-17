@@ -12,6 +12,8 @@ import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP, type ShoppingItem } from '@/domain/types';
 import QtyStepper from '@/components/QtyStepper.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 
 /**
  * 清单项的行内入库卡。
@@ -132,20 +134,15 @@ function submit() {
       <span class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ totalHint }}</span>
     </div>
 
-    <div class="flex gap-1.5 flex-wrap mb-2.5">
-      <button
+    <PillGroup class="mb-2.5">
+      <Pill
         v-for="l in enabled"
         :key="l.id"
-        type="button"
-        class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-        :class="locId === l.id
-          ? 'bg-primary-600 border-primary-600 text-white font-medium'
-          : 'bg-card border-line text-ink-2'"
+        :selected="locId === l.id"
+        :dot-color="ENV_MAP[l.env].color"
         @click="locId = l.id"
-      >
-        <span class="w-1.5 h-1.5 rounded-full block flex-none" :style="{ background: ENV_MAP[l.env].color }"></span>{{ l.name }}
-      </button>
-    </div>
+      >{{ l.name }}</Pill>
+    </PillGroup>
 
     <div v-if="enabled.length === 0" class="tip tip-danger mb-2.5">
       所有位置都被停用了，请先到「位置管理」启用一个位置再入库。

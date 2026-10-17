@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import SearchField from '@/components/SearchField.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog, ConsumeType } from '@/domain/types';
 import { fromEpoch, monthKey, todayStr, toDateStr } from '@/domain/dates';
@@ -185,19 +187,14 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
     -->
     <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pt-1 pb-2">
       <SearchField v-model="kw" class="mb-2" placeholder="搜索名称" />
-      <div class="flex gap-1.5 flex-wrap" role="group" aria-label="按日期筛选">
-        <button
+      <PillGroup role="group" aria-label="按日期筛选">
+        <Pill
           v-for="r in ranges"
           :key="r.key"
-          type="button"
-          class="inline-flex items-center whitespace-nowrap text-[13px] border rounded-full px-3 py-1.5 cursor-pointer min-h-10"
-          :class="range === r.key
-            ? 'bg-primary-600 border-primary-600 text-white font-medium'
-            : 'bg-card border-line text-ink-2 hover:border-line-strong'"
-          :aria-pressed="range === r.key"
+          :selected="range === r.key"
           @click="range = r.key"
-        >{{ r.label }}</button>
-      </div>
+        >{{ r.label }}</Pill>
+      </PillGroup>
       <div class="flex gap-1.5 bg-sunken p-1 rounded-full mt-2">
         <button
           v-for="c in cats"
