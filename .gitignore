@@ -71,3 +71,6 @@ android/local.properties
 
 # debug APK 输出（不入库）
 *.apk
+
+# release keystore（不入库）
+release.keystore

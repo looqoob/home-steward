@@ -3,12 +3,23 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.home.steward"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    // 正式 1.0.0 签名配置
+    signingConfigs {
+        release {
+            storeFile file('../../release.keystore')
+            storePassword 'home1234'
+            keyAlias 'home-steward'
+            keyPassword 'home1234'
+        }
+    }
+
     defaultConfig {
         applicationId "com.home.steward"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -20,6 +31,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 }
