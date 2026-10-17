@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
+import StatCard from '@/components/StatCard.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
@@ -80,28 +81,20 @@ const backupTip = computed(() =>
     </button>
 
     <div class="grid grid-cols-3 gap-2 mb-3.5">
-      <div class="card p-2.5 text-center">
-        <div class="block text-[20px] font-semibold leading-[1.2]">{{ ms.inbound }}</div>
-        <div class="block text-[12px] text-ink-3 mt-0.5">本月入库</div>
-      </div>
-      <!-- 统计卡是居中排版，这里不能再挂 text-left：同一个元素上 text-center / text-left 谁生效
-           取决于工具类在 CSS 里的先后，会与其它两张卡不对齐 -->
-      <button
-        type="button"
-        class="card p-2.5 text-center cursor-pointer w-full"
+      <StatCard :value="ms.inbound" label="本月入库" />
+      <!-- 统计卡是居中排版，点击态不能再挂 text-left：与另两张卡共用 StatCard 的居中规则 -->
+      <StatCard
+        :value="ms.consumed"
+        label="已消耗"
+        clickable
         aria-label="查看消耗明细"
         @click="router.push('/consume-log')"
-      >
-        <div class="block text-[20px] font-semibold leading-[1.2]">{{ ms.consumed }}</div>
-        <div class="block text-[12px] text-ink-3 mt-0.5">已消耗</div>
-      </button>
-      <div
-        class="card p-2.5 text-center"
-        :class="ms.wastedAmount > 0 ? 'border-danger' : 'border-line'"
-      >
-        <div class="block text-[20px] font-semibold leading-[1.2]" :class="ms.wastedAmount > 0 ? 'text-danger' : ''">¥{{ ms.wastedAmount.toFixed(0) }}</div>
-        <div class="block text-[12px] text-ink-3 mt-0.5">扔掉金额</div>
-      </div>
+      />
+      <StatCard
+        :value="`¥${ms.wastedAmount.toFixed(0)}`"
+        label="扔掉金额"
+        :tone="ms.wastedAmount > 0 ? 'danger' : 'neutral'"
+      />
     </div>
 
     <div class="section-label">位置分布</div>

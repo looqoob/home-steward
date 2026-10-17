@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import PageShell from '@/components/PageShell.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import FormField from '@/components/FormField.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import { useBarcodesStore } from '@/stores/barcodes';
 import { useToast } from '@/composables/useToast';
 import type { BarcodeEntry } from '@/domain/types';
@@ -50,14 +51,14 @@ async function doDelete() {
       扫码入库时，条码只会匹配这里记录的名称。映射<strong>只存在本机</strong>，不联网查询任何商品库。
     </div>
 
-    <div v-if="list.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
-      <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">
+    <EmptyState v-if="list.length === 0">
+      <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 5v14M7 5v14M11 5v10M15 5v14M19 5v14" />
         </svg>
-      </div>
+      </template>
       还没有条码映射。<br />在「快速入库」里点「扫码」扫一次就会自动创建。
-    </div>
+    </EmptyState>
 
     <div
       v-for="b in list"

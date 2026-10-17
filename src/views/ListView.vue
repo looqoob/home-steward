@@ -5,6 +5,7 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import ShoppingInboundRow from '@/components/ShoppingInboundRow.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
@@ -208,15 +209,14 @@ async function clearDone() {
       </div>
     </FormField>
 
-    <div v-if="shopping.visible.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
-      <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">
+    <EmptyState v-if="shopping.visible.length === 0" text="暂无需购买的物品">
+      <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 11 12 14 22 4" />
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </svg>
-      </div>
-      暂无需购买的物品
-    </div>
+      </template>
+    </EmptyState>
 
     <template v-for="g in groups" :key="g.key">
       <div class="flex items-center gap-2 text-[13px] font-medium text-ink-1 mt-3 mb-2">

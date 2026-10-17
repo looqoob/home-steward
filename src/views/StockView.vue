@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
@@ -8,6 +8,8 @@ import ItemGroupCard from '@/components/ItemGroupCard.vue';
 import LocationChipBar from '@/components/LocationChipBar.vue';
 import IconText from '@/components/IconText.vue';
 import PageHeader from '@/components/PageHeader.vue';
+import EmptyState from '@/components/EmptyState.vue';
+import StatCard from '@/components/StatCard.vue';
 import ConsumeSheet from '@/components/ConsumeSheet.vue';
 import GroupConsumeSheet from '@/components/GroupConsumeSheet.vue';
 import StocktakePanel from '@/components/StocktakePanel.vue';
@@ -28,6 +30,7 @@ import { normalizeName } from '@/data/dict/normalize';
 import type { ConsumeType, Item } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
 import { useToast } from '@/composables/useToast';
+import { useStickyFilterOffset } from '@/composables/useStickyFilterOffset';
 
 const router = useRouter();
 const route = useRoute();
@@ -41,34 +44,10 @@ const keyword = ref('');
 const filterLoc = ref<string | null>(null);
 
 /**
- * 吸顶筛选条的实测高度，作为分组头 `sticky top` 的偏移量。
- *
- * 不能写死：chip 高度受字体缩放、位置数量（换行）影响，写死 52px 时
- * 分组头会被筛选条压住只露出半截。用 ResizeObserver 跟随实际高度，
- * 再上移 1px 让两者有 1px 重叠，杜绝亚像素缝隙。
+ * 吸顶筛选条的实测高度（ResizeObserver 跟随字体缩放与换行）。
+ * 分组头 `sticky top` 用它减 1px，与筛选条重叠 1px，杜绝亚像素缝隙。
  */
-const filterEl = ref<HTMLElement | null>(null);
-const filterH = ref(56);
-let ro: ResizeObserver | null = null;
-
-function measureFilter() {
-  const el = filterEl.value;
-  // 多选 / 盘点态下筛选条被移除，此时没有可测量的元素，保留上一次的值即可
-  if (el) filterH.value = el.getBoundingClientRect().height;
-}
-
-onMounted(() => {
-  measureFilter();
-  if (filterEl.value && typeof ResizeObserver !== 'undefined') {
-    ro = new ResizeObserver(measureFilter);
-    ro.observe(filterEl.value);
-  }
-});
-
-onBeforeUnmount(() => {
-  ro?.disconnect();
-  ro = null;
-});
+const { filterEl, filterH } = useStickyFilterOffset();
 
 /**
  * 分组头吸顶位置：有筛选条时紧贴其下沿（-1px 做重叠，避免发丝缝）。
@@ -563,42 +542,32 @@ function exitStocktake() {
     <template v-else>
       <!-- ② 统计 / 筛选：三张卡既是概览也是状态筛选器，点一下即过滤，再点一下取消 -->
       <div v-if="!selectMode" class="grid grid-cols-3 gap-2 mb-3.5">
-        <button
-          type="button"
-          class="border rounded-md px-2 py-2.5 text-center w-full cursor-pointer transition"
-          :class="[
-            statusFilter === 'urgent' ? 'bg-urgent-bg border-urgent-bg text-urgent-fg' : 'bg-card border-line text-ink-1',
-            { 'ring-2 ring-primary-600': statusFilter === 'urgent' },
-          ]"
+        <StatCard
+          :value="todo.length"
+          label="今日待吃"
+          tone="urgent"
+          clickable
+          :selected="statusFilter === 'urgent'"
           :aria-pressed="statusFilter === 'urgent'"
           @click="toggleStatus('urgent')"
-        >
-          <span class="block text-[20px] font-semibold leading-[1.2]">{{ todo.length }}</span>
-          <span class="block text-[12px] mt-0.5" :class="statusFilter === 'urgent' ? 'text-urgent-fg' : 'text-ink-3'">今日待吃</span>
-        </button>
-        <button
-          type="button"
-          class="border rounded-md px-2 py-2.5 text-center w-full cursor-pointer transition"
-          :class="[
-            statusFilter === 'overdue' ? 'bg-over-bg border-over-bg text-over-fg' : 'bg-card border-line text-ink-1',
-            { 'ring-2 ring-primary-600': statusFilter === 'overdue' },
-          ]"
+        />
+        <StatCard
+          :value="overdueCount"
+          label="已过期"
+          tone="over"
+          clickable
+          :selected="statusFilter === 'overdue'"
           :aria-pressed="statusFilter === 'overdue'"
           @click="toggleStatus('overdue')"
-        >
-          <span class="block text-[20px] font-semibold leading-[1.2]">{{ overdueCount }}</span>
-          <span class="block text-[12px] mt-0.5" :class="statusFilter === 'overdue' ? 'text-over-fg' : 'text-ink-3'">已过期</span>
-        </button>
-        <button
-          type="button"
-          class="border rounded-md px-2 py-2.5 text-center w-full cursor-pointer transition bg-card border-line text-ink-1"
-          :class="{ 'ring-2 ring-primary-600': statusFilter === null }"
+        />
+        <StatCard
+          :value="total"
+          label="在库"
+          clickable
+          :selected="statusFilter === null"
           :aria-pressed="statusFilter === null"
           @click="statusFilter = null"
-        >
-          <span class="block text-[20px] font-semibold leading-[1.2]">{{ total }}</span>
-          <span class="block text-[12px] mt-0.5 text-ink-3">在库</span>
-        </button>
+        />
       </div>
 
       <!--
@@ -623,17 +592,21 @@ function exitStocktake() {
         </div>
       </div>
 
-      <div v-if="rows.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
-        <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">
+      <EmptyState
+        v-if="rows.length === 0"
+        :text="keyword || filterLoc ? '没有符合条件的物资' : '还没有物资'"
+      >
+        <template #icon>
           <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <rect x="2.5" y="3" width="19" height="5" rx="1.2" />
             <path d="M4.5 8v10.5a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5V8" />
             <path d="M10 12h4" />
           </svg>
-        </div>
-        {{ keyword || filterLoc ? '没有符合条件的物资' : '还没有物资' }}
-        <div><van-button type="primary" class="mt-3.5" @click="openQuickAdd">添加第一件物资</van-button></div>
-      </div>
+        </template>
+        <template #action>
+          <van-button type="primary" @click="openQuickAdd">添加第一件物资</van-button>
+        </template>
+      </EmptyState>
 
       <!--
         每个分组必须是独立的 <section>：sticky 元素被约束在自己的包含块内，

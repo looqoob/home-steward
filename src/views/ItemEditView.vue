@@ -16,6 +16,7 @@ import { fmtQty } from '@/domain/quantity';
 import { useToast } from '@/composables/useToast';
 import QtyStepper from '@/components/QtyStepper.vue';
 import FormField from '@/components/FormField.vue';
+import EmptyState from '@/components/EmptyState.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 
@@ -180,10 +181,9 @@ async function removeItem() {
 
 <template>
   <PageShell :title="isNew ? '添加物资' : draft.name || '编辑物资'">
-    <div v-if="!isNew && !item" class="text-center py-12 px-6 text-[13px] text-ink-3">
-      <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">?</div>
-      该物资不存在或已删除
-    </div>
+    <EmptyState v-if="!isNew && !item" text="该物资不存在或已删除">
+      <template #icon>?</template>
+    </EmptyState>
 
     <template v-else>
       <FormField label="名称">

@@ -10,6 +10,7 @@ import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
 import type { ConsumeType } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
+import EmptyState from '@/components/EmptyState.vue';
 
 const props = defineProps<{
   /** 当前筛选结果（`StockView.rows`，已过滤 + 已排序）；盘点只判这些，避免判到看不见的项 */
@@ -154,10 +155,14 @@ function finish() {
       </p>
     </div>
 
-    <div v-if="!current" class="text-center py-12 px-6 text-[13px] text-ink-3">
-      {{ total === 0 ? '当前筛选下没有可盘点的物资' : '全部核对完毕' }}
-      <div><van-button type="primary" class="mt-3.5" @click="finish">完成</van-button></div>
-    </div>
+    <EmptyState
+      v-if="!current"
+      :text="total === 0 ? '当前筛选下没有可盘点的物资' : '全部核对完毕'"
+    >
+      <template #action>
+        <van-button type="primary" @click="finish">完成</van-button>
+      </template>
+    </EmptyState>
 
     <template v-else>
       <!--

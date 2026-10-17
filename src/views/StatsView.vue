@@ -11,6 +11,7 @@ import {
   wasteTrend,
 } from '@/domain/stats';
 import { todayStr } from '@/domain/dates';
+import StatCard from '@/components/StatCard.vue';
 
 /**
  * 统计页（V3-04）。
@@ -74,24 +75,14 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
     <!-- 本月概览：与「我的」页同一套数字来源（monthStats），口径不会打架 -->
     <div class="section-label">本月概览</div>
     <div class="grid grid-cols-4 gap-2 mb-5">
-      <div class="card p-2.5 text-center">
-        <div class="block text-[18px] font-semibold leading-[1.2]">{{ ms.inbound }}</div>
-        <div class="block text-[11px] text-ink-3 mt-0.5">入库</div>
-      </div>
-      <div class="card p-2.5 text-center">
-        <div class="block text-[18px] font-semibold leading-[1.2]">{{ ms.consumed }}</div>
-        <div class="block text-[11px] text-ink-3 mt-0.5">用掉</div>
-      </div>
-      <div class="card p-2.5 text-center">
-        <div class="block text-[18px] font-semibold leading-[1.2]">{{ ms.wastedCount }}</div>
-        <div class="block text-[11px] text-ink-3 mt-0.5">扔掉</div>
-      </div>
-      <div class="card p-2.5 text-center" :class="ms.wastedAmount > 0 ? 'border-danger' : 'border-line'">
-        <div class="block text-[18px] font-semibold leading-[1.2]" :class="ms.wastedAmount > 0 ? 'text-danger' : ''">
-          ¥{{ ms.wastedAmount.toFixed(0) }}
-        </div>
-        <div class="block text-[11px] text-ink-3 mt-0.5">浪费金额</div>
-      </div>
+      <StatCard :value="ms.inbound" label="入库" />
+      <StatCard :value="ms.consumed" label="用掉" />
+      <StatCard :value="ms.wastedCount" label="扔掉" />
+      <StatCard
+        :value="`¥${ms.wastedAmount.toFixed(0)}`"
+        label="浪费金额"
+        :tone="ms.wastedAmount > 0 ? 'danger' : 'neutral'"
+      />
     </div>
     <div v-if="wastedNoPriceHint" class="text-[11px] text-ink-3 -mt-3 mb-5 leading-relaxed">
       {{ wastedNoPriceHint }}。入库时填了单价才会统计到金额。

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import SearchField from '@/components/SearchField.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import EmptyState from '@/components/EmptyState.vue';
+import StatCard from '@/components/StatCard.vue';
 import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog, ConsumeType } from '@/domain/types';
 import { fromEpoch, monthKey, todayStr, toDateStr } from '@/domain/dates';
 import { normalizePrice } from '@/domain/price';
+import { useStickyFilterOffset } from '@/composables/useStickyFilterOffset';
 
 const router = useRouter();
 const route = useRoute();
@@ -124,28 +127,8 @@ const wastedAmount = computed(() =>
   ) / 100,
 );
 
-/**
- * 吸顶筛选条实测高度 → 分组头 `sticky top` 的偏移量。
- * 不能写死：日期胶囊在窄屏会换行、字体缩放也会改变高度，写死会让分组头被筛选条压掉半截。
- * 用 ResizeObserver 跟随实际高度，再上移 1px 与筛选条重叠 1px，杜绝发丝缝。
- */
-const filterEl = ref<HTMLElement | null>(null);
-const filterH = ref(56);
-let ro: ResizeObserver | null = null;
-function measure() {
-  if (filterEl.value) filterH.value = filterEl.value.getBoundingClientRect().height;
-}
-onMounted(() => {
-  measure();
-  if (filterEl.value && typeof ResizeObserver !== 'undefined') {
-    ro = new ResizeObserver(measure);
-    ro.observe(filterEl.value);
-  }
-});
-onBeforeUnmount(() => {
-  ro?.disconnect();
-  ro = null;
-});
+/** 吸顶筛选条的实测高度（日期胶囊窄屏会换行，不能写死）→ 分组头偏移 */
+const { filterEl, filterH } = useStickyFilterOffset();
 const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
 </script>
 
@@ -163,21 +146,13 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
     <div class="h-5" aria-hidden="true"></div>
 
     <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
-      <div class="card p-2.5 text-center">
-        <div class="block text-[20px] font-semibold leading-[1.2]">{{ totalCount }}</div>
-        <div class="block text-[12px] text-ink-3 mt-0.5">笔数</div>
-      </div>
-      <div class="card p-2.5 text-center">
-        <div class="block text-[20px] font-semibold leading-[1.2]">{{ money(totalAmount) }}</div>
-        <div class="block text-[12px] text-ink-3 mt-0.5">合计金额</div>
-      </div>
-      <div
-        class="card p-2.5 text-center"
-        :class="wastedAmount > 0 ? 'border-danger' : 'border-line'"
-      >
-        <div class="block text-[20px] font-semibold leading-[1.2]" :class="wastedAmount > 0 ? 'text-danger' : ''">{{ money(wastedAmount) }}</div>
-        <div class="block text-[12px] text-ink-3 mt-0.5">扔掉金额</div>
-      </div>
+      <StatCard :value="totalCount" label="笔数" />
+      <StatCard :value="money(totalAmount)" label="合计金额" />
+      <StatCard
+        :value="money(wastedAmount)"
+        label="扔掉金额"
+        :tone="wastedAmount > 0 ? 'danger' : 'neutral'"
+      />
     </div>
 
     <!--
@@ -208,18 +183,19 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
       </div>
     </div>
 
-    <div v-if="groups.length === 0" class="text-center py-12 px-6 text-[13px] text-ink-3">
-      <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">
+    <EmptyState v-if="groups.length === 0" text="没有符合筛选条件的消耗记录">
+      <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
           <line x1="9" y1="13" x2="15" y2="13" />
           <line x1="9" y1="17" x2="13" y2="17" />
         </svg>
-      </div>
-      没有符合筛选条件的消耗记录
-      <div><van-button class="mt-3.5" @click="router.push('/stock')">去添加物资</van-button></div>
-    </div>
+      </template>
+      <template #action>
+        <van-button @click="router.push('/stock')">去添加物资</van-button>
+      </template>
+    </EmptyState>
 
     <template v-for="g in groups" :key="g.day">
       <section class="group">
