@@ -581,3 +581,56 @@ npm run apk             # = cd android && ./gradlew assembleDebug
 - 已用 zip 校验：APK 内 `assets/public/assets/ListView-*.js` 与 `MeView-*.js` 均含 `h-4`，修复已落包。
 - 注：本会话 `gradlew` 需先 `cd android` 再执行（wrapper 以 CWD 为工程根，直接在仓库根跑会报
   “does not contain a Gradle build”）；`JAVA_HOME` 需显式指向 Microsoft JDK 21。
+
+---
+
+## 17. 组件重复治理（批次 B：7 批重构）
+
+起因是一次全库扫描：同一段 UI / 逻辑在多个页面各抄一份，且已经开始漂移。下面按落地顺序记录，
+**每一条都写清「抽了什么、为什么是这个粒度、顺手修了什么」**——后者往往比抽取本身更有价值。
+
+| 批 | 内容 | 净变化 |
+| --- | --- | --- |
+| ① | `domain/quantity.ts`（`fmtQty`）、`domain/shelfLife.ts`（`expiryPreviewText`） | 7 处 `fmtQty` + 4 处到期文案 |
+| ② | `.section-label` / `.tip` / `.card` 组件类 | 19 文件 82 处类串 |
+| ③ | `BottomSheet.vue` | 6 个 Sheet，净减 ~200 行 |
+| ④ | `QtyStepper.vue` | 7 处步进器，净减 139 行 |
+| ⑤ | `Pill` / `PillGroup` + `FormField` / `.field-*` | 18 处胶囊 + 25 处字段 |
+| ⑥ | `PageShell` / `PageHeader` | 7 个二级页 + 3 个 Tab 页头 |
+| ⑦ | `StatCard` / `EmptyState` / `useStickyFilterOffset` | 13 张卡 + 6 处空状态 + 2 份 40 行 Observer |
+
+### 17.1 为什么「输入框」是 CSS 类而不是 `<AppInput>` 组件
+
+单价、手填保质期这几个字段需要 `:value` + `@input` 走自定义解析（`priceFromInput` 把非法值归一为
+`null` 而不是 0）。做成组件就得为 `v-model` 再造一套 parse/format 协议，调用点反而更长。
+所以：**外观收进 `@layer components` 的 `.field-input` / `.field-textarea`，结构与标签交给 `<FormField>`**。
+判断标准是「这处重复是样式还是协议」——样式用类，协议用组件。
+
+### 17.2 顺手修掉的三个真 bug
+
+1. **`ConfirmSheet` 先关后确认**（批次③）：原先 `emit('update:modelValue', false)` 在
+   `emit('confirm')` 之前，父组件的 `confirmRemove` 先被置空，`doRemove()` 再去读就已经是 `null`——
+   「移除清单项」「删除物资」实际都没生效。约定：**先 confirm，再关闭**。
+2. **`QuickAddSheet` 的「＋」没有上限**（批次④）：`-1` 有 `Math.max(0.5, …)`，`+1` 什么都没有，
+   步进也不对称。`QtyStepper` 的 `step: 'auto'`（上限 ≥2 走 1，否则 0.5）把这件事一次定义好。
+3. **`ItemEditView` 单价占位符显示字面量**（批次⑤）：`placeholder="每 1 {{ draft.unit }}"` 是
+   非绑定属性内插值，Vue 3 不编译，线上一直显示 `每 1 {{ draft.unit || '个' }} 的价格…`。
+   改成 `:placeholder` 模板字面量。**教训：`{{ }}` 只能出现在文本节点里。**
+
+### 17.3 统一掉的真实漂移（不是「看起来一样」，是确实不一致）
+
+- 统计数字卡：统计页 `18/11` vs 其余页 `20/12`（批次⑦）
+- 页头：库存页 `items-center min-h-9 mb-3.5` vs 清单/我的 `items-baseline mb-3`——
+  基线对齐遇到 32px 图标按钮会上下错位（批次⑥）
+- 胶囊按钮内边距三档：`px-3 py-1.5` / `px-3 py-1` / `px-2 py-1`（批次⑤）
+- 胶囊的 `aria-pressed`：18 处里只有 3 处写了（批次⑤，现在 `Pill` 恒定输出）
+- 步进器按钮 `w-8` / `w-9` / `w-11` 三档混用（批次④）
+
+### 17.4 三条守则（新增组件时照做）
+
+1. **插槽放内容，props 放语义**：`EmptyState` 的插画走 `#icon` 插槽（各页图标是内容），
+   而 56px 圆底、间距、字号由组件定（这些是规范）。
+2. **不把业务判断塞进通用组件**：`PageShell` 不做「返回去哪」，`useStickyFilterOffset` 不知道
+   「多选态下筛选条被移除」——那个 `if` 留在 `StockView`。
+3. **动态类名必须是字面量**：`Record<'sm'|'md', string>` 映射表可以，模板串拼接不行，
+   Tailwind 扫不到就静默丢样式。
