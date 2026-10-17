@@ -5,6 +5,7 @@ import { ENV_MAP } from '@/domain/types';
 import { barColor, freshnessOf } from '@/domain/freshness';
 import type { ItemGroup } from '@/domain/grouping';
 import { normalizePrice, unitPriceText } from '@/domain/price';
+import { fmtQty } from '@/domain/quantity';
 import { formatMD } from '@/domain/dates';
 import { useSettingsStore } from '@/stores/settings';
 import { todayStr } from '@/domain/dates';
@@ -131,10 +132,6 @@ const groupPriceText = computed(() => {
   const unit = props.group.unit || '个';
   return lo === hi ? `¥${fmtQty(lo)}/${unit}` : `¥${fmtQty(lo)}–${fmtQty(hi)}/${unit}`;
 });
-
-function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
-}
 
 function totalQtyText(): string {
   return `${fmtQty(props.group.totalQuantity)} ${props.group.unit}`.trim();

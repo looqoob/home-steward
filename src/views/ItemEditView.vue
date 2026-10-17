@@ -12,6 +12,7 @@ import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP, type Item } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { fmtQty } from '@/domain/quantity';
 import { useToast } from '@/composables/useToast';
 
 const route = useRoute();
@@ -145,7 +146,7 @@ async function consume(type: 'consumed' | 'wasted') {
   const logId = await items.consume(item.value.id, type, qty);
   if (!logId) return;
   const verb = type === 'consumed' ? '用掉' : '扔掉';
-  const used = Number.isInteger(qty) ? String(qty) : String(Math.round(qty * 100) / 100);
+  const used = fmtQty(qty);
   show(
     qty >= remain ? `已记录${verb}：${item.value.name}` : `已记录${verb} ${used}${item.value.unit}，剩余 ${remain - qty}`,
     2200,

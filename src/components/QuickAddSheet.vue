@@ -6,7 +6,7 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { lookupFood } from '@/data/dict';
-import { computeExpiry } from '@/domain/shelfLife';
+import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
@@ -86,9 +86,7 @@ const note = computed(() => {
     fallbackDays,
   );
   const envLabel = ENV_MAP[env].label;
-  if (r.notRecommended) return `${selected.value} · ${envLabel} · 不建议存放（${r.reason}）`;
-  if (!r.expireAt) return `${selected.value} · ${envLabel} · 未设置保质期（可到编辑页手填）`;
-  return `${selected.value} · ${envLabel} · ${r.days} 天，到期日 ${r.expireAt.slice(5)}`;
+  return expiryPreviewText(selected.value, r, { envLabel });
 });
 
 watch(

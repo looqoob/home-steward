@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { fallbackDays } from '@/domain/categories';
-import { computeExpiry } from '@/domain/shelfLife';
+import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { todayStr } from '@/domain/dates';
 import { ENV_MAP } from '@/domain/types';
 
@@ -47,9 +47,7 @@ const preview = computed(() => {
     dict.resolve,
     fallbackDays,
   );
-  if (r.notRecommended) return `${loc.name} · 不建议存放（${r.reason}）`;
-  if (!r.expireAt) return `${loc.name} · 不计入保质期`;
-  return `${loc.name} · ${r.days} 天，到期日 ${r.expireAt.slice(5)}`;
+  return expiryPreviewText(loc.name, r, { unsetText: '不计入保质期' });
 });
 
 function cancel() {

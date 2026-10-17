@@ -6,7 +6,7 @@ import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { useDictStore } from '@/stores/dict';
 import { fallbackDays } from '@/domain/categories';
-import { computeExpiry } from '@/domain/shelfLife';
+import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { todayStr } from '@/domain/dates';
 import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
@@ -240,9 +240,7 @@ watch([newLoc, newName], () => {
     dict.resolve,
     fallbackDays,
   );
-  if (r.notRecommended) expiryPreview.value = `${loc.name} · 不建议存放（${r.reason}）`;
-  else if (!r.expireAt) expiryPreview.value = `${loc.name} · 不计入保质期`;
-  else expiryPreview.value = `${loc.name} · ${r.days} 天，到期日 ${r.expireAt.slice(5)}`;
+  expiryPreview.value = expiryPreviewText(loc.name, r, { unsetText: '不计入保质期' });
 });
 
 watch(

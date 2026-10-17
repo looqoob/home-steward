@@ -5,6 +5,7 @@ import type { ConsumeType, Item } from '@/domain/types';
 // 与 bulk.buildConsumeLog 是两份实现，迟早漂移；而且它只挡 null/undefined，
 // 挡不住旧备份带进来的脏值（字符串 / 负数 → NaN）。
 import { amountOf } from '@/domain/price';
+import { fmtQty } from '@/domain/quantity';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -37,10 +38,6 @@ function clamp(v: number): number {
 
 function setQty(v: number) {
   qty.value = clamp(v);
-}
-
-function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
 function cancel() {
@@ -88,7 +85,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <div class="w-9 h-1 rounded-full bg-line-strong mx-auto mb-3"></div>
       <h3 class="text-[16px] font-semibold mb-3.5">{{ type === 'consumed' ? '用掉了多少' : '扔掉了多少' }}</h3>
       <p class="text-[13px] text-ink-2 leading-relaxed mb-4">
-        {{ item.name }} · 在库 {{ fmt(item.quantity) }}{{ item.unit }}
+        {{ item.name }} · 在库 {{ fmtQty(item.quantity) }}{{ item.unit }}
         <template v-if="amount !== null"> · 本次约 ¥{{ amount.toFixed(2) }}</template>
       </p>
 
@@ -135,7 +132,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             : 'border-line bg-card text-ink-2'"
           @click="setQty(n)"
         >
-          {{ fmt(n) }}{{ item.unit }}
+          {{ fmtQty(n) }}{{ item.unit }}
         </button>
         <button
           type="button"
@@ -157,7 +154,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           :type="type === 'wasted' ? 'danger' : 'primary'"
           @click="confirm"
         >
-          {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmt(qty) }}{{ item.unit }}
+          {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmtQty(qty) }}{{ item.unit }}
         </van-button>
       </div>
     </div>

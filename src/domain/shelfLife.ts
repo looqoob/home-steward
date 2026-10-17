@@ -91,3 +91,32 @@ export function compareLocations(input: ExpiryInput, locations: Location[], reso
     };
   });
 }
+
+export interface ExpiryPreviewOptions {
+  /** 环境标签（如「冷藏」），提供则拼进文案；扫码/移库等只关心位置的场景可省 */
+  envLabel?: string;
+  /** 到期日为空时的文案。默认「未设置保质期（可到编辑页手填）」，适合入库/编辑流；
+   *  移库/扫码等提示性场景传「不计入保质期」。 */
+  unsetText?: string;
+}
+
+/**
+ * 把 `computeExpiry` 的结果翻成给人看的三态预览文案：
+ * 不建议存放（原因） / 未设置保质期 / N 天，到期日 M-D。
+ *
+ * 以前这段拼串在 QuickAddSheet / ScanSheet / ShoppingInboundRow /
+ * LocationPickerSheet 各抄一份，措辞靠拷贝维持一致；改文案漏改某处
+ * 用户就会在不同入口看到两种说法。
+ */
+export function expiryPreviewText(
+  name: string,
+  r: ExpiryResult,
+  opts?: ExpiryPreviewOptions,
+): string {
+  const seg = opts?.envLabel ? ` · ${opts.envLabel} · ` : ' · ';
+  if (r.notRecommended) return `${name}${seg}不建议存放（${r.reason}）`;
+  if (!r.expireAt || !r.days) {
+    return `${name}${seg}${opts?.unsetText ?? '未设置保质期（可到编辑页手填）'}`;
+  }
+  return `${name}${seg}${r.days} 天，到期日 ${r.expireAt.slice(5)}`;
+}

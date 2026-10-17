@@ -7,6 +7,7 @@ import { formatMD } from '@/domain/dates';
 import { useSettingsStore } from '@/stores/settings';
 import { todayStr } from '@/domain/dates';
 import { amountOf } from '@/domain/price';
+import { fmtQty } from '@/domain/quantity';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -69,10 +70,6 @@ function clamp(v: number): number {
   return Math.round(Math.min(max.value, Math.max(min.value, v)) * 100) / 100;
 }
 
-function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
-}
-
 function cancel() {
   emit('update:modelValue', false);
 }
@@ -129,7 +126,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           {{ group.members.length > 1 ? `用掉「${group.name}」的哪一份` : (type === 'consumed' ? '用掉了多少' : '扔掉了多少') }}
         </h3>
         <p class="text-[13px] text-ink-2 leading-relaxed mb-3">
-          共 {{ group.members.length }} 份，合计 {{ fmt(group.totalQuantity) }}{{ group.unit }}
+          共 {{ group.members.length }} 份，合计 {{ fmtQty(group.totalQuantity) }}{{ group.unit }}
           <template v-if="amount !== null"> · 本次约 ¥{{ amount.toFixed(2) }}</template>
         </p>
 
@@ -152,7 +149,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             <span class="w-1.5 self-stretch rounded-full flex-none" :style="{ background: barColor(freshnessOf(m, today, settings.settings).state) }"></span>
             <span class="flex-1 min-w-0">
               <span class="block text-[13px] text-ink-1">
-                第 {{ i + 1 }} 份 · {{ fmt(m.quantity) }} {{ m.unit }}
+                第 {{ i + 1 }} 份 · {{ fmtQty(m.quantity) }} {{ m.unit }}
                 <span v-if="i === 0" class="text-[11px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 ml-1">下一份</span>
               </span>
               <span class="block text-[12px] text-ink-3">{{ m.expireAt ? `${formatMD(m.expireAt)} 到期` : '无到期日' }} · {{ freshnessOf(m, today, settings.settings).label }}</span>
@@ -205,7 +202,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             class="border text-[13px] px-3 py-1.5 rounded-full cursor-pointer min-h-[34px] inline-flex items-center gap-1.5"
             :class="qty === n ? 'border-primary-600 bg-primary-50 text-primary-700 font-medium' : 'border-line bg-card text-ink-2'"
             @click="qty = clamp(n)"
-          >{{ fmt(n) }}{{ picked.unit }}</button>
+          >{{ fmtQty(n) }}{{ picked.unit }}</button>
           <button
             type="button"
             class="border text-[13px] px-3 py-1.5 rounded-full cursor-pointer min-h-[34px] inline-flex items-center gap-1.5"
@@ -224,7 +221,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
             :type="type === 'wasted' ? 'danger' : 'primary'"
             @click="confirm"
           >
-            {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmt(qty) }}{{ picked.unit }}
+            {{ type === 'consumed' ? '用掉了' : '扔掉了' }} {{ fmtQty(qty) }}{{ picked.unit }}
           </van-button>
         </div>
       </div>

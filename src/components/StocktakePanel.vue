@@ -5,6 +5,7 @@ import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
 import { freshnessOf } from '@/domain/freshness';
 import { formatMD, todayStr } from '@/domain/dates';
+import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
 import type { ConsumeType } from '@/domain/types';
@@ -59,10 +60,6 @@ watch(
     result.value = { consumed: 0, wasted: 0 };
   },
 );
-
-function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
-}
 
 /**
  * 「还在」：只把这一张标记为已核对，**不写任何日志**。

@@ -20,6 +20,7 @@ import { groupByTimeline } from '@/domain/timeline';
 import { foldItems, type ItemGroup } from '@/domain/grouping';
 import { buildTodayTodo } from '@/domain/todo';
 import { todayStr } from '@/domain/dates';
+import { fmtQty } from '@/domain/quantity';
 import { lookupFood } from '@/data/dict';
 import { foodKeyOf } from '@/data/dict';
 import { normalizeName } from '@/data/dict/normalize';
@@ -244,11 +245,6 @@ function openQuickAdd() {
  */
 function openSettings() {
   router.push('/settings');
-}
-
-/** 数量显示：整数不补小数位，0.5 这类保留两位以内 */
-function fmtQty(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
 
 /* ==================== 消耗 ==================== */

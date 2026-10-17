@@ -5,10 +5,11 @@ import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { inboundDefaults } from '@/domain/inbound';
 import { foodKeyOf } from '@/data/dict';
-import { computeExpiry } from '@/domain/shelfLife';
+import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { todayStr } from '@/domain/dates';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP, type ShoppingItem } from '@/domain/types';
 
 /**
@@ -70,10 +71,7 @@ const preview = computed(() => {
     dict.resolve,
     fallbackDays,
   );
-  const envLabel = ENV_MAP[loc.env].label;
-  if (r.notRecommended) return `${props.item.name} · ${envLabel} · 不建议存放（${r.reason}）`;
-  if (!r.expireAt) return `${props.item.name} · ${envLabel} · 未设置保质期（可到编辑页手填）`;
-  return `${props.item.name} · ${envLabel} · ${r.days} 天，到期日 ${r.expireAt.slice(5)}`;
+  return expiryPreviewText(props.item.name, r, { envLabel: ENV_MAP[loc.env].label });
 });
 
 /**
@@ -88,10 +86,6 @@ const totalHint = computed(() => {
   return `合计 ¥${round2(p * qty.value).toFixed(2)}`;
 });
 
-function fmt(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
-}
-
 function submit() {
   if (!canSubmit.value || !locId.value) return;
   emit('inbound', qty.value, locId.value, normalizePrice(price.value));
@@ -101,7 +95,7 @@ function submit() {
 <template>
   <!-- 已入库：折叠成一行结果 + 撤销入口，让用户随时能查「到底入库了没」 -->
   <div v-if="inbound" class="mt-2 text-[12px] text-ink-2 flex items-center justify-between gap-2">
-    <span class="truncate">已入库 · {{ fmt(qty) }}{{ item.unit }} · {{ locations.byId(locId ?? '')?.name ?? '' }}</span>
+    <span class="truncate">已入库 · {{ fmtQty(qty) }}{{ item.unit }} · {{ locations.byId(locId ?? '')?.name ?? '' }}</span>
     <button type="button" class="text-primary-700 cursor-pointer flex-none" @click="emit('undo')">撤销入库</button>
   </div>
 
@@ -183,7 +177,7 @@ function submit() {
         class="flex-1 inline-flex items-center justify-center gap-1 bg-primary-600 text-white rounded-md text-[13px] cursor-pointer min-h-11 disabled:opacity-40"
         :disabled="!canSubmit"
         @click="submit"
-      >入库 {{ fmt(qty) }}{{ item.unit || '个' }}</button>
+      >入库 {{ fmtQty(qty) }}{{ item.unit || '个' }}</button>
       <button
         type="button"
         class="flex-1 inline-flex items-center justify-center gap-1 border border-line-strong bg-card rounded-md text-[13px] text-ink-2 cursor-pointer min-h-11"
