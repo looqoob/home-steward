@@ -12,7 +12,7 @@ import { newId } from './ids';
 import { diffDays, todayStr } from './dates';
 import { amountOf, normalizePrice } from './price';
 
-export type BulkKind = 'consume' | 'move' | 'remove';
+export type BulkKind = 'consume' | 'move' | 'remove' | 'price';
 
 /**
  * 一次批量操作的快照，供撤销使用。

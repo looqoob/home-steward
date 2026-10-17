@@ -40,8 +40,10 @@ export type AliasKeyResolver = (name: string) => string | null;
  * 归一，**没有同义词表**。别名必须走 `aliasKey`。
  *
  * 历史物品自身也可能没存 `dictKey`（当时是手打的名字），所以两侧都实时解析一次再比。
+ *
+ * 导出供 `QuickAddSheet` 等非清单入库入口复用：选了食材名后查最近一次同名单价做预填。
  */
-function findRecentByName(items: Item[], name: string, aliasKey?: AliasKeyResolver): Item | undefined {
+export function findRecentByName(items: Item[], name: string, aliasKey?: AliasKeyResolver): Item | undefined {
   const target = normalizeName(name);
   if (!target) return undefined;
   const targetKey = aliasKey?.(name) ?? null;

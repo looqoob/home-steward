@@ -398,6 +398,24 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   /**
+   * 批量改价：把选中的物品单价统一设为 `price`（走 `normalizePrice`）。
+   *
+   * 不重算到期日（单价不影响保质期）。撤销走通用 `undoBulk`：写回 `before` 快照。
+   */
+  async function bulkSetPrice(ids: string[], price: number | null): Promise<BulkOp | null> {
+    const targets = pickActive(ids);
+    if (!targets.length) return null;
+    const now = Date.now();
+    const before = targets.map((i) => ({ ...i }));
+    const p = normalizePrice(price);
+    await db.items.bulkPut(
+      targets.map((i) => ({ ...i, price: p, updatedAt: now })),
+    );
+    await load();
+    return remember({ id: newId(), kind: 'price', items: before, logIds: [], createdAt: now });
+  }
+
+  /**
    * 撤销一次批量操作。
    *
    * ⚠️ 顺序要紧：**先硬删日志，再写回商品快照**。反了会留下
@@ -417,6 +435,6 @@ export const useItemsStore = defineStore('items', () => {
   return {
     list, logs, loaded, active, load, byId, add, addMany, save, moveTo, setManualShelfLife,
     snooze, unsnooze, consume, undoConsume, remove, restore, recomputeAll,
-    bulkConsume, consumeGroup, bulkMoveTo, bulkRemove, undoBulk,
+    bulkConsume, consumeGroup, bulkMoveTo, bulkRemove, bulkSetPrice, undoBulk,
   };
 });

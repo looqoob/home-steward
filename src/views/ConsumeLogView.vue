@@ -117,13 +117,20 @@ const groups = computed(() => {
   return [...map.entries()].map(([day, list]) => ({ day, list }));
 });
 
+/**
+ * 合计金额 / 浪费金额。
+ *
+ * 走 `normalizePrice` 而不是 `l.price || 0`：后者把「真的免费（0）」和「没填价（null）」
+ * 混为一谈，且对脏值（旧备份里的字符串）不做防护 —— `0 + "12.5"` 会触发字符串拼接
+ * 让整条 reduce 变成 `"012.5…"`。`normalizePrice` 把脏值一律归 `null`，`?? 0` 再落回 0。
+ */
 const totalAmount = computed(() =>
-  Math.round(filtered.value.reduce((s, l) => s + (l.price || 0), 0) * 100) / 100,
+  Math.round(filtered.value.reduce((s, l) => s + (normalizePrice(l.price) ?? 0), 0) * 100) / 100,
 );
 const totalCount = computed(() => filtered.value.length);
 const wastedAmount = computed(() =>
   Math.round(
-    filtered.value.filter((l) => l.type === 'wasted').reduce((s, l) => s + (l.price || 0), 0) * 100,
+    filtered.value.filter((l) => l.type === 'wasted').reduce((s, l) => s + (normalizePrice(l.price) ?? 0), 0) * 100,
   ) / 100,
 );
 

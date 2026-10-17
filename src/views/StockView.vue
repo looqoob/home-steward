@@ -18,12 +18,15 @@ import TodayTodo from '@/components/TodayTodo.vue';
 import BulkActionBar from '@/components/BulkActionBar.vue';
 import LocationPickerSheet from '@/components/LocationPickerSheet.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
+import BottomSheet from '@/components/BottomSheet.vue';
+import FormField from '@/components/FormField.vue';
 import { freshnessOf, sortByFreshness, groupByFreshness, type FreshGroup } from '@/domain/freshness';
 import { groupByTimeline } from '@/domain/timeline';
 import { foldItems, type ItemGroup } from '@/domain/grouping';
 import { buildTodayTodo } from '@/domain/todo';
 import { todayStr } from '@/domain/dates';
 import { fmtQty } from '@/domain/quantity';
+import { priceFromInput, normalizePrice } from '@/domain/price';
 import { lookupFood } from '@/data/dict';
 import { foodKeyOf } from '@/data/dict';
 import { normalizeName } from '@/data/dict/normalize';
@@ -418,6 +421,33 @@ async function bulkRemove() {
   await afterBulk(op, '已删除');
 }
 
+/**
+ * 批量改价：把选中的物品单价改成同一个值。
+ *
+ * 与其他批量操作一样走 `pickActive` 快照 + `remember(BulkOp)`：
+ * - `null` = 把这批物品的价清空（"没填价"），不是改成 0；
+ * - `0` = 真的免费（保留 null / 0 的语义边界）。
+ *
+ * 因为一次只能填一个价，这里只支持"统一改价"——选中几件都同价，
+ * 不能在批量面板里逐条改。后者更合适在物品详情里做。
+ */
+const priceSheet = ref(false);
+const batchPrice = ref<number | null>(null);
+
+function openPriceSheet() {
+  // 打开即重置：上一次批量改价的残留值不能带到这一次（不同批次的价差极大）
+  batchPrice.value = null;
+  priceSheet.value = true;
+}
+
+async function bulkSetPrice() {
+  const op = await items.bulkSetPrice([...selected.value], batchPrice.value);
+  priceSheet.value = false;
+  // 用 `?? 0` 后再 `> 0` 判定，把"没填价(null)"和"真的免费(0)"都归到"已清价"文案
+  const verb = batchPrice.value && batchPrice.value > 0 ? `已改价为 ¥${batchPrice.value}` : '已清价';
+  await afterBulk(op, verb);
+}
+
 /* ==================== 盘点（V3-07） ==================== */
 
 /**
@@ -669,6 +699,7 @@ function exitStocktake() {
       :total="rows.length"
       @consume="bulkConsume"
       @move="moveSheet = true"
+      @price="openPriceSheet"
       @remove="confirmBulkRemove = true"
       @select-all="selectAll"
       @exit="exitSelect"
@@ -689,5 +720,48 @@ function exitStocktake() {
       danger
       @confirm="bulkRemove"
     />
+
+    <!--
+      批量改价面板：一个单价输入框。
+      fixedFooter 布局——输入区滚动、确认按钮固定在底部不随键盘顶起。
+      与 BarcodeManageView 的编辑表单走同一套写法：
+      `:value` + `@input` + `priceFromInput` + `normalizePrice` 兜底。
+    -->
+    <BottomSheet v-model="priceSheet" title="批量改价" fixed-footer>
+      <FormField
+        label="单价（元，可选）"
+        for-id="batch-price"
+        spacing="normal"
+        :hint="`将应用到选中的 ${selected.size} 件物资。留空 = 没填价；0 = 真的免费。`"
+      >
+        <input
+          id="batch-price"
+          :value="batchPrice === null ? '' : batchPrice"
+          type="number"
+          step="0.01"
+          min="0"
+          inputmode="decimal"
+          class="field-input"
+          placeholder="如 1.5"
+          @input="batchPrice = priceFromInput(($event.target as HTMLInputElement).value)"
+        />
+      </FormField>
+
+      <template #footer>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="flex-1 min-h-11 rounded-md border border-line-strong text-ink-2 text-[14px]"
+            @click="priceSheet = false"
+          >取消</button>
+          <button
+            type="button"
+            data-autofocus
+            class="flex-1 min-h-11 rounded-md bg-primary-600 text-white text-[14px] font-medium"
+            @click="bulkSetPrice"
+          >确定</button>
+        </div>
+      </template>
+    </BottomSheet>
   </div>
 </template>

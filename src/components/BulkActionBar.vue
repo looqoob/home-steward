@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'consume', type: 'consumed' | 'wasted'): void;
   (e: 'move'): void;
+  (e: 'price'): void;
   (e: 'remove'): void;
   (e: 'selectAll'): void;
   (e: 'exit'): void;
@@ -70,6 +71,12 @@ const allSelected = computed(() => props.count > 0 && props.count >= props.total
         :disabled="count === 0"
         @click="emit('move')"
       >换位置</button>
+      <button
+        type="button"
+        class="flex-1 inline-flex items-center justify-center gap-1 border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-11 disabled:opacity-40"
+        :disabled="count === 0"
+        @click="emit('price')"
+      >改价</button>
       <button
         type="button"
         class="flex-1 inline-flex items-center justify-center gap-1 border border-danger rounded-md text-[13px] text-danger cursor-pointer min-h-11 disabled:opacity-40"

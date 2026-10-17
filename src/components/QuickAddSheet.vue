@@ -5,12 +5,13 @@ import { QUICK_FOODS } from '@/data/dict/builtin';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
-import { lookupFood } from '@/data/dict';
+import { lookupFood, foodKeyOf } from '@/data/dict';
 import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { findRecentByName } from '@/domain/inbound';
 import { useToast } from '@/composables/useToast';
 import BottomSheet from '@/components/BottomSheet.vue';
 import QtyStepper from '@/components/QtyStepper.vue';
@@ -73,6 +74,21 @@ const recentNames = computed(() => {
 watch(customName, (v) => {
   const n = v.trim();
   if (n) selected.value = n;
+});
+
+/**
+ * 选了食材后预填单价：从最近一次同名称入库的物品带出，与清单行内入库（ShoppingInboundRow）
+ * 走同一套 `findRecentByName` 逻辑，体感对齐。支持别名（西红柿 ↔ 番茄）。
+ *
+ * `null` = 没买过或上次没填价 —— 不凭空给默认值，用户实际花的钱未必和上次一样。
+ */
+watch(selected, (name) => {
+  if (!name) {
+    price.value = null;
+    return;
+  }
+  const prev = findRecentByName(items.list, name, foodKeyOf);
+  price.value = prev ? normalizePrice(prev.price) : null;
 });
 
 /** 点九宫格：占用 `selected` 并清空自定义输入，避免两处同时高亮 */

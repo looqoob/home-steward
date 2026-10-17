@@ -18,6 +18,16 @@ const settings = useSettingsStore();
 const barcodes = useBarcodesStore();
 
 const ms = computed(() => monthStats(items.list, items.logs, Date.now()));
+
+/**
+ * 「扔掉 N 件 / ¥0」最容易被误读为「没浪费钱」，实际可能是那些物品都没填单价。
+ * 与 StatsView 同款脚注，保证两个入口的口径一致。
+ */
+const wastedNoPriceHint = computed(() => {
+  const { wastedCount, wastedAmount } = ms.value;
+  if (wastedCount === 0 || wastedAmount > 0) return '';
+  return `这 ${wastedCount} 件都没填单价，金额按 0 计`;
+});
 const dist = computed(() =>
   locationDistribution(items.list, locations.all, (env) => ENV_MAP[env].color),
 );
@@ -95,6 +105,9 @@ const backupTip = computed(() =>
         label="扔掉金额"
         :tone="ms.wastedAmount > 0 ? 'danger' : 'neutral'"
       />
+    </div>
+    <div v-if="wastedNoPriceHint" class="text-[11px] text-ink-3 -mt-3 mb-3.5 leading-relaxed">
+      {{ wastedNoPriceHint }}。入库时填了单价才会统计到金额。
     </div>
 
     <div class="section-label">位置分布</div>

@@ -6,6 +6,7 @@ import FormField from '@/components/FormField.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import { useBarcodesStore } from '@/stores/barcodes';
 import { useToast } from '@/composables/useToast';
+import { priceFromInput, normalizePrice, unitPriceText } from '@/domain/price';
 import type { BarcodeEntry } from '@/domain/types';
 
 const barcodes = useBarcodesStore();
@@ -15,9 +16,11 @@ const { show } = useToast();
  * 条码映射管理。
  *
  * 必须有这个出口：扫描时教错的映射要能改能删，否则用户只能带着一条错误数据用下去。
+ * 除名称外，单价也能在此修正 —— 扫码入库会自动带出条码记住的单价，价不对会一路错下去。
  */
 const editing = ref<BarcodeEntry | null>(null);
 const editName = ref('');
+const editPrice = ref<number | null>(null);
 const confirmDelete = ref<BarcodeEntry | null>(null);
 
 const list = computed(() => barcodes.list);
@@ -25,13 +28,14 @@ const list = computed(() => barcodes.list);
 function startEdit(b: BarcodeEntry) {
   editing.value = b;
   editName.value = b.name;
+  editPrice.value = normalizePrice(b.price);
 }
 
 async function saveEdit() {
   const b = editing.value;
   const name = editName.value.trim();
   if (!b || !name) return;
-  await barcodes.update(b.id, { name });
+  await barcodes.update(b.id, { name, price: normalizePrice(editPrice.value) });
   editing.value = null;
   show('已更新');
 }
@@ -68,15 +72,16 @@ async function doDelete() {
       <div class="flex-1 min-w-0">
         <div class="text-[14px] font-medium truncate text-ink-1">{{ b.name }}</div>
         <div class="text-[12px] text-ink-3 mt-0.5 truncate font-mono">{{ b.code }}</div>
-        <div v-if="b.quantity || b.unit" class="text-[12px] text-ink-3 mt-0.5">
+        <div class="text-[12px] text-ink-3 mt-0.5">
           默认 {{ b.quantity ?? 1 }}{{ b.unit || '个' }}
+          <template v-if="b.price !== null && b.price !== undefined"> · {{ unitPriceText(b.price, b.unit || '个') }}</template>
         </div>
       </div>
       <button
         type="button"
         class="flex-none text-[13px] text-primary-700 cursor-pointer min-h-11 px-2"
         @click="startEdit(b)"
-      >改名</button>
+      >编辑</button>
       <button
         type="button"
         class="flex-none text-[13px] text-danger cursor-pointer min-h-11 px-2"
@@ -85,7 +90,7 @@ async function doDelete() {
     </div>
 
     <!--
-      改名用**行内展开**而不是 fixed 底栏：fixed 在这个 max-w 容器里定位需要额外的
+      编辑用**行内展开**而不是 fixed 底栏：fixed 在这个 max-w 容器里定位需要额外的
       居中 hack，且会盖住列表。更重要的是行内展开不会「点保存时列表已滚走」，
       避免用户不知道自己在改哪一条。
     -->
@@ -100,6 +105,24 @@ async function doDelete() {
           v-model="editName"
           class="field-input"
           @keyup.enter="saveEdit"
+        />
+      </FormField>
+      <FormField
+        :label="`单价（元 / ${editing.unit || '个'}，可选）`"
+        for-id="bc-price"
+        spacing="tight"
+        hint="下次扫到这个条码时自动带出。留空 = 不记价。"
+      >
+        <input
+          id="bc-price"
+          :value="editPrice ?? ''"
+          type="number"
+          step="0.01"
+          min="0"
+          inputmode="decimal"
+          class="field-input"
+          placeholder="如 1.5"
+          @input="editPrice = priceFromInput(($event.target as HTMLInputElement).value)"
         />
       </FormField>
       <div class="flex gap-2">
