@@ -20,6 +20,7 @@ declare module 'vue' {
     LocationChipBar: typeof import('./components/LocationChipBar.vue')['default']
     LocationPickerSheet: typeof import('./components/LocationPickerSheet.vue')['default']
     NavBar: typeof import('./components/NavBar.vue')['default']
+    QtyStepper: typeof import('./components/QtyStepper.vue')['default']
     QuickAddSheet: typeof import('./components/QuickAddSheet.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

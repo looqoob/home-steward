@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import type { ConsumeType, Item } from '@/domain/types';
 import BottomSheet from '@/components/BottomSheet.vue';
+import QtyStepper from '@/components/QtyStepper.vue';
 import { barColor, freshnessOf } from '@/domain/freshness';
 import type { ItemGroup } from '@/domain/grouping';
 import { formatMD } from '@/domain/dates';
@@ -48,9 +49,8 @@ const picked = computed<Item | null>(() => {
 });
 
 const max = computed(() => picked.value?.quantity ?? 1);
-/** 剩余量不足 1（如 0.5 斤）时步长跟着变小，别让 stepper 一步跨过上限 */
-const step = computed(() => (max.value >= 2 ? 1 : 0.5));
-const min = computed(() => Math.min(step.value, max.value));
+/** 步长自适应由 QtyStepper 内部处理；这里只保留 clamp 所需的下限 */
+const min = computed(() => Math.min(0.5, max.value));
 
 /** 本次金额 = 选中那份的单价 × 数量；没填单价 / 脏值 → null（不显示） */
 const amount = computed(() => amountOf(picked.value?.price, qty.value));
@@ -150,37 +150,14 @@ watch(
           class="tip tip-urgent mb-3"
         >{{ fefoWarning }}</div>
 
-        <div class="flex items-center gap-2 my-1 mb-3">
-          <button
-            type="button"
-            class="relative w-11 h-11 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center disabled:opacity-40 before:absolute before:content-[''] before:-inset-2"
-            :disabled="qty <= min"
-            :aria-label="`减少 ${step}`"
-            @click="qty = clamp(qty - step)"
-          >
-            <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-          </button>
-          <input
-            :value="qty"
-            type="number"
-            class="flex-1 min-w-0 text-center text-[16px] text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
-            :step="step"
-            :min="min"
-            :max="max"
-            :aria-label="`数量，最多 ${max}`"
-            @input="qty = clamp(Number(($event.target as HTMLInputElement).value))"
-          />
-          <span class="flex-none text-[14px] text-ink-2">{{ picked.unit }}</span>
-          <button
-            type="button"
-            class="relative w-11 h-11 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center disabled:opacity-40 before:absolute before:content-[''] before:-inset-2"
-            :disabled="qty >= max"
-            :aria-label="`增加 ${step}`"
-            @click="qty = clamp(qty + step)"
-          >
-            <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-          </button>
-        </div>
+        <QtyStepper
+          v-model="qty"
+          class="my-1 mb-3"
+          size="lg"
+          :max="max"
+          :unit="picked.unit"
+          :aria-label="`数量，最多 ${max}`"
+        />
 
         <div class="flex flex-wrap gap-1.5 mb-4">
           <button

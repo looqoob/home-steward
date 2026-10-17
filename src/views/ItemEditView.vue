@@ -11,9 +11,10 @@ import { computeExpiry, compareLocations } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP, type Item } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
-import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { normalizePrice, priceFromInput } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { useToast } from '@/composables/useToast';
+import QtyStepper from '@/components/QtyStepper.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -192,35 +193,13 @@ async function removeItem() {
 
         <div class="mb-3.5">
           <label class="block text-[12px] text-ink-2 mb-1.5" for="item-qty">数量 / 单位</label>
-          <div class="flex items-center gap-2 bg-card border border-line rounded-md px-2.5 py-1.5">
-            <button
-              type="button"
-              class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-              aria-label="减少"
-              @click="draft.quantity = Math.max(0.5, round2(draft.quantity - 1))"
-            >
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-            </button>
-            <!-- 数字可直接输入：0.5 斤 / 1.5 袋这类值用 ±1 步进根本到不了 -->
-            <input
-              id="item-qty"
-              :value="draft.quantity"
-              type="number"
-              step="0.5"
-              min="0.5"
-              class="flex-1 min-w-0 text-center text-[15px] font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
+          <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
+            <QtyStepper
+              v-model="draft.quantity"
+              input-id="item-qty"
+              :unit="draft.unit || '个'"
               aria-label="数量"
-              @input="draft.quantity = Number(($event.target as HTMLInputElement).value) || 0.5"
             />
-            <button
-              type="button"
-              class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-              aria-label="增加"
-              @click="draft.quantity = round2(draft.quantity + 1)"
-            >
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-            </button>
-            <span class="flex-none text-[14px] text-ink-2">{{ draft.unit || '个' }}</span>
           </div>
           <!-- 单位：常用 chips + 自定义，与快速入库（QuickAddSheet）保持同一套交互 -->
           <div class="flex gap-1.5 flex-wrap mt-2">
@@ -364,24 +343,13 @@ async function removeItem() {
           <div class="section-label">处理这件物资</div>
           <div class="mb-3.5">
             <label class="block text-[12px] text-ink-2 mb-1.5">本次数量（在库 {{ remainQty }}{{ draft.unit }}）</label>
-            <div class="flex items-center gap-3 bg-card border border-line rounded-md px-2.5 py-1.5">
-              <button
-                type="button"
-              class="relative w-8 h-8 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-              aria-label="减少"
-              @click="consumeQty = Math.max(0.5, consumeQty - 1)"
-            >
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-            </button>
-            <span class="flex-1 min-w-0 text-center text-[15px] font-medium">{{ consumeQty }}</span>
-            <button
-              type="button"
-              class="relative w-8 h-8 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-              aria-label="增加"
-              @click="consumeQty = Math.min(remainQty, consumeQty + 1)"
-            >
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-            </button>
+            <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
+              <QtyStepper
+                v-model="consumeQty"
+                size="sm"
+                :max="remainQty"
+                :aria-label="`本次数量，最多 ${remainQty}`"
+              />
             </div>
             <button
               type="button"

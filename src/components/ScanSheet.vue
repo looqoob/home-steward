@@ -11,6 +11,7 @@ import { todayStr } from '@/domain/dates';
 import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
 import BottomSheet from '@/components/BottomSheet.vue';
+import QtyStepper from '@/components/QtyStepper.vue';
 import type { Item } from '@/domain/types';
 // 仅类型导入：运行时代码走动态 import，不会让 html5-qrcode 进主包
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -292,31 +293,8 @@ onBeforeUnmount(() => {
 
         <div class="mb-3">
           <div class="text-[12px] text-ink-2 mb-1.5">数量</div>
-          <div class="flex items-center gap-2 bg-card border border-line rounded-md px-2.5 py-1.5">
-            <button
-              type="button"
-              class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-              aria-label="减少"
-              @click="newQty = Math.max(0.5, Math.round((newQty - 0.5) * 100) / 100)"
-            >
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-            </button>
-            <input
-              v-model.number="newQty"
-              type="number"
-              step="0.5"
-              min="0.5"
-              class="flex-1 min-w-0 text-center text-[15px] font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
-              aria-label="数量"
-            />
-            <button
-              type="button"
-              class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-              aria-label="增加"
-              @click="newQty = Math.round((newQty + 0.5) * 100) / 100"
-            >
-              <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-            </button>
+          <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
+            <QtyStepper v-model="newQty" aria-label="数量" />
           </div>
         </div>
 

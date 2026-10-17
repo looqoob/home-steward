@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import type { ConsumeType, Item } from '@/domain/types';
 import BottomSheet from '@/components/BottomSheet.vue';
+import QtyStepper from '@/components/QtyStepper.vue';
 // 金额口径走 domain/price 的 amountOf：以前这里手抄了一版 `round2(price * qty)`，
 // 与 bulk.buildConsumeLog 是两份实现，迟早漂移；而且它只挡 null/undefined，
 // 挡不住旧备份带进来的脏值（字符串 / 负数 → NaN）。
@@ -77,37 +78,14 @@ watch(
         <template v-if="amount !== null"> · 本次约 ¥{{ amount.toFixed(2) }}</template>
       </p>
 
-      <div class="flex items-center gap-2 my-1 mb-3">
-        <button
-          type="button"
-          class="relative w-11 h-11 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center disabled:opacity-40 before:absolute before:content-[''] before:-inset-2"
-          :disabled="qty <= min"
-          :aria-label="`减少 ${step}`"
-          @click="setQty(qty - step)"
-        >
-          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-        </button>
-        <input
-          :value="qty"
-          type="number"
-          class="flex-1 min-w-0 text-center text-[16px] text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
-          :step="step"
-          :min="min"
-          :max="max"
-          :aria-label="`数量，最多 ${max}`"
-          @input="setQty(Number(($event.target as HTMLInputElement).value))"
-        />
-        <span class="flex-none text-[14px] text-ink-2">{{ item.unit }}</span>
-        <button
-          type="button"
-          class="relative w-11 h-11 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center disabled:opacity-40 before:absolute before:content-[''] before:-inset-2"
-          :disabled="qty >= max"
-          :aria-label="`增加 ${step}`"
-          @click="setQty(qty + step)"
-        >
-          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-        </button>
-      </div>
+      <QtyStepper
+        v-model="qty"
+        class="my-1 mb-3"
+        size="lg"
+        :max="max"
+        :unit="item.unit"
+        :aria-label="`数量，最多 ${max}`"
+      />
 
       <div class="flex flex-wrap gap-1.5 mb-4">
         <button

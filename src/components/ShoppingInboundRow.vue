@@ -11,6 +11,7 @@ import { todayStr } from '@/domain/dates';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP, type ShoppingItem } from '@/domain/types';
+import QtyStepper from '@/components/QtyStepper.vue';
 
 /**
  * 清单项的行内入库卡。
@@ -102,32 +103,12 @@ function submit() {
   <div v-else class="mt-2.5 pt-2.5 border-t border-line">
     <div class="flex items-center gap-2 mb-2.5">
       <span class="text-[12px] text-ink-2 w-9 flex-none">数量</span>
-      <button
-        type="button"
-        class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-        aria-label="减少"
-        @click="qty = Math.max(0.5, Math.round((qty - 0.5) * 100) / 100)"
-      >
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-      </button>
-      <input
-        :value="qty"
-        type="number"
-        step="0.5"
-        min="0.5"
-        class="flex-1 min-w-0 text-center text-[15px] font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
-        :aria-label="`数量，最多按 ${item.name} 实际情况`"
-        @input="qty = Number(($event.target as HTMLInputElement).value) || 0.5"
+      <QtyStepper
+        v-model="qty"
+        class="flex-1 min-w-0"
+        :unit="item.unit || '个'"
+        :aria-label="`数量，${item.name}`"
       />
-      <button
-        type="button"
-        class="relative w-9 h-9 flex-none rounded-md border border-line-strong bg-card text-ink-1 cursor-pointer flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
-        aria-label="增加"
-        @click="qty = Math.round((qty + 0.5) * 100) / 100"
-      >
-        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
-      </button>
-      <span class="text-[12px] text-ink-2 flex-none">{{ item.unit || '个' }}</span>
     </div>
 
     <!--
