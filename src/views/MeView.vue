@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import PageHeader from '@/components/PageHeader.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
@@ -57,12 +58,8 @@ const backupTip = computed(() =>
 
 <template>
   <div>
-    <!-- 顶部 16px 间距，与库存页一致：滚动容器 pt-0，间距改由普通流占位元素提供 -->
-    <div class="h-4" aria-hidden="true"></div>
-
-    <div class="flex items-baseline justify-between gap-2 mb-3">
-      <h1 class="text-[20px] font-semibold leading-[1.2]">我的</h1>
-    </div>
+    <!-- 顶部 16px 占位由 PageHeader 提供；与库存 / 清单同一套页头节奏 -->
+    <PageHeader title="我的" />
 
     <button
       v-if="backupTip.level !== 'none'"

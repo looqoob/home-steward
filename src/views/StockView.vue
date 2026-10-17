@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/stores/settings';
 import ItemGroupCard from '@/components/ItemGroupCard.vue';
 import LocationChipBar from '@/components/LocationChipBar.vue';
 import IconText from '@/components/IconText.vue';
+import PageHeader from '@/components/PageHeader.vue';
 import ConsumeSheet from '@/components/ConsumeSheet.vue';
 import GroupConsumeSheet from '@/components/GroupConsumeSheet.vue';
 import StocktakePanel from '@/components/StocktakePanel.vue';
@@ -461,13 +462,6 @@ function exitStocktake() {
 <template>
   <div>
     <!--
-      顶部 16px 间距由本占位元素承担（TabLayout 给本页加了 .flush-top 取消 .body 的上内边距）。
-      滚动容器的上内边距会让 sticky 顶边与容器顶边差一个 padding，滚动内容会从这条缝里漏出来；
-      间距改由普通流内元素提供，sticky 才能严格贴到容器顶边。
-    -->
-    <div class="h-4" aria-hidden="true"></div>
-
-    <!--
       顶部区域自上而下四层，层间距统一 14px（mb-3.5），每层只放本层的内容：
 
         ① 标题行      页面名 + 本页操作
@@ -477,15 +471,14 @@ function exitStocktake() {
 
       原先「标题行里塞统计文字」是跨层混排：同一行里 20px 标题 / 13px 按钮 / 12px 统计
       三种字号挤在一起，再叠上 SVG 基线问题（见 .icon 的注释），观感自然乱。
+      PageHeader 自带顶部 16px 占位（TabLayout 给本页取消了滚动容器上内边距）。
     -->
-    <header class="flex items-center justify-between gap-2 min-h-9 mb-3.5">
-      <h1 class="text-[20px] font-semibold leading-[1.2]">{{ stocktakeMode ? '盘点' : '库存' }}</h1>
-
+    <PageHeader :title="stocktakeMode ? '盘点' : '库存'">
       <!--
         右侧操作区：三种模式填不同内容，但**容器对齐方式与控件高度一致**
         （items-center + 32px 控件），切换模式时下方内容不会跳动。
       -->
-      <div class="flex items-center gap-1 flex-none">
+      <template #actions>
         <template v-if="stocktakeMode">
           <button type="button" class="tool-btn text-ink-2" @click="exitStocktake">
             <IconText>
@@ -557,8 +550,8 @@ function exitStocktake() {
             </IconText>
           </button>
         </template>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
     <StocktakePanel

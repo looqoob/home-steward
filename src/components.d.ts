@@ -8,7 +8,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    BarcodeManageView: typeof import('./components/BarcodeManageView.vue')['default']
     BottomSheet: typeof import('./components/BottomSheet.vue')['default']
     BulkActionBar: typeof import('./components/BulkActionBar.vue')['default']
     ConfirmSheet: typeof import('./components/ConfirmSheet.vue')['default']
@@ -21,6 +20,8 @@ declare module 'vue' {
     LocationChipBar: typeof import('./components/LocationChipBar.vue')['default']
     LocationPickerSheet: typeof import('./components/LocationPickerSheet.vue')['default']
     NavBar: typeof import('./components/NavBar.vue')['default']
+    PageHeader: typeof import('./components/PageHeader.vue')['default']
+    PageShell: typeof import('./components/PageShell.vue')['default']
     Pill: typeof import('./components/Pill.vue')['default']
     PillGroup: typeof import('./components/PillGroup.vue')['default']
     QtyStepper: typeof import('./components/QtyStepper.vue')['default']

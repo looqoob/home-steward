@@ -17,7 +17,7 @@
 | `/appearance` | `AppearanceView.vue` | NavBar | 外观与主题（深浅模式 + 主题色） |
 | `/settings` | `SettingsView.vue` | NavBar | 设置（提醒） |
 | `/backup` | `BackupView.vue` | NavBar | 备份导出/导入（顶部显示上次备份时间） |
-| `/barcodes` | `BarcodeManageView.vue`（在 `../components/`） | NavBar | **v2**：条码映射的查看/改名/删除 |
+| `/barcodes` | `BarcodeManageView.vue` | NavBar | **v2**：条码映射的查看/改名/删除 |
 | `/consume-log` | `ConsumeLogView.vue` | TabLayout + 顶栏（`meta.header`） | 消耗明细（每次用掉/扔掉的逐条记录） |
 | `/stats` | `StatsView.vue` | TabLayout + 顶栏（`meta.header`） | **v3**：统计（趋势 / Top 浪费 / 周转天数 / 品类分布） |
 

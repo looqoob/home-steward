@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import NavBar from '@/components/NavBar.vue';
+import PageShell from '@/components/PageShell.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
@@ -179,192 +179,188 @@ async function removeItem() {
 </script>
 
 <template>
-  <div class="flex flex-col bg-page h-full w-full max-w-[480px] mx-auto relative overflow-hidden">
-    <NavBar :title="isNew ? '添加物资' : draft.name || '编辑物资'" show-back @back="router.back()" />
+  <PageShell :title="isNew ? '添加物资' : draft.name || '编辑物资'">
+    <div v-if="!isNew && !item" class="text-center py-12 px-6 text-[13px] text-ink-3">
+      <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">?</div>
+      该物资不存在或已删除
+    </div>
 
-    <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <div v-if="!isNew && !item" class="text-center py-12 px-6 text-[13px] text-ink-3">
-        <div class="w-14 h-14 rounded-full bg-sunken flex items-center justify-center mx-auto mb-3 text-ink-3">?</div>
-        该物资不存在或已删除
+    <template v-else>
+      <FormField label="名称">
+        <input v-model="draft.name" class="field-input" placeholder="如 西红柿 / 牛奶" />
+      </FormField>
+
+      <FormField label="数量 / 单位" for-id="item-qty">
+        <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
+          <QtyStepper
+            v-model="draft.quantity"
+            input-id="item-qty"
+            :unit="draft.unit || '个'"
+            aria-label="数量"
+          />
+        </div>
+        <!-- 单位：常用 chips + 自定义，与快速入库（QuickAddSheet）保持同一套交互 -->
+        <PillGroup class="mt-2">
+          <Pill
+            v-for="u in UNITS"
+            :key="u"
+            :selected="draft.unit === u"
+            @click="draft.unit = u"
+          >{{ u }}</Pill>
+        </PillGroup>
+        <input
+          v-model="draft.unit"
+          class="field-input mt-2"
+          placeholder="其它单位，如 把 / 根"
+          aria-label="其它单位"
+        />
+      </FormField>
+
+      <FormField label="存放位置（切换即时重算到期日）">
+        <PillGroup>
+          <Pill
+            v-for="l in locations.all"
+            :key="l.id"
+            :selected="draft.locationId === l.id"
+            :dot-color="ENV_MAP[l.env].color"
+            @click="draft.locationId = l.id"
+          >{{ l.name }}</Pill>
+        </PillGroup>
+      </FormField>
+
+      <div
+        class="tip mb-3.5"
+        :class="currentPreview?.notRecommended ? 'tip-soon' : ''"
+      >
+        <template v-if="currentPreview?.notRecommended">
+          <b class="font-medium">不建议存放：</b>{{ currentPreview.reason }}
+        </template>
+        <template v-else-if="currentPreview?.expireAt">
+          当前位置到期日 <b class="font-medium text-ink-1">{{ currentPreview.expireAt }}</b>（{{ currentPreview.days }} 天）
+        </template>
+        <template v-else>该位置未设置保质期，可手填。</template>
       </div>
 
-      <template v-else>
-        <FormField label="名称">
-          <input v-model="draft.name" class="field-input" placeholder="如 西红柿 / 牛奶" />
+      <div class="section-label">各位置到期日预览</div>
+      <table class="w-full text-[12px] border-collapse">
+        <thead>
+          <tr><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">位置</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">环境</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">天数</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">到期日</th></tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="row in compareRows"
+            :key="row.locationId"
+            :class="row.locationId === draft.locationId ? 'text-fresh-fg font-medium' : ''"
+          >
+            <td class="py-1.5 border-b border-dashed border-line text-ink-1">{{ row.locationName }}</td>
+            <td class="py-1.5 border-b border-dashed border-line text-ink-2">{{ ENV_MAP[row.env].label }}</td>
+            <td class="py-1.5 border-b border-dashed border-line text-ink-2">
+              <template v-if="row.notRecommended">不建议</template>
+              <template v-else-if="row.days">{{ row.days }} 天</template>
+              <template v-else>—</template>
+            </td>
+            <td class="py-1.5 border-b border-dashed border-line text-ink-2">
+              <template v-if="row.notRecommended">{{ row.reason }}</template>
+              <template v-else-if="row.expireAt">{{ row.expireAt }}</template>
+              <template v-else>—</template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="section-label flex justify-between items-center">
+        <span>更多选项（可选）</span>
+        <button
+          type="button"
+          class="bg-transparent border-0 text-primary-600 text-[13px] cursor-pointer p-0"
+          :aria-expanded="moreOpen"
+          @click="moreOpen = !moreOpen"
+        >{{ moreOpen ? '收起' : '展开' }}</button>
+      </div>
+
+      <div v-show="moreOpen">
+        <FormField label="生产日期（可选）">
+          <input v-model="draft.producedAt" type="date" class="field-input" />
         </FormField>
 
-        <FormField label="数量 / 单位" for-id="item-qty">
+        <FormField label="手填保质期（天，覆盖自动推算）">
+          <input
+            :value="draft.manualShelfLife ?? ''"
+            type="number"
+            min="1"
+            class="field-input"
+            placeholder="留空则按字典/品类自动推算"
+            @input="draft.manualShelfLife = ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null"
+          />
+        </FormField>
+
+        <!--
+          单价：**每 1 单位**的价格（元）。用它算「本次金额 = 单价 × 消耗数量」。
+          ⚠️ 口径必须走 `priceFromInput`：负数会把月度「浪费金额」拉成负数，`1e999` 会让它变 `¥Infinity`，
+          而 `min="0"` 只是 HTML 校验、挡不住手输。非法值归一为 `null`（= 没填价，不是 0）。
+        -->
+        <FormField
+          :label="`单价（元 / ${draft.unit || '个'}，可选）`"
+          for-id="item-price"
+          hint="用于统计浪费金额。整份花了多少钱请除以数量再填。"
+        >
+          <input
+            id="item-price"
+            :value="draft.price ?? ''"
+            type="number"
+            step="0.01"
+            min="0"
+            inputmode="decimal"
+            class="field-input"
+            :placeholder="`每 1 ${draft.unit || '个'} 的价格，如 1.5（不是整盒 30）`"
+            @input="draft.price = priceFromInput(($event.target as HTMLInputElement).value)"
+          />
+        </FormField>
+
+        <FormField label="备注（可选）">
+          <textarea v-model="draft.note" class="field-textarea" placeholder="如 买的第二袋"></textarea>
+        </FormField>
+      </div>
+
+      <div class="tip mb-3.5">入库日期：{{ storedAt }}</div>
+
+      <van-button block type="primary" class="mb-2" @click="save">保存</van-button>
+
+      <template v-if="!isNew">
+        <div class="section-label">处理这件物资</div>
+        <FormField :label="`本次数量（在库 ${remainQty}${draft.unit}）`">
           <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
             <QtyStepper
-              v-model="draft.quantity"
-              input-id="item-qty"
-              :unit="draft.unit || '个'"
-              aria-label="数量"
+              v-model="consumeQty"
+              size="sm"
+              :max="remainQty"
+              :aria-label="`本次数量，最多 ${remainQty}`"
             />
           </div>
-          <!-- 单位：常用 chips + 自定义，与快速入库（QuickAddSheet）保持同一套交互 -->
-          <PillGroup class="mt-2">
-            <Pill
-              v-for="u in UNITS"
-              :key="u"
-              :selected="draft.unit === u"
-              @click="draft.unit = u"
-            >{{ u }}</Pill>
-          </PillGroup>
-          <input
-            v-model="draft.unit"
-            class="field-input mt-2"
-            placeholder="其它单位，如 把 / 根"
-            aria-label="其它单位"
-          />
-        </FormField>
-
-        <FormField label="存放位置（切换即时重算到期日）">
-          <PillGroup>
-            <Pill
-              v-for="l in locations.all"
-              :key="l.id"
-              :selected="draft.locationId === l.id"
-              :dot-color="ENV_MAP[l.env].color"
-              @click="draft.locationId = l.id"
-            >{{ l.name }}</Pill>
-          </PillGroup>
-        </FormField>
-
-        <div
-          class="tip mb-3.5"
-          :class="currentPreview?.notRecommended ? 'tip-soon' : ''"
-        >
-          <template v-if="currentPreview?.notRecommended">
-            <b class="font-medium">不建议存放：</b>{{ currentPreview.reason }}
-          </template>
-          <template v-else-if="currentPreview?.expireAt">
-            当前位置到期日 <b class="font-medium text-ink-1">{{ currentPreview.expireAt }}</b>（{{ currentPreview.days }} 天）
-          </template>
-          <template v-else>该位置未设置保质期，可手填。</template>
-        </div>
-
-        <div class="section-label">各位置到期日预览</div>
-        <table class="w-full text-[12px] border-collapse">
-          <thead>
-            <tr><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">位置</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">环境</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">天数</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">到期日</th></tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in compareRows"
-              :key="row.locationId"
-              :class="row.locationId === draft.locationId ? 'text-fresh-fg font-medium' : ''"
-            >
-              <td class="py-1.5 border-b border-dashed border-line text-ink-1">{{ row.locationName }}</td>
-              <td class="py-1.5 border-b border-dashed border-line text-ink-2">{{ ENV_MAP[row.env].label }}</td>
-              <td class="py-1.5 border-b border-dashed border-line text-ink-2">
-                <template v-if="row.notRecommended">不建议</template>
-                <template v-else-if="row.days">{{ row.days }} 天</template>
-                <template v-else>—</template>
-              </td>
-              <td class="py-1.5 border-b border-dashed border-line text-ink-2">
-                <template v-if="row.notRecommended">{{ row.reason }}</template>
-                <template v-else-if="row.expireAt">{{ row.expireAt }}</template>
-                <template v-else>—</template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="section-label flex justify-between items-center">
-          <span>更多选项（可选）</span>
           <button
             type="button"
-            class="bg-transparent border-0 text-primary-600 text-[13px] cursor-pointer p-0"
-            :aria-expanded="moreOpen"
-            @click="moreOpen = !moreOpen"
-          >{{ moreOpen ? '收起' : '展开' }}</button>
+            class="bg-transparent border-0 text-primary-600 text-[13px] cursor-pointer p-0 mt-1.5"
+            @click="consumeQty = remainQty"
+          >全部（{{ remainQty }}{{ draft.unit }}）</button>
+        </FormField>
+        <div class="flex gap-2 mb-2">
+          <van-button class="flex-1" @click="consume('consumed')">
+            用掉了{{ consumeQty >= remainQty ? '' : ` ${consumeQty}${draft.unit}` }}
+          </van-button>
+          <van-button class="flex-1" @click="consume('wasted')">
+            扔掉了{{ consumeQty >= remainQty ? '' : ` ${consumeQty}${draft.unit}` }}
+          </van-button>
         </div>
-
-        <div v-show="moreOpen">
-          <FormField label="生产日期（可选）">
-            <input v-model="draft.producedAt" type="date" class="field-input" />
-          </FormField>
-
-          <FormField label="手填保质期（天，覆盖自动推算）">
-            <input
-              :value="draft.manualShelfLife ?? ''"
-              type="number"
-              min="1"
-              class="field-input"
-              placeholder="留空则按字典/品类自动推算"
-              @input="draft.manualShelfLife = ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null"
-            />
-          </FormField>
-
-          <!--
-            单价：**每 1 单位**的价格（元）。用它算「本次金额 = 单价 × 消耗数量」。
-            ⚠️ 口径必须走 `priceFromInput`：负数会把月度「浪费金额」拉成负数，`1e999` 会让它变 `¥Infinity`，
-            而 `min="0"` 只是 HTML 校验、挡不住手输。非法值归一为 `null`（= 没填价，不是 0）。
-          -->
-          <FormField
-            :label="`单价（元 / ${draft.unit || '个'}，可选）`"
-            for-id="item-price"
-            hint="用于统计浪费金额。整份花了多少钱请除以数量再填。"
-          >
-            <input
-              id="item-price"
-              :value="draft.price ?? ''"
-              type="number"
-              step="0.01"
-              min="0"
-              inputmode="decimal"
-              class="field-input"
-              :placeholder="`每 1 ${draft.unit || '个'} 的价格，如 1.5（不是整盒 30）`"
-              @input="draft.price = priceFromInput(($event.target as HTMLInputElement).value)"
-            />
-          </FormField>
-
-          <FormField label="备注（可选）">
-            <textarea v-model="draft.note" class="field-textarea" placeholder="如 买的第二袋"></textarea>
-          </FormField>
-        </div>
-
-        <div class="tip mb-3.5">入库日期：{{ storedAt }}</div>
-
-        <van-button block type="primary" class="mb-2" @click="save">保存</van-button>
-
-        <template v-if="!isNew">
-          <div class="section-label">处理这件物资</div>
-          <FormField :label="`本次数量（在库 ${remainQty}${draft.unit}）`">
-            <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
-              <QtyStepper
-                v-model="consumeQty"
-                size="sm"
-                :max="remainQty"
-                :aria-label="`本次数量，最多 ${remainQty}`"
-              />
-            </div>
-            <button
-              type="button"
-              class="bg-transparent border-0 text-primary-600 text-[13px] cursor-pointer p-0 mt-1.5"
-              @click="consumeQty = remainQty"
-            >全部（{{ remainQty }}{{ draft.unit }}）</button>
-          </FormField>
-          <div class="flex gap-2 mb-2">
-            <van-button class="flex-1" @click="consume('consumed')">
-              用掉了{{ consumeQty >= remainQty ? '' : ` ${consumeQty}${draft.unit}` }}
-            </van-button>
-            <van-button class="flex-1" @click="consume('wasted')">
-              扔掉了{{ consumeQty >= remainQty ? '' : ` ${consumeQty}${draft.unit}` }}
-            </van-button>
-          </div>
-          <van-button block plain type="danger" @click="confirmRemove = true">删除</van-button>
-          <ConfirmSheet
-            v-model="confirmRemove"
-            title="删除物资"
-            :message="`「${draft.name}」将从库存移除，且不计入消耗统计。`"
-            confirm-text="删除"
-            danger
-            @confirm="removeItem"
-          />
-        </template>
+        <van-button block plain type="danger" @click="confirmRemove = true">删除</van-button>
+        <ConfirmSheet
+          v-model="confirmRemove"
+          title="删除物资"
+          :message="`「${draft.name}」将从库存移除，且不计入消耗统计。`"
+          confirm-text="删除"
+          danger
+          @confirm="removeItem"
+        />
       </template>
-    </div>
-  </div>
+    </template>
+</PageShell>
 </template>

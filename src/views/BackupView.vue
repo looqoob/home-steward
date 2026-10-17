@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import NavBar from '@/components/NavBar.vue';
+import PageShell from '@/components/PageShell.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
@@ -16,7 +15,6 @@ import { parseBackup, importBackup, type ImportMode } from '@/data/backup/import
 import { useToast } from '@/composables/useToast';
 import { formatMD, fromEpoch } from '@/domain/dates';
 
-const router = useRouter();
 const items = useItemsStore();
 const locations = useLocationsStore();
 const dict = useDictStore();
@@ -146,58 +144,54 @@ async function doImport() {
 </script>
 
 <template>
-  <div class="flex flex-col bg-page h-full w-full max-w-[480px] mx-auto relative overflow-hidden">
-    <NavBar title="数据备份" show-back @back="router.back()" />
-
-    <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <div class="tip mb-3.5">
-        所有数据仅存本机。导出为 JSON 文件可备份或迁移；导入可选择「合并」或「覆盖」。建议每次大改前导出一份。
-      </div>
-
-      <div class="flex items-center justify-between card px-3 py-2.5 mb-3.5">
-        <span class="text-[12px] text-ink-2">上次备份</span>
-        <span class="text-[13px] text-ink-1">{{ lastBackupLabel }}</span>
-      </div>
-
-      <div class="section-label">导出</div>
-      <van-button block type="primary" class="mb-2" @click="exportFile">导出 JSON（下载）</van-button>
-      <van-button block class="mb-3.5" @click="copyJson">复制 JSON 到剪贴板</van-button>
-
-      <div class="section-label">导入</div>
-      <PillGroup class="mb-3" role="group" aria-label="导入方式">
-        <Pill :selected="mode === 'merge'" @click="mode = 'merge'">合并</Pill>
-        <Pill :selected="mode === 'replace'" @click="mode = 'replace'">覆盖</Pill>
-      </PillGroup>
-      <div class="tip mb-3.5">
-        合并：按 id 取较新版本；覆盖：先清空本机再写入。
-      </div>
-      <!--
-        不用 <label> 包裹 display:none 的 input：那样键盘无法聚焦触发。
-        改为可见 button 触发 + 视觉隐藏的 input（tabindex=-1 避免与按钮重复朗读）。
-      -->
-      <van-button block class="mb-3.5" @click="pickFile">选择备份文件并导入</van-button>
-      <input
-        ref="fileInput"
-        type="file"
-        accept="application/json,.json"
-        class="sr-only"
-        tabindex="-1"
-        aria-hidden="true"
-        @change="onFile"
-      />
-
-      <div class="tip mt-4">
-        导入后本页会自动刷新各模块内存数据。若提示文件无效，请确认是从本应用导出的备份。
-      </div>
-
-      <ConfirmSheet
-        v-model="confirmImport"
-        title="覆盖导入"
-        :message="pendingFile ? `将用「${pendingFile.name}」的内容替换本机全部数据，现有物品、位置、日志、清单与字典都会被清空。建议先导出一份当前数据。` : ''"
-        confirm-text="覆盖导入"
-        danger
-        @confirm="doImport"
-      />
+  <PageShell title="数据备份">
+    <div class="tip mb-3.5">
+      所有数据仅存本机。导出为 JSON 文件可备份或迁移；导入可选择「合并」或「覆盖」。建议每次大改前导出一份。
     </div>
-  </div>
+
+    <div class="flex items-center justify-between card px-3 py-2.5 mb-3.5">
+      <span class="text-[12px] text-ink-2">上次备份</span>
+      <span class="text-[13px] text-ink-1">{{ lastBackupLabel }}</span>
+    </div>
+
+    <div class="section-label">导出</div>
+    <van-button block type="primary" class="mb-2" @click="exportFile">导出 JSON（下载）</van-button>
+    <van-button block class="mb-3.5" @click="copyJson">复制 JSON 到剪贴板</van-button>
+
+    <div class="section-label">导入</div>
+    <PillGroup class="mb-3" role="group" aria-label="导入方式">
+      <Pill :selected="mode === 'merge'" @click="mode = 'merge'">合并</Pill>
+      <Pill :selected="mode === 'replace'" @click="mode = 'replace'">覆盖</Pill>
+    </PillGroup>
+    <div class="tip mb-3.5">
+      合并：按 id 取较新版本；覆盖：先清空本机再写入。
+    </div>
+    <!--
+      不用 <label> 包裹 display:none 的 input：那样键盘无法聚焦触发。
+      改为可见 button 触发 + 视觉隐藏的 input（tabindex=-1 避免与按钮重复朗读）。
+    -->
+    <van-button block class="mb-3.5" @click="pickFile">选择备份文件并导入</van-button>
+    <input
+      ref="fileInput"
+      type="file"
+      accept="application/json,.json"
+      class="sr-only"
+      tabindex="-1"
+      aria-hidden="true"
+      @change="onFile"
+    />
+
+    <div class="tip mt-4">
+      导入后本页会自动刷新各模块内存数据。若提示文件无效，请确认是从本应用导出的备份。
+    </div>
+
+    <ConfirmSheet
+      v-model="confirmImport"
+      title="覆盖导入"
+      :message="pendingFile ? `将用「${pendingFile.name}」的内容替换本机全部数据，现有物品、位置、日志、清单与字典都会被清空。建议先导出一份当前数据。` : ''"
+      confirm-text="覆盖导入"
+      danger
+      @confirm="doImport"
+    />
+</PageShell>
 </template>

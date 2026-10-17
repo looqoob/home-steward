@@ -22,12 +22,23 @@
 | `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（默认 1，含「全部」） | StockView、ItemEditView、TodayTodo |
 | `GroupConsumeSheet.vue` | **v3**：一组多份时的「选份」弹层（FEFO 默认选中最早到期那份 + 越序警告） | StockView |
 | `StocktakePanel.vue` | **v3**：盘点模式面板（逐张核对：还在 / 用掉了 / 扔掉了） | StockView |
+| `BottomSheet.vue` | 底部弹层外壳：遮罩、Esc/点遮罩关闭、焦点管理、可选固定底栏 | 6 个 Sheet |
+| `QtyStepper.vue` | 数量步进器：− 输入 ＋，上下限钳制、步长自适应、单位后缀 | 消耗 / 盘点 / 编辑 / 清单 / 扫码 |
+| `Pill.vue` / `PillGroup.vue` | 胶囊筛选按钮与容器：选中态、环境色点、`aria-pressed`、换行/横滑布局 | 12 个页面 |
+| `FormField.vue` | 表单字段结构：标签 + 控件 + 说明，配合 `.field-input` 组件类 | 8 个页面 |
+| `PageShell.vue` | 二级页外壳：NavBar + 返回 + 可滚动内容区（含 `padding` 预置） | 7 个独立页 |
+| `PageHeader.vue` | Tab 页页内标题行：标题 + 右侧操作，自带顶部 16px 占位 | StockView、ListView、MeView |
+| `BottomSheet.vue` | 底部弹层外壳：遮罩、Esc/点遮罩关闭、焦点管理、可选固定底栏 | 6 个 Sheet |
+| `QtyStepper.vue` | 数量步进器：− 输入 ＋，上下限钳制、步长自适应、单位后缀 | 消耗 / 盘点 / 编辑 / 清单 / 扫码 |
+| `Pill.vue` / `PillGroup.vue` | 胶囊筛选按钮与容器：选中态、环境色点、`aria-pressed`、换行/横滑布局 | 12 个页面 |
+| `FormField.vue` | 表单字段结构：标签 + 控件 + 说明，配合 `.field-input` 组件类 | 8 个页面 |
+| `PageShell.vue` | 二级页外壳：NavBar + 返回 + 可滚动内容区（含 `padding` 预置） | 7 个独立页 |
+| `PageHeader.vue` | Tab 页页内标题行：标题 + 右侧操作，自带顶部 16px 占位 | StockView、ListView、MeView |
 | `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」 | StockView |
 | `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/单价/位置/到期日预览）。**v3**：单价预填「上次买这个的价格」 | ListView |
 | `BulkActionBar.vue` | **v2**：多选态吸底操作条（用掉/扔掉/换位置/删除） | StockView |
 | `LocationPickerSheet.vue` | **v2**：选择存放位置的弹层，带到期日预览 | StockView |
 | `ScanSheet.vue` | **v2**：扫码入库弹层（动态加载 html5-qrcode）。**v3**：教一次时顺带记住单价，下次扫到自动带出 | TabLayout |
-| `BarcodeManageView.vue` | **v2**：条码映射的查看/改名/删除（路由 `/barcodes`） | 独立路由 |
 
 > v2 组件的坑位与设计取舍见 [`docs/V2-CHANGELOG.md`](../../docs/V2-CHANGELOG.md)；
 > v3 组件见 [`docs/V3-CHANGELOG.md`](../../docs/V3-CHANGELOG.md)。

@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
-import NavBar from '@/components/NavBar.vue';
+import PageShell from '@/components/PageShell.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import FormField from '@/components/FormField.vue';
 import { useSettingsStore } from '@/stores/settings';
 
-const router = useRouter();
 const settings = useSettingsStore();
 
 /**
@@ -60,77 +58,73 @@ async function toggleRemind() {
 </script>
 
 <template>
-  <div class="flex flex-col bg-page h-full w-full max-w-[480px] mx-auto relative overflow-hidden">
-    <NavBar title="设置" show-back @back="router.back()" />
+  <PageShell title="设置">
+    <!--
+      分区标题用 ink-3 小字，与「我的」页 links 区的分组标题同一套视觉。
+      库存相关设置统一收在这里，将来新增（如默认展开折叠组、是否显示进度条）往这一节加。
+    -->
+    <div class="section-label">库存设置</div>
 
-    <div class="flex-1 overflow-y-auto px-4 pt-4 pb-2 no-scrollbar overscroll-contain">
-      <!--
-        分区标题用 ink-3 小字，与「我的」页 links 区的分组标题同一套视觉。
-        库存相关设置统一收在这里，将来新增（如默认展开折叠组、是否显示进度条）往这一节加。
-      -->
-      <div class="section-label">库存设置</div>
-
-      <div class="card px-3.5 py-3 mb-2">
-        <div class="text-[14px] mb-1">列表展示方式</div>
-        <div class="text-[12px] text-ink-3 mb-2.5">决定库存列表是按新鲜度分组、按到期日排列，还是完全不分组。</div>
-        <PillGroup gap="xs" role="group" aria-label="库存列表展示方式">
-          <Pill
-            v-for="o in STOCK_VIEW_OPTIONS"
-            :key="o.value"
-            class="flex-1"
-            size="sm"
-            :selected="stockViewMode === o.value"
-            @click="stockViewMode = o.value"
-          >{{ o.label }}</Pill>
-        </PillGroup>
-        <div class="text-[12px] text-ink-2 mt-2.5 leading-relaxed">
-          {{ STOCK_VIEW_OPTIONS.find((o) => o.value === stockViewMode)?.hint }}
-        </div>
-      </div>
-
-      <div class="section-label">提醒设置</div>
-
-      <div class="flex items-center justify-between card px-3.5 py-3.5 mb-2 text-[14px] cursor-default gap-3">
-        <span>开启临期提醒</span>
-        <van-switch :model-value="settings.settings.remindEnabled" @change="toggleRemind" />
-      </div>
-
-      <FormField
-        class="mt-1.5"
-        label="每日提醒时间（原生 App 会在此时推送；网页版需当天打开过一次）"
-        for-id="remind-time"
-      >
-        <input
-          id="remind-time"
-          v-model="timeStr"
-          type="time"
-          class="field-input"
-        />
-      </FormField>
-
-      <FormField label="临期阈值（剩余 ≤ N 天）" for-id="soon-days">
-        <input
-          id="soon-days"
-          v-model="soonDays"
-          type="number"
-          min="1"
-          class="field-input"
-        />
-      </FormField>
-
-      <FormField label="紧急 / 待吃阈值（剩余 ≤ N 天）" for-id="urgent-days">
-        <input
-          id="urgent-days"
-          v-model="urgentDays"
-          type="number"
-          min="0"
-          class="field-input"
-        />
-      </FormField>
-
-      <div class="tip">
-        网页（PWA）版本没有可靠的后台定时，会在你每次打开 App 时检查并发通知；安装到手机桌面或改用 APK 可获得更稳定的本地定时提醒。
+    <div class="card px-3.5 py-3 mb-2">
+      <div class="text-[14px] mb-1">列表展示方式</div>
+      <div class="text-[12px] text-ink-3 mb-2.5">决定库存列表是按新鲜度分组、按到期日排列，还是完全不分组。</div>
+      <PillGroup gap="xs" role="group" aria-label="库存列表展示方式">
+        <Pill
+          v-for="o in STOCK_VIEW_OPTIONS"
+          :key="o.value"
+          class="flex-1"
+          size="sm"
+          :selected="stockViewMode === o.value"
+          @click="stockViewMode = o.value"
+        >{{ o.label }}</Pill>
+      </PillGroup>
+      <div class="text-[12px] text-ink-2 mt-2.5 leading-relaxed">
+        {{ STOCK_VIEW_OPTIONS.find((o) => o.value === stockViewMode)?.hint }}
       </div>
     </div>
-  </div>
+
+    <div class="section-label">提醒设置</div>
+
+    <div class="flex items-center justify-between card px-3.5 py-3.5 mb-2 text-[14px] cursor-default gap-3">
+      <span>开启临期提醒</span>
+      <van-switch :model-value="settings.settings.remindEnabled" @change="toggleRemind" />
+    </div>
+
+    <FormField
+      class="mt-1.5"
+      label="每日提醒时间（原生 App 会在此时推送；网页版需当天打开过一次）"
+      for-id="remind-time"
+    >
+      <input
+        id="remind-time"
+        v-model="timeStr"
+        type="time"
+        class="field-input"
+      />
+    </FormField>
+
+    <FormField label="临期阈值（剩余 ≤ N 天）" for-id="soon-days">
+      <input
+        id="soon-days"
+        v-model="soonDays"
+        type="number"
+        min="1"
+        class="field-input"
+      />
+    </FormField>
+
+    <FormField label="紧急 / 待吃阈值（剩余 ≤ N 天）" for-id="urgent-days">
+      <input
+        id="urgent-days"
+        v-model="urgentDays"
+        type="number"
+        min="0"
+        class="field-input"
+      />
+    </FormField>
+
+    <div class="tip">
+      网页（PWA）版本没有可靠的后台定时，会在你每次打开 App 时检查并发通知；安装到手机桌面或改用 APK 可获得更稳定的本地定时提醒。
+    </div>
+</PageShell>
 </template>

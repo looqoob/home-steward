@@ -4,6 +4,7 @@ import { useShoppingStore } from '@/stores/shopping';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
+import PageHeader from '@/components/PageHeader.vue';
 import ShoppingInboundRow from '@/components/ShoppingInboundRow.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
@@ -168,14 +169,12 @@ async function clearDone() {
 
 <template>
   <div>
-    <!-- 顶部 16px 间距，与库存页一致：滚动容器 pt-0（吸顶筛选条需要），间距改由普通流占位元素提供 -->
-    <div class="h-4" aria-hidden="true"></div>
-
-    <!-- 与库存页保持同一套页头节奏：标题 + 右侧计数 -->
-    <div class="flex items-baseline justify-between gap-2 mb-3">
-      <h1 class="text-[20px] font-semibold leading-[1.2]">清单</h1>
-      <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.visible.length }} 件</span>
-    </div>
+    <!-- 与库存页保持同一套页头节奏：标题 + 右侧计数（顶部 16px 占位由 PageHeader 提供） -->
+    <PageHeader title="清单">
+      <template #actions>
+        <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.visible.length }} 件</span>
+      </template>
+    </PageHeader>
 
     <div class="tip mb-3.5">
       清单根据库存与消耗自动生成；手动项不会被自动清理。
