@@ -26,7 +26,8 @@ const headerTitle = computed(() => route.meta.header);
  * - **库存页**：筛选条吸顶 → `pt-0`；底部要给悬浮的「快速入库」FAB 让位 → `pb-[84px]`。
  * - **有顶栏的页面**（`meta.header`）：顶栏由本外壳渲染在滚动容器**外面**，页面里的筛选条 / 合计条
  *   又要分别贴容器顶边、底边 → 上下都 `0`，留白由页面内的占位元素提供。
- * - **其余主 Tab 页**：常规 `16px / 12px`。
+ * - **其余主 Tab 页**（清单 / 我的）：顶部 `0`（留白由 PageHeader.topGap 承担，与库存页对齐），
+ *   底部 12px 收尾。
  *
  * 不能随便给带 sticky 元素的页面加容器 padding：sticky 偏移是相对内容盒算的，
  * padding 会把吸顶/吸底条整体推离容器边缘，中间漏出的缝里能看到滚动中的卡片。
@@ -83,7 +84,10 @@ const padClass = computed(() => {
     return 'pt-0 pb-[84px]';
   }
   if (headerTitle.value) return 'pt-0 pb-0';
-  return 'pt-4 pb-3';
+  // 主 Tab（库存之外的清单 / 我的）：顶部留白交给 PageHeader.topGap（与库存页同款节奏），
+  // 这里只给底部收尾留白。曾写 pt-4 pb-3，pt-4 与 PageHeader.topGap 的 h-4 重复 16px，
+  // 导致这两个页面 header 整体比库存页低 16px。
+  return 'pt-0 pb-3';
 });
 
 function go(path: string) {
