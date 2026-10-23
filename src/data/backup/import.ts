@@ -2,6 +2,7 @@ import { db } from '../index';
 import type { BackupFile } from './schema';
 import { validateBackup } from './schema';
 import {
+  sanitizeDict,
   sanitizeItems,
   sanitizeLocations,
   sanitizeLogs,
@@ -10,6 +11,7 @@ import {
 } from './sanitize';
 import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, ShoppingItem } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
+import { normalizeSettings } from '@/domain/settings';
 
 export type ImportMode = 'replace' | 'merge';
 
@@ -48,16 +50,29 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
   const locsR = sanitizeLocations(data.locations ?? []);
   const logsR = sanitizeLogs(data.logs ?? []);
   const shopR = sanitizeShopping(data.shopping ?? []);
+  // ⚠️ 字典必须清洗：不洗的话 `dictKey: null` 会让 `stores/dict` 的 `buildCustomMap`
+  // 在 `.trim()` 上抛 TypeError，物品编辑 / 快速入库 / 扫码 / 清单入库四处**一起白屏**。
+  const dictR = sanitizeDict(data.dict ?? []);
   const incomingItems = itemsR.rows;
   const incomingLocations = locsR.rows;
   const incomingLogs = logsR.rows;
   const incomingShopping = shopR.rows;
-  const incomingDict = (data.dict ?? []).filter((d) => d && !d.deletedAt);
+  const incomingDict = dictR.rows;
   // v1 备份没有 barcodes 字段，必须 `?? []` 兜底
   const incomingBarcodes = (data.barcodes ?? []).filter((b) => b && !b.deletedAt);
 
-  const dropped = itemsR.dropped + locsR.dropped + logsR.dropped + shopR.dropped;
-  const fixed = itemsR.fixed + locsR.fixed + logsR.fixed + shopR.fixed;
+  const dropped = itemsR.dropped + locsR.dropped + logsR.dropped + shopR.dropped + dictR.dropped;
+  const fixed = itemsR.fixed + locsR.fixed + logsR.fixed + shopR.fixed + dictR.fixed;
+
+  // ★ 防空覆盖：备份信封合法、但**物品全被清洗掉**时，`replace` 会先清空 6 张表再写入 0 条，
+  // 结果「数据没了、还提示成功」。宁可中止导入、保留本机数据，也不能让用户以为备份可用。
+  const sourceItemCount = Array.isArray(data.items) ? data.items.length : 0;
+  if (sourceItemCount > 0 && incomingItems.length === 0) {
+    return {
+      ok: false,
+      message: `备份里的 ${sourceItemCount} 条物品记录全部无法识别（缺 id / name，或字段不合法），已中止导入，本机数据未改动。`,
+    };
+  }
 
   try {
     await db.transaction(async () => {
@@ -69,7 +84,9 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
         await db.shopping.bulkPut(incomingShopping);
         await db.dict.bulkPut(incomingDict);
         await db.barcodes.bulkPut(incomingBarcodes);
-        if (data.settings) await db.settings.save(data.settings);
+        // ⚠️ 导入路径**不经过 store**，设置必须在这里过同一套归一化：
+        // `id` 非 'singleton' 的记录永远读不到（垃圾行 + 整份设置静默不生效）。
+        if (data.settings) await db.settings.save(normalizeSettings(data.settings));
         return;
       }
 

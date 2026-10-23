@@ -94,50 +94,59 @@ const currentPreview = computed(() => {
 
 const storedAt = computed(() => item.value?.storedAt ?? todayStr());
 
+/** 防连点：双击保存会建出两条记录；编辑时第一条已 `router.back()`，第二条照样落库 */
+const saving = ref(false);
+
 async function save() {
+  if (saving.value) return;
   const name = draft.name.trim();
   if (!name) {
     show('请填写名称');
     return;
   }
-  const env = locations.envOf(draft.locationId);
-  const r = computeExpiry(baseInput.value, env, dict.resolve, fallbackDays);
-  const patch = {
-    expireAt: r.expireAt,
-    shelfLifeDays: r.days,
-    shelfLifeSource: r.source,
-    notRecommended: r.notRecommended,
-    notRecommendedReason: r.reason,
-  };
-  if (isNew.value) {
-    await items.add({
-      name,
-      quantity: draft.quantity,
-      unit: draft.unit || '个',
-      locationId: draft.locationId,
-      price: normalizePrice(draft.price),
-      producedAt: draft.producedAt,
-      manualShelfLife: draft.manualShelfLife,
-      note: draft.note,
-    });
-    show('已加入库存');
-  } else if (item.value) {
-    await items.save({
-      ...item.value,
-      name,
-      quantity: draft.quantity,
-      unit: draft.unit || '个',
-      price: normalizePrice(draft.price),
-      producedAt: draft.producedAt,
-      manualShelfLife: draft.manualShelfLife,
-      note: draft.note,
-      locationId: draft.locationId,
-      ...patch,
-      updatedAt: Date.now(),
-    } as Item);
-    show('已保存');
+  saving.value = true;
+  try {
+    const env = locations.envOf(draft.locationId);
+    const r = computeExpiry(baseInput.value, env, dict.resolve, fallbackDays);
+    const patch = {
+      expireAt: r.expireAt,
+      shelfLifeDays: r.days,
+      shelfLifeSource: r.source,
+      notRecommended: r.notRecommended,
+      notRecommendedReason: r.reason,
+    };
+    if (isNew.value) {
+      await items.add({
+        name,
+        quantity: draft.quantity,
+        unit: draft.unit || '个',
+        locationId: draft.locationId,
+        price: normalizePrice(draft.price),
+        producedAt: draft.producedAt,
+        manualShelfLife: draft.manualShelfLife,
+        note: draft.note,
+      });
+      show('已加入库存');
+    } else if (item.value) {
+      await items.save({
+        ...item.value,
+        name,
+        quantity: draft.quantity,
+        unit: draft.unit || '个',
+        price: normalizePrice(draft.price),
+        producedAt: draft.producedAt,
+        manualShelfLife: draft.manualShelfLife,
+        note: draft.note,
+        locationId: draft.locationId,
+        ...patch,
+        updatedAt: Date.now(),
+      } as Item);
+      show('已保存');
+    }
+    router.back();
+  } finally {
+    saving.value = false;
   }
-  router.back();
 }
 
 /** 详情页也能部分消耗（20 个鸡蛋一次用 2 个）；上限跟着剩余量走 */
@@ -327,7 +336,7 @@ async function removeItem() {
 
       <div class="tip mb-3.5">入库日期：{{ storedAt }}</div>
 
-      <van-button block type="primary" class="mb-2" @click="save">保存</van-button>
+      <van-button block type="primary" class="mb-2" :disabled="saving" @click="save">保存</van-button>
 
       <template v-if="!isNew">
         <div class="section-label">处理这件物资</div>

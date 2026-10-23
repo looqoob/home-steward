@@ -11,10 +11,15 @@ export const PRESET_LOCATIONS: Array<Pick<Location, 'name' | 'icon' | 'env'>> = 
   { name: '阳台挂篮', icon: '阳', env: 'ventilated' },
 ];
 
-/** 首次启动写入预设位置（已存在则不动） */
+/**
+ * 首次启动写入预设位置。
+ *
+ * ⚠️ 判据是 `countAll() > 0`（**含软删除行**），不是 `all().length > 0`：
+ * 用户手动删光六个预设位置后，`all()` 同样返回 0，用它的写法会在下次启动时
+ * 把预设重新播一遍 —— 用户删不掉、位置列表还会凭空多出六行。
+ */
 export async function ensureSeed(db: DataSources): Promise<void> {
-  const existing = await db.locations.all();
-  if (existing.length > 0) return;
+  if ((await db.locations.countAll()) > 0) return;
   const now = Date.now();
   const rows: Location[] = PRESET_LOCATIONS.map((p, i) => ({
     id: newId(),

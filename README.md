@@ -48,28 +48,44 @@ npm run icons        # 重新生成图标到 public/icons/
 ### 打包 Android（可选）
 
 ```bash
-npm run cap:add      # 首次：初始化 android/ 工程
-npm run cap:sync     # 构建 + 同步到 android/app/src/main/assets/public
-npm run apk          # 产出 debug APK
+npm run cap:sync       # 构建 Web 产物 + 同步到 android/app/src/main/assets/public
+npm run apk            # 产出 debug APK（= android/app/build/outputs/apk/debug/）
+npm run apk:release    # 产出 release APK，需要先配签名（见下）
 ```
 
 > **注意**：`capacitor.config.ts` 里**不要**配置 `server.url`，否则 App 依赖网络、失去离线能力。
 
+**release 签名**：口令与密钥文件都不入库。
+
+```bash
+cp android/keystore.properties.example android/keystore.properties  # 填 storePassword / keyPassword
+keytool -genkeypair -v -keystore release.keystore -alias home-steward \
+  -keyalg RSA -keysize 2048 -validity 10000
+npm run apk:release
+```
+
+`android/keystore.properties` 已被 `.gitignore` 忽略；CI 里也可以用
+`HOME_STEWARD_KEYSTORE` / `HOME_STEWARD_STORE_PASSWORD` / `HOME_STEWARD_KEY_ALIAS` /
+`HOME_STEWARD_KEY_PASSWORD` 四个环境变量代替。**没有签名时 `apk:release` 会在构建前直接报错中止**，
+不会产出装不上的未签名包。
+
 ### 扫码入库的相机权限（仅 APK）
 
-`html5-qrcode` 走 `getUserMedia`，**Web 端首次扫码时浏览器会自己弹权限框，无需配置**。  
-但打包成 APK 后需要在原生工程里声明相机权限，否则 WebView 拿不到摄像头：
+`html5-qrcode` 走 `getUserMedia`：Web 端首次扫码时浏览器自己弹权限框，无需配置；
+APK 里需要原生 `AndroidManifest.xml` 声明 `CAMERA`，否则 Capacitor 的
+`onPermissionRequest` 会立即拒绝，扫码永久降级成手输。
 
-1. 先执行一次 `npm run cap:add`（生成 `android/` 目录，该目录不入库）
-2. 打开 `android/app/src/main/AndroidManifest.xml`，在 `<manifest>` 下加入：
+**v1.0.1 起这一行已经写进仓库的 `android/app/src/main/AndroidManifest.xml`**，正常打包即在：
 
 ```xml
 <uses-permission android:name="android.permission.CAMERA" />
+<uses-feature android:name="android.hardware.camera" android:required="false" />
 ```
 
-1. 重新 `npm run cap:sync && npm run apk`
+只有在**删掉 `android/` 重新 `cap:add`** 之后才需要重新核对（Capacitor 生成的新工程会覆盖 manifest）。
 
-> 不加也能用：扫码页会降级为「手动输入条码数字」，功能不中断。
+> 没有摄像头或用户拒绝授权时，扫码页会降级为「手动输入条码数字」，功能不中断。
+
 
 ---
 

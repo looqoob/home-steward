@@ -69,7 +69,8 @@ home-steward/
 ├── package.json
 │
 ├── scripts/
-│   └── gen-icons.mjs         # sharp 生成 PWA / APK 图标 → public/icons/
+│   ├── gen-icons.mjs         # sharp 生成 PWA / APK 图标 → public/icons/
+│   └── apk.mjs               # 跨平台调 Gradle Wrapper（`npm run apk` / `apk:release`）
 │
 ├── public/
 │   └── icons/                # ★ 图标必须在这里才会进 dist 并被预缓存
@@ -95,6 +96,7 @@ home-steward/
     │   ├── grouping.ts       # v3：同名折叠 + FEFO 排序与消耗
     │   ├── timeline.ts       # v3：到期日时间轴分桶
     │   ├── accent.ts         # 主题色：预设色板 + 对比度校正 + 色阶派生（纯函数）
+    │   ├── settings.ts       # 设置归一（旧数据 / 备份导入共用，单一真源）
     │   └── README.md
     │
     ├── data/                 # 【第 2 层】持久化
@@ -126,6 +128,7 @@ home-steward/
     ├── composables/          # 跨模块可复用逻辑
     │   ├── useReminder.ts    # 临期提醒（原生通知 / Web 降级）
     │   ├── useToast.ts       # 全局轻提示（模块级单例 state）
+    │   ├── useSafeArea.ts    # 顶部安全区（状态栏/刘海）→ 写 <html> 的 --safe-top，顶栏只认它
     │   ├── useTheme.ts       # 外观主题（深浅 + 主题色）→ 写 html[data-theme] 与 --primary-* 内联变量
     │   └── README.md
     │
@@ -261,6 +264,8 @@ export const db: DataSources = createDexieSources();  // ← 换成 createSqlite
 除 `Settings` 外的所有实体都有 `deletedAt: number | null`。
 **仓库层的 `all()` / `byId()` 已自动过滤 `deletedAt`**，业务层不需要到处写 `.filter(i => !i.deletedAt)`，但 UI 层的 store getter（`active` / `visible`）出于性能仍保留过滤，两者不冲突。
 
+⚠️ 正因为 `all()` 过滤了软删除，「这条记录从没存在过」和「用户把它删光了」在它眼里是一样的。**判断「是否首次启动」必须用 `countAll()`**（含软删除行），否则用户把位置全删光后会重播预设（坑位 #60）。
+
 注意 `ConsumeLog` **没有** `updatedAt` 字段 —— 写通用工具函数时不能用 `updatedAt` 做硬约束（这是踩过的坑）。
 
 ### 5.6 同名折叠与 FEFO（v3）
@@ -271,7 +276,7 @@ export const db: DataSources = createDexieSources();  // ← 换成 createSqlite
 
 | 层 | 做法 |
 | --- | --- |
-| 数据层 | 永不合并（`stores/items.addMany` 只在**入库时**且到期日相差 ≤ 1 天才真合并） |
+| 数据层 | 永不合并（`stores/items.addMany` 只在**入库时**且到期日相差 ≤ 1 天才真合并；⚠️ 清单「全部入库」传 `{ merge: false }`，见坑位 #56） |
 | 展示层 | `domain/grouping.foldItems` 折叠成 `ItemGroup` |
 | 消耗层 | `planGroupConsume` / `fefoSlices` 按 FEFO 分配 |
 
@@ -322,12 +327,13 @@ export const db: DataSources = createDexieSources();  // ← 换成 createSqlite
 
 ### 6.3 顶栏规范
 
-- `TabLayout`（三个主 Tab）：**纯白背景、不显示标题**（底部 Tab 已表明页面）。顶部的纯白占位只负责安全区高度（`env(safe-area-inset-top) + 12px`）。
+- ★ **顶部安全区（状态栏 / 刘海）只有 `--safe-top` 一个真源**：`src/composables/useSafeArea.ts` 在启动时（`main.ts` 中 `app.mount` 之前）量出真实值，写成 `<html>` 的 inline `--safe-top`；`index.css` 的 `:root` 里那份 `env(safe-area-inset-top, 0px)` 只是 JS 还没跑时的首帧兜底。**组件一律写 `pt-[var(--safe-top)]`，禁止再各写 `env(safe-area-inset-top)`** —— 后者在 Android WebView 里恒为 0（详见 §10 #53）。
+- `TabLayout`（三个主 Tab）：**纯白背景、不显示标题**（底部 Tab 已表明页面）。顶部的纯白占位负责「安全区 + 12px 呼吸空间」（`h-[calc(var(--safe-top)+12px)]`）。
 - **独立路由子页**（商品编辑 / 位置管理 / 字典 / 设置 / 备份）：页面自己渲染 `NavBar.vue`（标题 + 返回），它是页面根容器（`flex flex-col h-full`）的首个 flex item —— 位于滚动容器**外面**，所以不随内容滚动、天然占满整宽。
 - **★ 挂在 TabLayout 下、又需要标题栏的页面**（如 `/consume-log` 消耗明细）：在路由上写 `meta: { header: '标题' }`，由 `TabLayout` 把 `NavBar` 渲染在滚动容器**外面**；**页面里不要再写 `<NavBar>`**，否则出现两条顶栏。这样它才和底部 Tab 一样贴死边缘、不随内容滚动。
   - 代价：这类页面的滚动容器 `padding` 会被置为 `pt-0 pb-0`（`TabLayout.padClass`），上下留白改由页面内的**普通流占位元素**提供（如 `ConsumeLogView` 的 `h-5`）。
   - 原因：`sticky` 的偏移量相对**内容盒**计算，容器 `padding` 会把吸顶 / 吸底条朝内推，与容器边缘之间漏出一条能看到滚动卡片的缝。改这类页面前先看 `src/styles/README.md`「吸顶层」规则 5。
-- `NavBar` 自己承担状态栏安全区（`pt-[env(safe-area-inset-top,0px)]` + `h-[calc(48px+env(...))]`），由外壳渲染时 `TabLayout` 就**不再**渲染那块 12px 纯白占位，避免白色多出一截。
+- `NavBar` 自己承担状态栏安全区（`pt-[var(--safe-top)]` + `h-[calc(48px+var(--safe-top))]`），由外壳渲染时 `TabLayout` 就**不再**渲染那块 12px 纯白占位，避免白色多出一截。**安全区逻辑只在 NavBar 里写一次** —— 新增二级页只要用 `NavBar` / `PageShell` / `meta.header` 中任一方式，就自动带安全区，不需要作者记得补 padding。
 - `index.html` 的 `theme-color` 只有**一份**，值由 `useTheme` 在切换时写入（浅 `#FFFFFF` / 深 `#1C211F`，与 `--bg-card` 同步）。**不要再改成「两套 meta + `media="(prefers-color-scheme: dark)"`」** —— 用户手选深色但系统是浅色时状态栏会错。manifest 的 `theme_color` 同理只有一份。
 
 ### 6.4 ★ 外观主题（深浅 + 主题色）
@@ -374,6 +380,7 @@ function closeQuickAdd() { if (route.query.quickadd) router.back(); }
 | npm | ≥ 10 | |
 | JDK | **21** | 仅打 APK 需要；Capacitor 8 不支持 JDK 17 |
 | Android SDK | compileSdk / targetSdk 36，minSdk 24 | 仅打 APK 需要 |
+| 签名（仅 release） | `android/keystore.properties` 或四个环境变量 | 照着 `android/keystore.properties.example` 建；**密钥与口令都不入库**（坑位 #61） |
 
 ### 安装
 
@@ -399,7 +406,8 @@ npm install
 | `npm run cap:add` | 初始化 Android 工程（首次） |
 | `npm run cap:sync` | 构建 + 同步到 Android 工程 |
 | `npm run cap:open` | 用 Android Studio 打开 |
-| `npm run apk` | 打 debug APK |
+| `npm run apk` | 打 debug APK（`scripts/apk.mjs`，Windows/macOS 通用） |
+| `npm run apk:release` | 打 release APK（需要 `android/keystore.properties`，缺签名会在构建前中止） |
 
 ### ⚠️ 提交前的双验（必做）
 
@@ -413,7 +421,7 @@ npm run typecheck && npm test && npm run build
 
 - 配置文件是**独立的 `vitest.config.ts`**（不是 `vite.config.ts`）：`environment: 'node'`，只注册 `@` 别名，
   `include: ['src/**/*.test.ts']`。只测**纯函数**——不依赖 Vue / Dexie / 浏览器 API。
-  `data/backup/sanitize.ts` 虽然在 data 层，但同样是纯函数，可以直接测（22 例）。
+  `data/backup/sanitize.ts` 虽然在 data 层，但同样是纯函数，可以直接测（45 例）。
 - 夹具统一放 `src/domain/__tests__/fixtures.ts`（`mkItem` / `mkLocation` / `mkShopping` / `TODAY` / `NOW` / `SETTINGS`）。
   时间基准固定在 `Date.UTC(2026, 9, 5)`，**不要用 `Date.now()`**，否则用例会随日子变化而红。
 - 新增领域函数 → 同步补 `src/domain/__tests__/*.test.ts`。
@@ -547,6 +555,17 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 50 | `./gradlew` 卡在 `Downloading gradle-8.x-all.zip` 然后 `SocketTimeoutException` | 本机网络到 `services.gradle.org` 不通 / 极慢 | `android/gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl` 改腾讯镜像 `https://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip`（`-bin` 不带 docs，路径更短，避免 Windows 超长路径解压失败） |
 | 51 | 配了 `HTTPS_PROXY` 环境变量，Gradle 还是 `Connect to repo.maven.apache.org:443 … timed out` | **Java/Gradle 不读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量**，只能从 `gradle.properties` 的 `systemProp.*` 拿代理 | 在**全局** `GRADLE_USER_HOME/gradle.properties`（本机 `C:\Users\陆乔冰\.gradle\gradle.properties`）写 `systemProp.https.proxyHost=127.0.0.1` + `systemProp.https.proxyPort=<会话代理端口>` + `nonProxyHosts=localhost\|127.0.0.1`。⚠️ 代理端口是会话级的（`echo $HTTPS_PROXY` 拿），换会话要改；**别写进仓库的 `android/gradle.properties`**，否则换机器就炸 |
 | 52 | 依赖都下完了，kotlinc 却报 `source file or directory not found: C:\Users\u9646u4E54u51B0\…DateMatch.kt`（一堆 .kt 找不到），连 `android.jar` 都标 `non-existent location` | 路径里的中文用户名在 Gradle→kotlinc worker 传参（argfile）时被按非 UTF-8 编码写/读，变成乱码 `陆乔冰`→`\u9646…`，文件自然找不到 | 全局 `gradle.properties` 给 daemon 强制 UTF-8：`org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8`（外加 `kotlin.daemon.jvmargs` 同款）。这样工程 / SDK / Gradle 缓存三条含中文路径都能正确寻址 |
+| 53 | APK 里二级页（设置 / 消耗明细 / 编辑 …）的返回按钮压在手机状态栏下面，**点不到**，改了 `pt-[env(safe-area-inset-top,0px)]` 却毫无效果 | `env(safe-area-inset-top)` 在 **Android WebView 里恒为 0** —— 它只反映刘海 / 挖孔，不反映状态栏。而 targetSdk 36 下 WebView 是 edge-to-edge，页面从屏幕最顶端绘制，状态栏浮在上面。JS 也读不到 `status_bar_height`（没有对应 Web API，`window.innerHeight` 也不含状态栏） | 顶部安全区统一由 `src/composables/useSafeArea.ts` 下发：`main.ts` 在 `app.mount` **之前**调 `initSafeArea()`，用探针 div 读 `env()` 真值、原生壳里取 `max(env, 平台兜底)`（iOS 47 / Android 24），写成 `<html>` 的 inline `--safe-top`。组件一律 `pt-[var(--safe-top)]`，**禁止再写 `env(safe-area-inset-top)`**。见 §6.3 |
+| 54 | 盘点连着判第二件就被跳过，进度「1/20 → 1/19 → 1/18」越盘越少、收尾统计也不对 | `watch(() => props.rows, …)` 用来「筛选变化就重排队列」，但 `judge()` 里的 `consumeGroup()` 会 `load()`，`rows` 每判定一次都是新数组 → watcher 在 `await` 续体之前触发，把 `cursor` 归零并重置计数 | 盘点队列只做**进入时快照**、**不 watch `props.rows`**；筛选变化退出重进（重挂载组件）；`judging` 挡同一张卡连点（否则游标多前进一格）。见 `src/components/README.md`「队列必须是快照」 |
+| 55 | 扫**一次**码入库十几件（一个条码建出十几条记录） | `html5-qrcode` 的解码回调**按帧触发**（fps 10），`onScan` 没有忙锁；`doInbound` 又是先 `addMany` 再 `stopScanner`，等落库完停扫时中间那几帧已经各入库一次 | `busy` 忙锁 + 同码 1.5s 时间窗去重；**先 `stopScanner()` 再写库**；未知码转表单前也要先停扫。见 `src/components/README.md`「ScanSheet 去重约定」 |
+| 56 | 清单里两行同名（自动临期 + 手动）「全部入库」后撤销一行再入库，库存变成 3 份（实际 2 份） | `items.addMany` 会**跨 input 合并**同名同位置同到期日的记录，两行共享同一个 `inboundItemId`；而撤销按「1 行 = 1 物品」回滚，`restore` 的是合并后的整份数量 | `inboundAll` 调 `addMany(..., { merge: false })`：一条 input = 一条批次记录。见 `src/stores/README.md` 边界条件与 §5.6 |
+| 57 | 备份里物品全都被清洗掉，导入却报「已覆盖导入（物品 0 位置 0 日志 0）」——本地数据已被清空 | 覆盖导入是「先 `db.wipe()` 再写入」；`validateBackup` 只校验信封，清洗一条不进不算失败。即使补了「先清洗后覆盖」，**清洗把物品全丢光**时照样清空 | `import.ts` 在覆盖前判定 `items 原始条数 > 0 且清洗后为 0` → 直接中止并返回原因；`BackupView` 在覆盖前把当前数据存成 JSON 快照，成功 toast 带「撤销覆盖」（仅本次会话有效） |
+| 58 | 手改过备份的 `dict` 数组后，一进「保质期字典 / 快速入库 / 扫码 / 清单入库」就白屏，重启依旧 | `dict` 表当初没进 sanitize：`dictKey` 存成数字 → `buildCustomMap` → `normalizeName(123).trim()` 抛 TypeError；`computed` 抛错会让**依赖它的页面**永久白屏 | 新增 `sanitizeDict`：id/`dictKey` 空、`days` 不是「正整数或 `-1`」→ 整条丢弃并计数（不猜天数）；`env` 非法回落 `cool`；`dictKey` 过 `normalizeName` 并去重 |
+| 59 | 导入备份后提醒开关反了、或「备份提醒」永远不弹 | `import.ts` 直接 `db.settings.save(data.settings)`；`id` 不是 `'singleton'` 时整条被忽略还留垃圾行，`"remindEnabled": "false"` 是**真值**，`lastBackupAt: "abc"` 让「上次备份」算出 NaN | 设置归一只有 `domain/settings.ts` 的 `normalizeSettings` 一份：`id` 恒 `singleton`、布尔用 `typeof`、时间戳非有限正数 → `null`、枚举白名单、数值 clamp。导入路径与 store 共用 |
+| 60 | 用户把位置全删光，重启后预设位置又全回来了 | `ensureSeed` 用 `countAll() > 0` 判断「是否首次启动」；若用 `all()`（过滤软删除），删光后计数为 0 → 当首次启动重播种子 | 计数用 `Repository.countAll()`（**含**软删除行）；见 `src/data/README.md` 与 `src/data/seed.ts` JSDoc |
+| 61 | release 的签名口令躺在仓库里，而签名文件根本不存在 | `android/app/build.gradle` 曾明文写 `storePassword 'home1234'` / `keyAlias` / `storeFile file('../../release.keystore')`，而 `release.keystore` 被 `.gitignore` 忽略、磁盘上也没有 → 口令已外泄，干净 clone 上 `assembleRelease` 必失败 | 签名只从 `android/keystore.properties`（git 忽略，模板 `keystore.properties.example`）或四个 `HOME_STEWARD_*` 环境变量读；`gradle.taskGraph.whenReady` 在 release 任务缺签名时**直接抛错中止**，绝不产出未签名包。见 `README.md`「release 签名」 |
+| 62 | Windows 上 `npm run apk` 报 `'./gradlew' 不是内部或外部命令` | `cd android && ./gradlew` 只能在 POSIX shell 里跑，cmd 不认 `./` 前缀 | 统一走 `scripts/apk.mjs`：按平台选 `gradlew.bat` / `./gradlew`，`npm run apk` 与 `npm run apk:release` 都是它 |
+| 63 | APK 里攒了几百条数据，换机时却在云端冒出来 | `AndroidManifest.xml` 的 `allowBackup` 默认是 `true`，Auto Backup / D2D 会把 WebView 数据（含 IndexedDB）带上云 | 显式 `android:allowBackup="false"`，与「数据 100% 本机」的产品底线一致；改权限 / 备份策略后要真机装一次确认 |
 
 ---
 
@@ -565,17 +584,21 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 库存列表的分组顺序 | `src/domain/freshness.ts`（`groupByFreshness`）；**折叠必须在此之前**，见 §5.6 |
 | 时间轴分桶 | `src/domain/timeline.ts` |
 | 统计口径 | `src/domain/stats.ts` |
-| 备份导入的脏数据清洗 | `src/data/backup/sanitize.ts` |
+| 备份导入的脏数据清洗 | `src/data/backup/sanitize.ts`（含 `sanitizeDict`，坑位 #58） |
+| 设置归一（旧数据 / 导入） | `src/domain/settings.ts`（`normalizeSettings`，**唯一**来源，坑位 #59；别在 store 里再写一份） |
 | 金额口径（单价 / 本次金额） | `src/domain/price.ts`（**唯一定义**，别在别处再拼一遍） |
 | 换个数据库 | `src/data/index.ts`（一行）+ 新增 sources 实现 |
 | 数据库表/索引 | `src/data/dexie/db.ts`（改后**必须**升 `SCHEMA_VERSION` 并在 import 处做版本兼容） |
 | 备份文件格式 | `src/data/backup/schema.ts`（改后**必须**升 `SCHEMA_VERSION`） |
 | 顶部 Tab / FAB / 弹框返回键 | `src/layouts/TabLayout.vue` |
 | 子页顶栏 / 标题 / 吸顶层留白 | `src/layouts/TabLayout.vue`（`meta.header` 页面）+ `src/components/NavBar.vue`；路由写 `meta: { header: '标题' }` |
+| 顶部安全区 / 返回按钮被状态栏压住 | `src/composables/useSafeArea.ts`（写 `--safe-top`）；组件只写 `pt-[var(--safe-top)]`，别用 `env(safe-area-inset-top)` |
 | 列表页搜索框 | `src/components/SearchField.vue` |
 | 新增路由 | `src/router/index.ts`（懒加载 `() => import('@/views/Xxx.vue')`） |
 | 主题色 / 间距 / 圆角 | `src/styles/index.css` |
 | 提醒时间 / 通知方式 | `src/composables/useReminder.ts` |
+| release 签名 / 打 APK | `scripts/apk.mjs` + `android/keystore.properties.example`（坑位 #61 / #62）；签名文件与口令**永远不入库** |
+| Android 权限 / 备份策略 | `android/app/src/main/AndroidManifest.xml`（CAMERA 已声明；`allowBackup="false"`，坑位 #63） |
 | appId / 包名 | `capacitor.config.ts` |
 
 ---
@@ -626,10 +649,11 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | `docs/V3-CHANGELOG.md` | **v3 变更说明**：同名折叠/FEFO 语义、备份清洗三层防御、盘点与统计口径（改 v3 相关代码前先看） |
 | `docs/ICON-TEXT-SPEC.md` | **图标 + 文本排版规范**：尺寸档位、描边、间距、垂直对齐换算、迁移清单（动图标前先看） |
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |
+| `docs/ITERATION-REVIEW.md` | **v1.0.0 迭代评审**：缺陷与可优化点清单（含 file:line 证据、建议批次、复核记录）+ §10 / §11 已落地批次记录。下一轮迭代从这里取活 |
 | `src/domain/README.md` | 领域层全部纯函数 API 参考 |
 | `src/data/README.md` | 持久化接口、表结构、备份格式 |
 | `src/stores/README.md` | 各 Pinia store 的状态与方法 |
-| `src/composables/README.md` | useReminder / useToast |
+| `src/composables/README.md` | useReminder / useToast / useTheme / useStickyFilterOffset / useSafeArea（`--safe-top` 顶部安全区） |
 | `src/components/README.md` | 组件 props / emits / 用法 |
 | `src/views/README.md` | 页面职责与路由映射 |
 | `src/styles/README.md` | 设计 token 清单与用法 |

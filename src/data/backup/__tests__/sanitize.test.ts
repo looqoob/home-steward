@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { isDateStr, sanitizeItems, sanitizeLocations, sanitizeLogs, sanitizeShopping } from '../sanitize';
+import {
+  isDateStr,
+  sanitizeDict,
+  sanitizeItems,
+  sanitizeLocations,
+  sanitizeLogs,
+  sanitizeShopping,
+} from '../sanitize';
 
 const TODAY = '2026-10-05';
+const NOW = 1759622400000;
 
 /** 一个字段齐全的合法物品，只改需要测的字段 */
 const good = (o: Record<string, unknown> = {}) => ({
@@ -185,8 +193,7 @@ describe('sanitizeLogs', () => {
   });
 });
 
-describe('sanitizeLocations', () => {
-  const loc = (o: Record<string, unknown> = {}) => ({
+describe('sanitizeLocations', () => {  const loc = (o: Record<string, unknown> = {}) => ({
     id: 'L1', name: '冷藏', icon: '冷', env: 'chilled', sort: 10,
     enabled: true, builtin: true, createdAt: 1, updatedAt: 1, deletedAt: null,
     ...o,
@@ -226,5 +233,102 @@ describe('sanitizeShopping', () => {
 
   it('缺 name 丢弃', () => {
     expect(sanitizeShopping([s(), s({ id: 's2', name: '' })]).dropped).toBe(1);
+  });
+});
+
+describe('软删除标记清洗（跨实体）', () => {
+  it('★ deletedAt 是字符串 "0" → null 并计入修正（否则该记录真值恒真、永久隐身）', () => {
+    const r = sanitizeItems([good({ deletedAt: '0' })], TODAY, NOW);
+    expect(r.rows[0]!.deletedAt).toBeNull();
+    expect(r.fixed).toBeGreaterThan(0);
+    expect(r.dropped).toBe(0);
+  });
+
+  it('deletedAt 是负数 / NaN → null；合法时间戳原样保留', () => {
+    expect(sanitizeItems([good({ deletedAt: -1 })], TODAY, NOW).rows[0]!.deletedAt).toBeNull();
+    expect(sanitizeItems([good({ deletedAt: 123 })], TODAY, NOW).rows[0]!.deletedAt).toBe(123);
+    expect(sanitizeItems([good({ deletedAt: undefined })], TODAY, NOW).rows[0]!.deletedAt).toBeNull();
+  });
+
+  it('createdAt 非数字 → 补 now；updatedAt 缺省跟 createdAt（合并导入靠它对顺序）', () => {
+    const r = sanitizeItems([good({ createdAt: '昨天', updatedAt: undefined })], TODAY, NOW);
+    expect(r.rows[0]!.createdAt).toBe(NOW);
+    expect(r.rows[0]!.updatedAt).toBe(NOW);
+    expect(r.fixed).toBeGreaterThan(0);
+  });
+
+  it('日志的 createdAt 非法 → 跟 at', () => {
+    const log = (o: Record<string, unknown> = {}) => ({
+      id: 'l1', itemId: 'i1', name: '牛奶', at: 111, quantity: 1,
+      type: 'consumed', expireAt: null, unit: '盒', locationId: 'L1',
+      price: null, unitPrice: null, note: null, createdAt: 1, deletedAt: null,
+      ...o,
+    });
+    const r = sanitizeLogs([log({ createdAt: 'x' })]);
+    expect(r.rows[0]!.createdAt).toBe(111);
+    expect(r.rows[0]!.deletedAt).toBeNull();
+  });
+});
+
+describe('sanitizeDict', () => {
+  const d = (o: Record<string, unknown> = {}) => ({
+    id: 'd1', dictKey: '牛奶', displayName: '牛奶', env: 'chilled', days: 7,
+    reason: null, origin: 'custom', createdAt: 1, updatedAt: 1, deletedAt: null,
+    ...o,
+  });
+
+  it('合法记录通过', () => {
+    const r = sanitizeDict([d()], NOW);
+    expect(r.dropped).toBe(0);
+    expect(r.fixed).toBe(0);
+    expect(r.rows[0]).toMatchObject({ dictKey: '牛奶', days: 7, env: 'chilled' });
+  });
+
+  it('★ dictKey 是数字 → 丢弃（不清洗会让 stores/dict 的白屏）', () => {
+    // buildCustomMap → normalizeName(e.dictKey) → (123).trim is not a function
+    const r = sanitizeDict([d({ dictKey: 123 })], NOW);
+    expect(r.rows).toHaveLength(0);
+    expect(r.dropped).toBe(1);
+  });
+
+  it('dictKey / id 空 → 丢弃', () => {
+    expect(sanitizeDict([d({ dictKey: '  ' }), d({ id: '' })], NOW).dropped).toBe(2);
+  });
+
+  it('★ days 非法（0 / 字符串 / NaN / 小于 -1）→ 整条丢弃，不猜一个天数', () => {
+    const bad = [0, '7', NaN, -2];
+    const r = sanitizeDict(bad.map((days, i) => d({ id: `d${i}`, days })), NOW);
+    expect(r.rows).toHaveLength(0);
+    expect(r.dropped).toBe(bad.length);
+  });
+
+  it('days = -1（不建议存放）是合法值', () => {
+    expect(sanitizeDict([d({ days: -1 })], NOW).rows[0]!.days).toBe(-1);
+  });
+
+  it('dictKey 归一化（全角/空格/大小写）并计一次修正', () => {
+    const r = sanitizeDict([d({ dictKey: ' 牛 奶 ' })], NOW);
+    expect(r.rows[0]!.dictKey).toBe('牛奶');
+    expect(r.fixed).toBe(1);
+  });
+
+  it('env 非法 → cool 并计修正', () => {
+    const r = sanitizeDict([d({ env: 'liquid-nitrogen' })], NOW);
+    expect(r.rows[0]!.env).toBe('cool');
+    expect(r.fixed).toBe(1);
+  });
+
+  it('同 dictKey|env 重复 → 保留最后一条并计数', () => {
+    const r = sanitizeDict([d({ id: 'old', days: 3 }), d({ id: 'new', days: 9 })], NOW);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0]).toMatchObject({ id: 'new', days: 9 });
+  });
+
+  it('deletedAt 字符串 → null（软删行会原样进 merge 路径）', () => {
+    expect(sanitizeDict([d({ deletedAt: '0' })], NOW).rows[0]!.deletedAt).toBeNull();
+  });
+
+  it('缺 displayName → 用 dictKey 兜底', () => {
+    expect(sanitizeDict([d({ displayName: undefined })], NOW).rows[0]!.displayName).toBe('牛奶');
   });
 });

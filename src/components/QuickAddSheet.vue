@@ -128,29 +128,38 @@ function close() {
   emit('update:modelValue', false);
 }
 
+/** 防连点：`items.add()` 不去重，手机卡顿时双击会建出两条同位置同数量的记录 */
+const saving = ref(false);
+
 /**
  * 加入库存。
  * @param keepOpen `true` = 连续录入模式：保留已选位置，只重置食材与数量，弹框不关闭。
  */
 async function confirm(keepOpen = false) {
-  if (!canAdd.value || !selected.value || !locId.value) return;
-  await items.add({
-    name: selected.value,
-    quantity: qty.value,
-    unit: unit.value || '个',
-    locationId: locId.value,
-    price: normalizePrice(price.value),
-  });
-  show(`已加入：${selected.value}`);
-  if (keepOpen) {
-    selected.value = null;
-    customName.value = '';
-    qty.value = 1;
-    // 单价也重置：连续录入的是**不同**商品，沿用上一件的价格多半是错的
-    price.value = null;
-    return;
+  if (saving.value || !canAdd.value || !selected.value || !locId.value) return;
+  saving.value = true;
+  try {
+    const name = selected.value;
+    await items.add({
+      name,
+      quantity: qty.value,
+      unit: unit.value || '个',
+      locationId: locId.value,
+      price: normalizePrice(price.value),
+    });
+    show(`已加入：${name}`);
+    if (keepOpen) {
+      selected.value = null;
+      customName.value = '';
+      qty.value = 1;
+      // 单价也重置：连续录入的是**不同**商品，沿用上一件的价格多半是错的
+      price.value = null;
+      return;
+    }
+    close();
+  } finally {
+    saving.value = false;
   }
-  close();
 }
 
 /**
@@ -317,10 +326,10 @@ function openScan() {
         </template>
 
     <template #footer>
-      <van-button block type="primary" :disabled="!canAdd" class="mb-2" @click="confirm(true)">
+      <van-button block type="primary" :disabled="!canAdd || saving" class="mb-2" @click="confirm(true)">
         加入并继续
       </van-button>
-      <van-button block :disabled="!canAdd" @click="confirm(false)">
+      <van-button block :disabled="!canAdd || saving" @click="confirm(false)">
         加入
       </van-button>
     </template>

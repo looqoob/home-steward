@@ -84,6 +84,34 @@ async function reloadStores() {
   ]);
 }
 
+/** 覆盖导入前的整份数据快照（JSON）。只留一次、只在本会话有效 —— 覆盖是唯一不可逆操作 */
+const snapshot = ref<string | null>(null);
+
+/**
+ * 撤销上一次覆盖导入。
+ *
+ * 覆盖导入会 `db.wipe()` 清空六张表，是本应用**唯一不可逆**的操作；用户选错文件时
+ * 必须有一条退路。快照在内存里（不落库，避免「撤销用的备份」自己占空间或被误导出），
+ * 因此只在本次会话内有效 —— 提示文案要说清楚这一点。
+ */
+async function undoReplace() {
+  const snap = snapshot.value;
+  if (!snap) return;
+  const parsed = parseBackup(snap);
+  if (!parsed.ok) {
+    show(parsed.message);
+    return;
+  }
+  const res = await importBackup(parsed.data, 'replace');
+  if (!res.ok) {
+    show(res.message);
+    return;
+  }
+  snapshot.value = null;
+  await reloadStores();
+  show('已恢复到覆盖前的数据');
+}
+
 const confirmImport = ref(false);
 const pendingFile = ref<File | null>(null);
 
@@ -95,6 +123,9 @@ async function runImport(f: File) {
       show(parsed.message);
       return;
     }
+    // 覆盖前先留快照：必须在 `importBackup` 之前，它一进去就 wipe。
+    if (mode.value === 'replace') snapshot.value = backupToJson(await buildBackup());
+
     const res = await importBackup(parsed.data, mode.value);
     if (res.ok) {
       await reloadStores();
@@ -109,8 +140,13 @@ async function runImport(f: File) {
         if (s.fixed > 0) parts.push(`修正 ${s.fixed} 条异常字段`);
         msg += `；${parts.join('，')}`;
       }
-      // 提示时长随内容长度调整：太长的文案在 Toast 里只显示 2.2s，读不完就没了
-      show(msg, msg.length > 40 ? 6000 : 2200);
+      if (mode.value === 'replace' && snapshot.value) {
+        // 带 action 的 toast 至少停留 5s（见 useToast），留足误点撤销的时间
+        show(msg, 6000, { text: '撤销覆盖', run: () => { void undoReplace(); } });
+      } else {
+        // 提示时长随内容长度调整：太长的文案在 Toast 里只显示 2.2s，读不完就没了
+        show(msg, msg.length > 40 ? 6000 : 2200);
+      }
     } else {
       show(res.message);
     }
@@ -164,7 +200,7 @@ async function doImport() {
       <Pill :selected="mode === 'replace'" @click="mode = 'replace'">覆盖</Pill>
     </PillGroup>
     <div class="tip mb-3.5">
-      合并：按 id 取较新版本；覆盖：先清空本机再写入。
+      合并：按 id 取较新版本；覆盖：先清空本机再写入（导入成功后会保留一份快照，可点「撤销覆盖」退回，仅本次会话有效）。
     </div>
     <!--
       不用 <label> 包裹 display:none 的 input：那样键盘无法聚焦触发。

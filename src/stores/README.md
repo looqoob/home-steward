@@ -61,13 +61,13 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 | `load` | `() => Promise<void>` | 并行重读 `items` 与 `logs` |
 | `byId` | `(id) => Item \| undefined` | 同步查找，过滤软删 |
 | `add` | `(input: NewItemInput) => Promise<Item>` | 新建。内部查 `lookupFood` 拿品类、查位置取环境、调 `createItem` 算到期日，**返回落库后的 Item** |
-| `addMany` | `(inputs: NewItemInput[]) => Promise<Item[]>` | **v2**：批量新建。一次 `bulkPut` + 一次 `load`。品类解析与 `add()` 完全一致 |
+| `addMany` | `(inputs: NewItemInput[], opts?: { merge?: boolean }) => Promise<Item[]>` | **v2**：批量新建。一次 `bulkPut` + 一次 `load`。品类解析与 `add()` 完全一致。`opts.merge === false` 关闭**跨 input 合并**（清单「全部入库」必须关，见边界条件） |
 | `snooze` | `(id, days = 1) => Promise<void>` | **v2**：「明天再说」。只写 `snoozeUntil`，**不动 `expireAt`**。`days <= 0` = 立即取消延后 |
 | `unsnooze` | `(id) => Promise<void>` | **v2**：取消延后，立即回到今日待办 |
 | `save` | `(item: Item) => Promise<void>` | 整条覆盖写入，自动刷 `updatedAt` |
 | `moveTo` | `(id, locationId) => Promise<void>` | 切换位置并**重算到期日**（`storedAt` 不变） |
 | `setManualShelfLife` | `(id, days: number \| null) => Promise<void>` | 设/清手填保质期并重算。`days <= 0` 归一化为 `null`（即关闭手填） |
-| `consume` | `(id, type: ConsumeType, qty?: number) => Promise<string>` | 用掉 / 扔掉，**支持部分消耗**：`qty` 缺省 = 全部（置 `'finished'`）；`qty < 剩余` 时只扣 `quantity`、状态保持 `'in_stock'`。**返回日志 id**（商品不存在或 `qty <= 0` 时返回 `''`） |
+| `consume` | `(id, type: ConsumeType, qty?: number) => Promise<string>` | 用掉 / 扔掉，**支持部分消耗**：`qty` 缺省 = 全部（置 `'finished'`）；`qty < 剩余` 时只扣 `quantity`、状态保持 `'in_stock'`。**返回日志 id**（商品不存在、`qty <= 0` 或**同一物品已有消耗在飞**时返回 `''`） |
 | `undoConsume` | `(logId: string) => Promise<void>` | 撤销一次消耗：删掉该日志、状态改回 `'in_stock'`，**部分消耗还会把数量加回去** |
 | `remove` | `(id) => Promise<Item \| undefined>` | 软删除（不写日志，用于误添加）。**返回删除前的快照** |
 | `restore` | `(snapshot: Item) => Promise<void>` | 撤销软删：把 `deletedAt` 置回 `null` 整条写回 |
@@ -276,6 +276,11 @@ const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
 - **v3**：入库路径全部要带 `price`。三个入口（快速入库 / 扫码 / 清单行内）以前都不传，
   新建物品价格恒为 `null`，于是「浪费金额」统计长期是 0 —— 用户得回头进详情页一件件补，
   那条路径基本没人走。单价口径统一走 `domain/price.normalizePrice`。
+- **v1.0.1**：`inboundAll` 调 `items.addMany(..., { merge: false })`。清单里两行同名（自动临期 + 手动）
+  若合并成一条记录，两行会共享同一个 `inboundItemId`，而「撤销入库」是按「1 行 = 1 物品」回滚的
+  → 撤销一行再入库就把数量算成双份。一条 input = 一条批次记录，与 AGENTS.md §5.6 一致。
+- **v1.0.1**：`consume` / `consumeGroup` 用 `consumeInFlight` 挡连点：同一物品在飞时再调用返回 `''` / `null`。
+  否则 qty=1 时双击 ✓ 会写两条日志（物品只 `finished` 一次），统计翻倍且撤销只能删一条。
 
 ### 边界条件
 
@@ -318,7 +323,7 @@ await shopping.clearDone();
 
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
-| `load` | `() => Promise<void>` | 从 db 读取（repository 保证缺失时自动补写默认） |
+| `load` | `() => Promise<void>` | 从 db 读取，**过 `domain/settings.normalizeSettings`**（repository 保证缺失时自动补写默认） |
 | `patch` | `(p: Partial<Settings>) => Promise<void>` | 局部更新并落库，自动刷 `updatedAt` |
 
 ### 关键字段
@@ -335,6 +340,7 @@ await shopping.clearDone();
 ### 边界条件
 
 - `patch` 是局部更新，不需要先展开整个对象。内部 `{ ...settings.value, ...p, updatedAt: Date.now() }`。
+- **归一规则不在这里**（v1.0.1 起）：`load()` 与备份导入都调 `domain/settings.normalizeSettings`。旧 IndexedDB 记录缺字段、导入了 `"remindEnabled": "false"` 这类脏值，都由那一个函数兜住。store 里**不要**再写一份 `{ ...DEFAULT_SETTINGS, ...raw }`。
 - **`soonDays` / `urgentDays` 变更后要重算新鲜度** —— 因为它们是 `freshnessOf` 的入参，所有使用方传入的都是 store 引用，computed 会自动重算，**但要注意 `todayStr()` 不会被缓存**（见 `domain/README.md` 的跨零点问题）。
 
 ### 示例

@@ -8,6 +8,12 @@ import { registerSW } from 'virtual:pwa-register';
 import './styles/index.css';
 import App from './App.vue';
 import router from './router';
+import { initSafeArea } from './composables/useSafeArea';
+
+// ⚠️ 必须在 mount 之前：先把 `--safe-top` 写成实测/兜底值，
+// 否则首帧会按 `env()` 的 0 画一遍，再于下一帧整体下移（顶栏闪一下）。
+// 见 composables/useSafeArea.ts 的根因说明（Android WebView 里 env(safe-area-inset-top) 恒为 0）。
+initSafeArea();
 
 const app = createApp(App);
 app.use(createPinia());

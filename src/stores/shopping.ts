@@ -198,7 +198,10 @@ export const useShoppingStore = defineStore('shopping', () => {
     const { rows, skipped } = inboundInputs(targets, items.list, locs.all, { overrides, aliasKey: foodKeyOf });
     if (!rows.length) return { count: 0, skipped };
 
-    const created = await items.addMany(rows.map((r) => r.input));
+    // ⚠️ `merge: false`：清单里两行同名（自动临期 + 手动）若合并成一条记录，
+    // 两行会共享同一个 `inboundItemId`，而 `undoInbound` 是按「1 行 = 1 物品」回滚的
+    // → 撤销一行再入库会把数量算成双份。一条 input = 一条批次记录，与 §5.6 一致。
+    const created = await items.addMany(rows.map((r) => r.input), { merge: false });
     for (let i = 0; i < rows.length; i++) {
       const item = created[i];
       if (item) await markInbound(rows[i].shoppingId, item.id);

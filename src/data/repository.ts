@@ -7,6 +7,14 @@ import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, Sho
  */
 export interface Repository<T extends { id: string }> {
   all(): Promise<T[]>;
+  /**
+   * 表内**全部**行数，**包含软删除的行**。
+   *
+   * ⚠️ 与 `all().length` 不是一回事：`all()` 过滤了 `deletedAt`，所以「用户把所有位置
+   * 都删了」与「首次启动」的返回值都是 0。`ensureSeed` 必须靠它区分两者，
+   * 否则每次启动都会把预设位置重新播一遍（用户删不掉、还会插进列表中间）。
+   */
+  countAll(): Promise<number>;
   byId(id: string): Promise<T | undefined>;
   put(entity: T): Promise<void>;
   bulkPut(entities: T[]): Promise<void>;

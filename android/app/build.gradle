@@ -4,13 +4,32 @@ android {
     namespace = "com.home.steward"
     compileSdk = rootProject.ext.compileSdkVersion
 
-    // 正式 1.0.0 签名配置
+    // ── Release 签名 ────────────────────────────────────────────────
+    // 口令与密钥文件**绝不入库**（REV-04）：
+    //   ① 本机建 android/keystore.properties（已被 .gitignore 忽略，模板见 keystore.properties.example）
+    //   ② 或走环境变量 HOME_STEWARD_KEYSTORE / _STORE_PASSWORD / _KEY_ALIAS / _KEY_PASSWORD（CI 用）
+    // 两者都没有时不注册 release 签名配置 —— debug 构建照常；release 构建会在文件末尾的
+    // taskGraph 检查里直接报错，而不是打出一个「装了也起不来」的未签名包。
+    def keystoreProps = new Properties()
+    def keystorePropsFile = rootProject.file('keystore.properties')
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.withInputStream { keystoreProps.load(it) }
+    }
+    def releaseStoreFile = keystoreProps.getProperty('storeFile') ?: System.getenv('HOME_STEWARD_KEYSTORE')
+    def releaseStorePassword = keystoreProps.getProperty('storePassword') ?: System.getenv('HOME_STEWARD_STORE_PASSWORD')
+    def releaseKeyAlias = keystoreProps.getProperty('keyAlias') ?: System.getenv('HOME_STEWARD_KEY_ALIAS')
+    def releaseKeyPassword = keystoreProps.getProperty('keyPassword') ?: System.getenv('HOME_STEWARD_KEY_PASSWORD')
+    // storeFile 的路径以本文件所在目录（android/app）为基准，模板里按 ../../release.keystore 写
+    def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
     signingConfigs {
-        release {
-            storeFile file('../../release.keystore')
-            storePassword 'home1234'
-            keyAlias 'home-steward'
-            keyPassword 'home1234'
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
 
@@ -29,9 +48,13 @@ android {
     }
     buildTypes {
         release {
+            // ⚠️ 故意保持 false：Capacitor 插件与 WebView 桥大量走反射，开 minify 必须先在真机上验证
+            // （REV-39）。没有真机回归结果前打开只会得到「装上就崩」的 release 包。
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
@@ -64,3 +87,31 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+// ── 构建前检查：release 任务必须有可用签名 ─────────────────────────
+// 没有这一层时，`assembleRelease` 仍会「成功」产出一个**未签名** APK，安装时才报
+// INSTALL_PARSE_FAILED_NO_CERTIFICATES，排查成本很高（REV-04 / AGENTS 坑位）。
+gradle.taskGraph.whenReady { graph ->
+    def wantsRelease = graph.allTasks.any { task ->
+        task.name.toLowerCase().contains('release')
+    }
+    if (wantsRelease && !hasReleaseSigning) {
+        throw new GradleException("""
+┌──────────────────────────────────────────────────────────────────────┐
+│ 缺少 release 签名配置，已中止构建（不会产出未签名包）。                    │
+│                                                                      │
+│ 做法二选一：                                                          │
+│  ① 在 android/keystore.properties 里写（模板：keystore.properties.example）│
+│     storeFile=../../release.keystore                                  │
+│     storePassword=***                                                 │
+│     keyAlias=home-steward                                             │
+│     keyPassword=***                                                   │
+│  ② 设置环境变量 HOME_STEWARD_KEYSTORE / HOME_STEWARD_STORE_PASSWORD /    │
+│     HOME_STEWARD_KEY_ALIAS / HOME_STEWARD_KEY_PASSWORD（CI 用）          │
+│                                                                      │
+│ 密钥文件与口令都不要提交进 git。                                        │
+└──────────────────────────────────────────────────────────────────────┘
+""")
+    }
+}
+

@@ -10,6 +10,9 @@ function base<T extends { id: string; deletedAt: number | null }>(table: Table<T
       const rows = await table.toArray();
       return rows.filter((r) => !r.deletedAt);
     },
+    async countAll(): Promise<number> {
+      return table.count();
+    },
     async byId(id: string) {
       const r = await table.get(id);
       return r && !r.deletedAt ? r : undefined;

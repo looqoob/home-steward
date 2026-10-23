@@ -150,6 +150,51 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
 
 ---
 
+## useSafeArea.ts — 顶部安全区（状态栏 / 刘海）的唯一真源
+
+```ts
+// main.ts —— 必须在 app.mount 之前调用一次
+import { initSafeArea } from './composables/useSafeArea';
+initSafeArea();
+
+// 组件里（一般不需要读值，直接用 CSS 变量 --safe-top 即可）
+const { safeTop } = useSafeArea(); // Ref<number>，单位 px
+```
+
+```html
+<!-- 顶栏：只看 --safe-top，不写 env(safe-area-inset-top) -->
+<header class="pt-[var(--safe-top)] h-[calc(48px+var(--safe-top))]">…</header>
+```
+
+| 成员 | 类型 | 说明 |
+| --- | --- | --- |
+| `initSafeArea()` | `() => void` | 挂到 `main.ts`，`app.mount` **之前**调用；幂等，重复调用无副作用 |
+| `useSafeArea()` | `() => { safeTop: Ref<number> }` | 读当前安全区高度（模块级单例，所有组件共享同一个 ref） |
+| `--safe-top` | CSS 变量（`<html>` inline） | **真源**。由 `initSafeArea` 写入，组件只认它 |
+
+兜底高度 `FALLBACK_TOP`：`ios: 47`、`android: 24`、`web: 0`。原生壳里取 `max(env 实测值, 兜底值)`；
+Web（浏览器 / PWA）只用 `env` 实测值 —— 桌面浏览器没有状态栏，兜底成 24px 反而是错的。
+
+### 为什么需要它（★ 改之前必读）
+
+`env(safe-area-inset-top)` 在 **Android WebView 里恒为 0**：它只反映刘海 / 挖孔，不反映状态栏。
+而 Capacitor 8 + targetSdk 36 的 WebView 是 edge-to-edge 绘制，页面从屏幕最顶端开始，状态栏浮在上面 ——
+于是所有「顶栏 + 返回按钮」都会压到状态栏里，返回按钮点不到。JS 也没有 API 能读 `status_bar_height`
+（`window.innerHeight` 不含状态栏）。
+
+所以这里用「探针 div 读 `env` 真实值 → 平台兜底值补足」的办法拿到一个**够用**的高度，
+一次性写进 `<html>` 的 inline `--safe-top`。新增二级页时只要走 `NavBar` / `PageShell` / `meta.header`
+任一方式，就自动带安全区，**不需要页面作者记得补 padding**。
+
+### 边界条件
+
+- `initSafeArea()` 必须在 `app.mount` 之前调用，否则首帧顶栏会先贴到屏幕最顶端再跳下来。
+- 探针 div 会临时插进 `<body>` 并立刻 `remove()`；它 `position: fixed` + `pointer-events: none` + 不可见，不影响布局。
+- `resize` / `orientationchange` 用 `requestAnimationFrame` 合并，横竖屏切换会重新解析。
+- 只处理**顶部**。底部 `env(safe-area-inset-bottom)` 仍由各处直接写（本项目暂未遇到恒 0 的问题）。
+
+---
+
 ## 新增 composable 的约定
 
 - 文件名 `useXxx.ts`，导出同名工厂函数 `useXxx()`。

@@ -90,6 +90,7 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - 圆角：`rounded-sm`=8px、`rounded-md`=12px、`rounded-lg`=16px、`rounded-xl`=16px、`rounded-2xl`=18px、`rounded-3xl`=20px、`rounded-full`=999px（已在 `@theme inline` 覆盖 Tailwind 默认刻度）。
 - 阴影：`shadow-card`（`0 1px 2px rgba(20,30,25,.06)`）、`shadow-pop`（`0 6px 24px rgba(20,30,25,.12)`）。
 - 动效：`--ease` = `200ms ease`。
+- 安全区：`--safe-top` —— **顶部安全区（状态栏 / 刘海）的唯一真源**。`index.css` 里的值是 `env(safe-area-inset-top, 0px)`，只作 JS 还没跑时的首帧兜底；运行时由 `src/composables/useSafeArea.ts` 量好写成 `<html>` 的 inline 变量（含 iOS 47 / Android 24 兜底）。组件一律 `pt-[var(--safe-top)]`，**禁止写 `env(safe-area-inset-top)`**（Android WebView 里恒为 0）。底部 `env(safe-area-inset-bottom)` 仍可直接用。
 
 ### 图标排版（`--ic-*`，完整规范见 `docs/ICON-TEXT-SPEC.md`）
 
@@ -213,7 +214,8 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - [ ] 新增 token → 加进 `:root`，并在 `@theme inline` 里挂上对应的 `--color-*`（否则没有工具类可用），同时更新本文档的清单
 - [ ] 组件里**没有魔法色值**（一律用 Tailwind 工具类或 `var(--*)`；环境色走 `ENV_MAP`）
 - [ ] 涉及「选中态」用的是 `bg-primary-600`
-- [ ] **顶部 / 底部容器处理了 `env(safe-area-inset-*)`**（`NavBar.vue` 用 `pt-[env(safe-area-inset-top,0px)]` + `h-[calc(48px+env(...))]`；`TabLayout` 的底栏与白色占位同理）
+- [ ] **顶部容器用 `var(--safe-top)`，不用 `env(safe-area-inset-top)`**（`NavBar.vue` 写 `pt-[var(--safe-top)]` + `h-[calc(48px+var(--safe-top))]`；`TabLayout` 主 Tab 白色占位写 `h-[calc(var(--safe-top)+12px)]`）。`env(safe-area-inset-top)` 在 **Android WebView 里恒为 0**，写了等于没写；`--safe-top` 才是真源，由 `src/composables/useSafeArea.ts` 写入 `<html>` inline，`:root` 里那份 `env()` 只是首帧兜底
+- [ ] **底部容器**仍可直接用 `env(safe-area-inset-bottom)`（`TabLayout` 底栏、`BottomSheet`、吸底合计条）
 - [ ] **带 sticky 条的页面**：滚动容器没有多余的上下 `padding`（见「吸顶层」规则 5）
 - [ ] **对比度达标**：正文/辅助文字 ≥4.5:1，圆点等图形 ≥3:1（改 `--text-3` / `--env-*` 时重点复查）
 - [ ] **字号 ≥12px**：中文不用 11px

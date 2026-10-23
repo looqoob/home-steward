@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
@@ -51,16 +51,15 @@ const currentFresh = computed(() =>
 );
 const currentLoc = computed(() => (current.value ? locations.byId(current.value.locationId) : undefined));
 
-/** 筛选结果变化（换了位置/关键词）就重置队列，否则进度会指向别的集合 */
-watch(
-  () => props.rows,
-  (list) => {
-    queue.value = list.map((r) => r.item.id);
-    cursor.value = 0;
-    ops.value = [];
-    result.value = { consumed: 0, wasted: 0 };
-  },
-);
+/**
+ * ⚠️ 这里**故意不 watch `props.rows`**。
+ *
+ * 曾经用它「筛选变化就重排队列」，但 `judge()` 里的 `consumeGroup()` 会 `load()`，
+ * 让 `props.rows` 每判定一次都变成新数组 → watcher 在 `judge` 的 await 续体之前触发，
+ * 把 `cursor` 归零并重置计数，表现是「第二件被跳过、进度越盘越少、收尾统计错」。
+ *
+ * 盘点是一次性会话：进入时拍快照，中途换筛选请退出重进（`StockView` 会重新挂载本组件）。
+ */
 
 /**
  * 「还在」：只把这一张标记为已核对，**不写任何日志**。
@@ -78,16 +77,25 @@ function markPresent() {
  * 数量 > 1 也**全量消耗**，不弹数量选择 —— 盘点追求的是「十秒过完整个冰箱」，
  * 需要部分数量的人退出盘点用普通消耗即可（判定本身是幂等的，不怕多点一次）。
  */
+/** 判定中：挡住「同一张卡连点两次」（第二次会让游标多前进一格、跳过下一件） */
+const judging = ref(false);
+
 async function judge(type: ConsumeType) {
+  if (judging.value) return;
   const it = current.value;
   if (!it) return;
-  const op = await items.consumeGroup([it.id], type);
-  if (op) {
-    ops.value = [...ops.value, op];
-    result.value = {
-      ...result.value,
-      [type === 'consumed' ? 'consumed' : 'wasted']: result.value[type === 'consumed' ? 'consumed' : 'wasted'] + 1,
-    };
+  judging.value = true;
+  try {
+    const op = await items.consumeGroup([it.id], type);
+    if (op) {
+      ops.value = [...ops.value, op];
+      result.value = {
+        ...result.value,
+        [type === 'consumed' ? 'consumed' : 'wasted']: result.value[type === 'consumed' ? 'consumed' : 'wasted'] + 1,
+      };
+    }
+  } finally {
+    judging.value = false;
   }
   cursor.value++;
 }

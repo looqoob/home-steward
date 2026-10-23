@@ -74,6 +74,17 @@ const UNITS = ['个', '袋', '斤', '瓶', '盒'];
 let scanner: Html5Qrcode | null = null;
 
 /**
+ * 同一个码在两帧里会被重复解码：用「忙锁 + 时间窗」去重。
+ *
+ * ⚠️ 不加锁会把同一个条码入库十几次（解码回调按 fps=10 触发，`doInbound` 又是异步的）。
+ * 锁挡「还没处理完的那几帧」，时间窗挡「处理完但镜头还没移开」。
+ */
+const DEDUPE_MS = 1500;
+const busy = ref(false);
+let lastCode = '';
+let lastHitAt = 0;
+
+/**
  * 彻底停掉摄像头。
  *
  * ⚠️ 只调 `scanner.stop()` 是不够的：必须显式 `getTracks().stop()`，
@@ -108,26 +119,37 @@ function close() {
   emit('update:modelValue', false);
 }
 
-/** 命中本地映射：直接入库 */
+/** 命中本地映射：直接入库（同一码只处理一次，见 `DEDUPE_MS`） */
 async function onScan(code: string) {
-  const hit = await barcodes.lookup(code);
-  if (!hit) {
-    // 未知条码 → 转入「教一次」表单
-    pendingCode.value = code;
-    newName.value = '';
-    newQty.value = 1;
-    newUnit.value = '个';
-    newLoc.value = locations.enabled[0]?.id ?? null;
-    newPrice.value = null;
-    return;
+  const now = Date.now();
+  if (busy.value) return;
+  if (code === lastCode && now - lastHitAt < DEDUPE_MS) return;
+  busy.value = true;
+  lastCode = code;
+  lastHitAt = now;
+  try {
+    const hit = await barcodes.lookup(code);
+    if (!hit) {
+      // 未知条码 → 停扫并转入「教一次」表单（继续扫只会反复重置表单）
+      await stopScanner();
+      pendingCode.value = code;
+      newName.value = '';
+      newQty.value = 1;
+      newUnit.value = '个';
+      newLoc.value = locations.enabled[0]?.id ?? null;
+      newPrice.value = null;
+      return;
+    }
+    await doInbound(
+      hit.name,
+      hit.quantity ?? 1,
+      hit.unit || '个',
+      hit.locationId ?? locations.enabled[0]?.id ?? null,
+      hit.price ?? null,
+    );
+  } finally {
+    busy.value = false;
   }
-  await doInbound(
-    hit.name,
-    hit.quantity ?? 1,
-    hit.unit || '个',
-    hit.locationId ?? locations.enabled[0]?.id ?? null,
-    hit.price ?? null,
-  );
 }
 
 async function startScan() {
@@ -171,6 +193,8 @@ async function doInbound(
     show('请先到「位置管理」启用一个位置');
     return;
   }
+  // ⚠️ 先停扫、再写库：解码回调按帧触发，等 addMany 落库完再停，中间那几帧已经各入库一次了
+  await stopScanner();
   const [row] = await items.addMany([{ name, quantity, unit, locationId, price: normalizePrice(price) }]);
   if (!row) return;
   show(`已加入库存：${row.name} ${row.quantity}${row.unit}`, 2200, {
@@ -178,45 +202,54 @@ async function doInbound(
     run: () => items.remove(row.id),
   });
   emit('inbound', row);
-  await stopScanner();
   close();
 }
 
-/** 首次见到：记住映射并同时入库 */
+/** 首次见到：记住映射并同时入库（`busy` 防连点：双击会记两条映射、建两件物品） */
 async function saveNewMapping() {
   const name = newName.value.trim();
-  if (!name || !pendingCode.value) return;
+  if (busy.value || !name || !pendingCode.value) return;
   if (!newLoc.value) {
     show('请先到「位置管理」启用一个位置');
     return;
   }
-  await barcodes.upsert({
-    code: pendingCode.value,
-    name,
-    quantity: newQty.value,
-    unit: newUnit.value,
-    locationId: newLoc.value,
-    price: newPrice.value,
-  });
-  await doInbound(name, newQty.value, newUnit.value, newLoc.value, newPrice.value);
+  busy.value = true;
+  try {
+    await barcodes.upsert({
+      code: pendingCode.value,
+      name,
+      quantity: newQty.value,
+      unit: newUnit.value,
+      locationId: newLoc.value,
+      price: newPrice.value,
+    });
+    await doInbound(name, newQty.value, newUnit.value, newLoc.value, newPrice.value);
+  } finally {
+    busy.value = false;
+  }
 }
 
-/** 只记映射不入库 */
+/** 只记映射不入库（同样防连点） */
 async function saveMappingOnly() {
   const name = newName.value.trim();
-  if (!name || !pendingCode.value) return;
-  // 价格一样要记住：这次不入库，下次扫到就该用得上
-  await barcodes.upsert({
-    code: pendingCode.value,
-    name,
-    quantity: newQty.value,
-    unit: newUnit.value,
-    locationId: newLoc.value,
-    price: newPrice.value,
-  });
-  show(`已记住：${name}`);
-  await stopScanner();
-  close();
+  if (busy.value || !name || !pendingCode.value) return;
+  busy.value = true;
+  try {
+    // 价格一样要记住：这次不入库，下次扫到就该用得上
+    await barcodes.upsert({
+      code: pendingCode.value,
+      name,
+      quantity: newQty.value,
+      unit: newUnit.value,
+      locationId: newLoc.value,
+      price: newPrice.value,
+    });
+    show(`已记住：${name}`);
+    await stopScanner();
+    close();
+  } finally {
+    busy.value = false;
+  }
 }
 
 /** 降级路径：手输条码数字 */
@@ -349,9 +382,9 @@ onBeforeUnmount(() => {
         <div v-if="expiryPreview" class="tip mb-3">{{ expiryPreview }}</div>
 
         <div class="flex flex-col gap-2">
-          <van-button block type="primary" :disabled="!newName.trim()" @click="saveNewMapping">记住并入库</van-button>
+          <van-button block type="primary" :disabled="!newName.trim() || busy" @click="saveNewMapping">记住并入库</van-button>
           <div class="flex gap-2">
-            <van-button class="flex-1" :disabled="!newName.trim()" @click="saveMappingOnly">只记名称</van-button>
+            <van-button class="flex-1" :disabled="!newName.trim() || busy" @click="saveMappingOnly">只记名称</van-button>
             <van-button class="flex-1" @click="close">取消</van-button>
           </div>
         </div>

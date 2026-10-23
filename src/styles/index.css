@@ -51,6 +51,16 @@
   --ease: 200ms ease;
 
   /*
+   * 顶部安全区（状态栏 / 刘海）高度 —— 这里是**首帧兜底**，不是真源。
+   *
+   * `env()` 在 Android WebView 里恒为 0（它只反映挖孔，不反映状态栏），而 APK 是 edge-to-edge 的，
+   * 光靠这行会让顶栏压在状态栏下面。真值由 `composables/useSafeArea.ts` 在启动时
+   * 量好并写成 `<html>` 的 inline `--safe-top`（inline 优先于 `:root`）。
+   * 组件一律用 `var(--safe-top)`，不要再各写 `env(safe-area-inset-top)`。
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+
+  /*
    * 图标排版 token（规范见 docs/ICON-TEXT-SPEC.md）。
    *
    * 尺寸只留四档：14 / 16 / 20 / 24，外加 26 的空状态插画（不与文字竞争，是特例）。

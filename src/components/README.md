@@ -332,7 +332,9 @@ pointerup / pointercancel / pointerleave → 取消计时
 
 - **不含返回逻辑**，只 emit `back`。返回动作由调用方决定（`router.back()` 或特定路由）。
 - 返回按钮带 `aria-label="返回"`，是无障碍要求。
-- **安全区处理（别删）**：`pt-[env(safe-area-inset-top,0px)]` + `h-[calc(48px+env(safe-area-inset-top,0px))]`。标题行的可视高度恒为 48px，安全区在它**之上**额外撑开，否则 PWA / APK（`viewport-fit=cover`）下标题会被状态栏压住。普通浏览器里 `env()` 为 0，等于 `h-12`，桌面端视觉不变。
+- **安全区处理（别删）**：`pt-[var(--safe-top)]` + `h-[calc(48px+var(--safe-top))]`。标题行的可视高度恒为 48px，安全区在它**之上**额外撑开，否则 APK（edge-to-edge）下标题与返回按钮会被状态栏压住。
+  - ⚠️ **这里只能写 `var(--safe-top)`，不能写 `env(safe-area-inset-top, 0px)`**：后者在 Android WebView 里恒为 0（只反映刘海 / 挖孔，不反映状态栏），写了等于没写 —— 这是 `v3` 修过的真实 bug（返回按钮点不到）。
+  - `--safe-top` 由 `src/composables/useSafeArea.ts` 在 `main.ts` 挂载前写入 `<html>` 的 inline style；`index.css` 里那份 `env(...)` 只是首帧兜底。普通浏览器里它通常为 0，等于 `h-12`，桌面端视觉不变。
 - 由外壳渲染时（方案 2），`TabLayout` **不再**渲染那块 12px 的纯白安全区占位，避免白色区域多出一截。
 
 ### 示例
@@ -639,7 +641,18 @@ const cursor = ref(0);
 - 进度显示写「3 / 12」而不只是百分比：这是个会走神的长流程，用户需要随时知道还剩几件。
 - **中途退出不保留进度**（`queue` / `cursor` / `ops` 都是纯内存 ref，没有落盘）。
   代价是重来一遍，换来的是不用处理「三天前盘了一半的进度到底还算不算」这个 corner case。
-- 筛选结果变化（换位置/关键词）就 `watch` 重置队列，否则进度会指向别的集合。
+- ⚠️ **不要 `watch(props.rows)` 重置队列**：`judge()` 里的 `consumeGroup()` 会 `load()`，
+  `rows` 每判定一次都变成新数组 → watcher 在 `judge` 的 await 续体之前触发，把 `cursor` 归零、计数清零，
+  表现是「第二件被跳过、进度越盘越少、收尾统计错」。筛选变化请退出重进（`StockView` 会重挂载本组件）。
+- `judging` 挡住同一张卡连点两次，否则游标会多前进一格、跳过下一件。
+
+## ScanSheet.vue — 扫码入库的**去重约定**
+
+- 解码回调**按帧触发**（`fps: 10`），必须「忙锁 + 同码时间窗」：`busy` 挡住还没处理完的那几帧，
+  `DEDUPE_MS = 1500` 挡住「处理完但镜头还没移开」。缺了这段，扫一次码会入库十几件。
+- **先 `stopScanner()` 再 `addMany`**：等落库完再停，中间那几帧已经各入库一次了。
+- 未知码跳到「教一次」表单前也要先停扫，否则持续解码会反复重置用户正在填的表单。
+- `saveNewMapping` / `saveMappingOnly` 同样用 `busy` 防连点（双击会记两条映射、建两件物品）。
 
 ---
 

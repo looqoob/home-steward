@@ -27,7 +27,7 @@ export const db: DataSources = createDexieSources();   // ← 换成 createSqlit
 | `backup/schema.ts` | 备份文件格式与校验 |
 | `backup/export.ts` | 导出 JSON / 触发下载 / 复制剪贴板 |
 | `backup/import.ts` | 导入（replace / merge 两种模式），**写库前先过 `sanitize`** |
-| `backup/sanitize.ts` | **v3 新增**：记录级清洗（`sanitizeItems` / `Logs` / `Locations` / `Shopping`） |
+| `backup/sanitize.ts` | **v3 新增**：记录级清洗（`sanitizeItems` / `Logs` / `Locations` / `Shopping` / **v1.0.1 增 `Dict`**） |
 
 ---
 
@@ -36,6 +36,7 @@ export const db: DataSources = createDexieSources();   // ← 换成 createSqlit
 ```ts
 interface Repository<T extends { id: string }> {
   all(): Promise<T[]>;              // 已自动过滤 soft-deleted
+  countAll(): Promise<number>;      // 含软删除行；判「是否首次启动」只能用它
   byId(id: string): Promise<T | undefined>;
   put(entity: T): Promise<void>;    // upsert：存在则整条替换
   bulkPut(entities: T[]): Promise<void>;
@@ -71,6 +72,7 @@ interface DataSources {
 
 1. **全部方法返回 Promise** —— 即使底层 API 是同步的。目的是与 Capacitor SQLite 这类异步插件 API 对齐，避免将来连锁重构。
 2. **`all()` / `byId()` 必须自动过滤 `deletedAt`** —— 调用方不应该到处写过滤。
+   ⚠️ 正因如此，「这条记录从没存在过」和「用户把它删光了」在 `all()` 眼里一样：**判「是否首次启动」必须用 `countAll()`**（含软删除行），否则位置删光后会重播预设（AGENTS 坑位 #60）。
 3. **`settings.get()` 永不 `undefined`** —— 缺失时补写 `DEFAULT_SETTINGS`。
 4. **`wipe()` 不动 settings** —— 导入「覆盖」时要保留用户的提醒偏好。
 5. **`probe()` 只读 + 补写，绝不覆盖已有设置** —— 它可能是用户在无痕模式下唯一的救命信息。
@@ -114,7 +116,10 @@ export const PRESET_LOCATIONS: Array<Pick<Location, 'name' | 'icon' | 'env'>>;
 export async function ensureSeed(db: DataSources): Promise<void>;
 ```
 
-**行为**：若 `locations.all()` 已非空则**直接返回**（幂等，可安全重复调用）；否则批量写入 6 个预设位置，sort 为 10/20/…/60，`builtin: true`。
+**行为**：若 `locations.countAll() > 0` 则**直接返回**（幂等，可安全重复调用）；否则批量写入 6 个预设位置，sort 为 10/20/…/60，`builtin: true`。
+
+> ⚠️ 判据必须是 `countAll()`（含软删除行），不能用 `all()`：`all()` 过滤掉了软删除，
+> 用户把 6 个预设位置全删光后计数变 0，会被误判成「首次启动」而重播一遍（AGENTS 坑位 #60）。
 
 **为什么用它**：用户第一次打开 App 时不应该面对空页面。`builtin: true` 标志着这是系统给的，将来做「恢复默认位置」时不误删用户自建的。
 
@@ -280,8 +285,15 @@ export function parseBackup(text: string): { ok: true; data: BackupFile } | { ok
 export async function importBackup(data: BackupFile, mode: ImportMode): Promise<ImportResult>;
 ```
 
-> ⚠️ v3 起 `importBackup` 在**写库之前**对四张表分别调 `sanitize`。
+> ⚠️ v3 起 `importBackup` 在**写库之前**对四张表分别调 `sanitize`（v1.0.1 起加第五张 `dict`，
+> 见 `sanitizeDict`）；设置对象在 `save` 前过 `domain/settings.normalizeSettings`。
 > 顺序不能反 —— 先写进去再清洗就来不及了，脏数据已经在 `bulkPut` 里了。
+
+> ⚠️ **防空覆盖守卫（v1.0.1）**：备份里 `items` 原始条数 > 0、但清洗后为 0 时，
+> `importBackup` 直接返回 `{ ok: false, message: …已中止导入，本机数据未改动 }`。
+> 覆盖模式是「先 `wipe()` 再写入」，没有这道守卫时，一份信封合法但记录全坏的备份会把本机清空、
+> 还报「已覆盖导入（物品 0 位置 0 日志 0）」。配套地，`BackupView` 在覆盖前把当前数据存成 JSON
+> 快照，成功 toast 带「撤销覆盖」（仅本次会话有效）。
 
 **两种模式**
 
@@ -349,18 +361,22 @@ export interface SanitizeResult<T> {
   fixed: number;     // 字段被修正过（数据还在，但值不合法）
 }
 
-export function sanitizeItems(input: unknown[], fallbackDate: string): SanitizeResult<Item>;
+export function sanitizeItems(input: unknown[], fallbackDate: string, now?: number): SanitizeResult<Item>;
 export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog>;
-export function sanitizeLocations(input: unknown[]): SanitizeResult<Location>;
-export function sanitizeShopping(input: unknown[]): SanitizeResult<ShoppingItem>;
+export function sanitizeLocations(input: unknown[], now?: number): SanitizeResult<Location>;
+export function sanitizeShopping(input: unknown[], now?: number): SanitizeResult<ShoppingItem>;
+// v1.0.1：自定义字典也进清洗（旧版漏了它 → 手改备份可让字典页永久白屏，坑位 #58）
+export function sanitizeDict(input: unknown[], now?: number): SanitizeResult<DictEntry>;
 ```
+
+> `now` 参数只是为了**可测试**（补时间戳/校验未来日期），业务调用不传，默认 `Date.now()`。
 
 ### 三条原则
 
 | 原则 | 具体做法 |
 | --- | --- |
-| **能修的修** | 日期非法 → `storedAt` 替换成导入当天、`expireAt` / `producedAt` 置 `null`；数量非有限正数 → 归 1；`status` 非法 → `in_stock`；`type` 非法 → `consumed`；`env` / `reason` 非法 → 各自兜底值 |
-| **修不了的丢** | 没有 `id` 或 `name`（非字符串 / 空串）的记录直接丢 —— 它在 UI 里无法呈现 |
+| **能修的修** | 日期非法 → `storedAt` 替换成导入当天、`expireAt` / `producedAt` 置 `null`；数量非有限正数 → 归 1；`status` 非法 → `in_stock`；`type` 非法 → `consumed`；`env` / `reason` 非法 → 各自兜底值；**时间戳**（`createdAt` / `updatedAt` / `deletedAt`）非有限数 → 补 `now` / 置 `null` 并计 `fixed` |
+| **修不了的丢** | 没有 `id` 或 `name`（非字符串 / 空串）的记录直接丢 —— 它在 UI 里无法呈现；**字典条目**的 `dictKey` 归一后为空、或 `days` 既不是正整数也不是 `-1` → 丢（不猜天数） |
 | **绝不静默** | 计数随 `ImportResult.sanitized` 返回，由 `BackupView` 如实告知用户 |
 
 > 为什么「能修就修」优先于「脏的就丢」：丢数据比显示错数据更糟 —— 用户宁可看到一个空日期，
@@ -387,11 +403,13 @@ export function sanitizeShopping(input: unknown[]): SanitizeResult<ShoppingItem>
 - `sanitizeLogs` 的 `at` 非法（非有限数或 ≤ 0）时补 `Date.now()` 并计 `fixed`。
 - `sanitizeLocations` 只丢缺 `id` 的（位置没有 `name` 也能显示「未命名位置」）。
 - `sanitizeShopping` 丢缺 `id` / `name` 的；`reason` 非法归 `'manual'`。
+- `sanitizeDict`（v1.0.1）：`env` 非法回落 `cool`；`displayName` 缺失回落 `dictKey`；`dictKey` 过 `normalizeName`（变了计 `fixed`）；同 `${dictKey}|${env}` 保留最后一条（同时计 `dropped` 与 `fixed`）。
+- 所有实体统一补 / 校验 `createdAt` / `updatedAt` / `deletedAt`：`deletedAt` 非有限数 → `null`（否则 `"deletedAt": "0"` 这种字符串为真，记录会进库后永久隐身，而计数报 `dropped:0 fixed:0`）。
 - 输入是 `unknown[]`，所以对非对象元素（`null` / 数字 / 数组）也有分支，不会抛错。
 
 ### 配套的测试
 
-`src/data/backup/__tests__/sanitize.test.ts`（22 例）。它虽然是 data 层测试，但仍然是
+`src/data/backup/__tests__/sanitize.test.ts`（45 例，含 `sanitizeDict` 与「软删除标记清洗」两组）。它虽然是 data 层测试，但仍然是
 纯函数、node 环境，可以直接跑。`vitest.config.ts` 的 `include` 是 `src/**/*.test.ts`。
 
 ---

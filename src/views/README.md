@@ -374,6 +374,9 @@ const trendMax = computed(() => Math.max(1, ...trend.value.map((p) => p.amount))
 
 同一个组件服务 `/item/new` 与 `/item/:id` 两条路由，靠 `route.params.id === 'new'` 区分。
 
+> ⚠️ 保存按钮有 `saving` 防连点：`items.add` 不去重，手机卡顿时双击会建出两条记录；
+> 编辑态第一条已 `router.back()`，第二条照样落库。新增「新建 / 保存」入口时照抄这个守卫。
+
 ### ★ 卖点功能：切换位置实时重算到期日
 
 选位置时下方会显示一张对比表（`compareLocations`），列出**每个候选位置的到期日**：
@@ -496,6 +499,21 @@ const urgentDays = computed({
 
 **导入后必须 `reloadStores()`** 重新 load 五个 store，否则 UI 显示旧内存状态。
 
+### ★ v1.0.1：覆盖前快照 + 「撤销覆盖」
+
+覆盖导入是「先 `db.wipe()` 再写入」，一旦写错就没有退路。`runImport` 在**调用 `importBackup` 之前**
+把当前数据序列化进 `snapshot`（`backupToJson(await buildBackup())`），成功提示带一个 action：
+
+```
+已覆盖导入：物品 12 · 位置 6 · 日志 30        [撤销覆盖]
+```
+
+点它 → `undoReplace()` 用快照再走一次 `importBackup(snapshot, 'replace')` 并 `reloadStores()`。
+
+- **只在本次会话有效**：`snapshot` 是页面内存里的字符串，离开页面就没了。够用 —— 覆盖是当场发生的。
+- 代价是一份 JSON 常驻内存（导出完全量数据），数据量很大时也不该省这一步：**没有它就等于没有退路**。
+- `importBackup` 自己还有一道「清洗后物品为 0 就中止」的守卫（见 `../data/README.md`）；快照是第二道。
+
 ### ★ v3：如实上报清洗结果
 
 `importBackup` 会在写库前跑 `data/backup/sanitize.ts`（见 `../data/README.md`），
@@ -532,7 +550,7 @@ const urgentDays = computed({
 ### 职责
 
 - 底部三 Tab（库存 / 清单 / 我的）
-- 顶部**纯白无标题**占位（只负责安全区高度 `env(safe-area-inset-top) + 12px`）
+- 顶部**纯白无标题**占位（只负责安全区高度 `var(--safe-top) + 12px`，即 `h-[calc(var(--safe-top)+12px)]`）
 - **由 `meta.header` 驱动的子页顶栏**：路由带 `meta.header` 时渲染 `NavBar`（在滚动容器外面），并跳过上面那块纯白占位（`NavBar` 自己承担安全区，否则白色多出 12px）
 - 右下角 FAB「快速入库」，**只在库存 Tab 显示**
 - 承载 `QuickAddSheet`

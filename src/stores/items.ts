@@ -72,9 +72,13 @@ export const useItemsStore = defineStore('items', () => {
    * 其它情况一律各存各的 —— 到期日不同就分属不同批次，合并会丢掉「哪一份先过期」。
    *
    * @returns 落库后的完整 Item 列表，顺序与 `inputs` 一致
+   * @param opts.merge 是否允许**跨 input 合并**（默认 `true`）。清单「全部入库」传 `false`：
+   *        合并会让多行清单指向同一条记录，而撤销是按「1 行 = 1 物品」回滚的，
+   *        撤销一行再入库就会把数量算成双份。关闭后一条 input = 一条批次记录，符合 §5.6。
    */
-  async function addMany(inputs: NewItemInput[]): Promise<Item[]> {
+  async function addMany(inputs: NewItemInput[], opts: { merge?: boolean } = {}): Promise<Item[]> {
     if (!inputs.length) return [];
+    const merge = opts.merge !== false;
     const dict = useDictStore();
     const locs = useLocationsStore();
     const now = Date.now();
@@ -91,7 +95,7 @@ export const useItemsStore = defineStore('items', () => {
     const byId = new Map<string, Item>();
     const landed: Item[] = [];
     for (const item of created) {
-      const hit = findMergeTarget(item, [...byId.values()], foodKeyOf);
+      const hit = merge ? findMergeTarget(item, [...byId.values()], foodKeyOf) : null;
       if (hit) {
         const next = { ...hit, quantity: round2(hit.quantity + item.quantity), updatedAt: now };
         byId.set(hit.id, next);
@@ -186,7 +190,17 @@ export const useItemsStore = defineStore('items', () => {
    * await items.consume(eggId, 'consumed', 2);  // 20 → 18，仍在库
    * await items.consume(eggId, 'wasted');       // 剩下的全扔掉
    */
+  /**
+   * 正在消耗的 item id（防连点）。
+   *
+   * 用 `Set` 而不是布尔：不同物品允许并发消耗，只有**同一件**在飞时才挡。
+   * 挡不住的话，qty=1 时双击 ✓ 会写两条日志（物品只 finished 一次）→ 统计翻倍、撤销只能删一条。
+   */
+  const consumeInFlight = new Set<string>();
+
   async function consume(id: string, type: ConsumeType, qty?: number): Promise<string> {
+    // 同一物品的消耗还没落库：直接忽略这次点击（调用方收到 '' 就不会弹 toast）
+    if (consumeInFlight.has(id)) return '';
     const cur = byId(id);
     // ⚠️ 必须校验 status === 'in_stock'：整条消耗后 quantity 保留原值（供日志对账），
     // 如果只看 byId（过滤 deletedAt），已 finished 的物品会被再次消耗，日志重复写入污染统计。
@@ -205,16 +219,21 @@ export const useItemsStore = defineStore('items', () => {
     // ⚠️ log + item 包进同一事务：bulkConsume / consumeGroup 都这么做，
     // 单条路径此前漏了。若 logs.put 成功后 items.put 失败（Quota / IO），
     // 日志已落库但物品未更新 → 统计虚高、撤销时会二次加回。
-    await db.transaction(async () => {
-      await db.logs.put(log);
-      if (take >= remain) {
-        await db.items.put({ ...cur, status: 'finished', updatedAt: now });
-      } else {
-        await db.items.put({ ...cur, quantity: round2(remain - take), updatedAt: now });
-      }
-    });
-    await load();
-    return log.id;
+    consumeInFlight.add(id);
+    try {
+      await db.transaction(async () => {
+        await db.logs.put(log);
+        if (take >= remain) {
+          await db.items.put({ ...cur, status: 'finished', updatedAt: now });
+        } else {
+          await db.items.put({ ...cur, quantity: round2(remain - take), updatedAt: now });
+        }
+      });
+      await load();
+      return log.id;
+    } finally {
+      consumeInFlight.delete(id);
+    }
   }
 
   /**
@@ -367,6 +386,8 @@ export const useItemsStore = defineStore('items', () => {
    * @example await items.consumeGroup(['a','b'], 'consumed', 2) // 先扣 10-08 那盒
    */
   async function consumeGroup(memberIds: string[], type: ConsumeType, qty?: number): Promise<BulkOp | null> {
+    // 组内任一成员正在被单条消耗（或上一次盘点还没落库）时让路，避免同一件被扣两次
+    if (memberIds.some((id) => consumeInFlight.has(id))) return null;
     const targets = pickActive(memberIds);
     if (!targets.length) return null;
     const total = round2(targets.reduce((s, i) => s + normalizeQty(i.quantity), 0));
@@ -377,19 +398,24 @@ export const useItemsStore = defineStore('items', () => {
     const before = targets.map((i) => ({ ...i }));
     const plan = planGroupConsume(targets, take, type, now);
     if (!plan.logs.length) return null;
-    await db.transaction(async () => {
-      await db.logs.bulkPut(plan.logs);
-      await db.items.bulkPut(plan.items);
-    });
-    await load();
-    return remember({
-      id: newId(),
-      kind: 'consume',
-      consumeType: type,
-      items: before,
-      logIds: plan.logs.map((l) => l.id),
-      createdAt: now,
-    });
+    targets.forEach((t) => consumeInFlight.add(t.id));
+    try {
+      await db.transaction(async () => {
+        await db.logs.bulkPut(plan.logs);
+        await db.items.bulkPut(plan.items);
+      });
+      await load();
+      return remember({
+        id: newId(),
+        kind: 'consume',
+        consumeType: type,
+        items: before,
+        logIds: plan.logs.map((l) => l.id),
+        createdAt: now,
+      });
+    } finally {
+      targets.forEach((t) => consumeInFlight.delete(t.id));
+    }
   }
 
   /** 批量换位置：按新位置重算到期日（手填保质期优先级不变） */

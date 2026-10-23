@@ -27,6 +27,7 @@
 | `grouping.ts` | **v3 新增**：同名同位置折叠、FEFO 排序与分配、入库时真合并判据 |
 | `timeline.ts` | **v3 新增**：到期日时间轴分桶（复用 `Freshness`，不重新解析日期） |
 | `price.ts` | **v3 新增**：金额口径的唯一定义（`normalizePrice` / `priceFromInput` / `amountOf` / `round2`） |
+| `settings.ts` | **v1.0.1 新增**：设置归一（`normalizeSettings`）—— 旧 IndexedDB 记录与备份导入共用的唯一校验入口 |
 
 > v2 各模块的用法与坑位见 [`docs/V2-CHANGELOG.md`](../../docs/V2-CHANGELOG.md)；
 > v3 见 [`docs/V3-CHANGELOG.md`](../../docs/V3-CHANGELOG.md)。
@@ -171,7 +172,10 @@ const notifId = hashId(id);      // 1234567890
 
 ### 边界条件
 
-- `KEYWORDS` 顺序敏感：`meat` 在 `fruit` 之前，所以「鸡肉」不会被误判；调整顺序要重新验证常见食材。
+- `KEYWORDS` 的**数组顺序就是优先级**（先命中先返回），编排理由是真实误判：
+  `eggMilk` 必须在 `meat` 前（「土鸡蛋」「有机牛奶」含「鸡 / 牛」），`vegetable` 在 `fruit` 前（「黄瓜」「南瓜」含「瓜」），
+  `frozenFood` 在 `grainOil` 前（「速冻饺子」含「饺」），`fruit` 在 `grainOil` 前（「牛油果」含「油」）。
+  `meat` 不再收裸「牛 / 羊」，否则「牛油果」会被判成肉。改顺序必须跑 `__tests__/categories.test.ts` 的 27 条表驱动用例。
 - `guessCategory` 是**子串匹配**（`name.includes(word)`），单字关键词（如 `'菜'` `'米'`）命中面很广，这是刻意的宽松策略 —— 猜错只影响兜底天数，用户可手填覆盖。
 - `fallbackDays` 对 `env === 'none'` 返回 `null`（全局值是 `-1`，不满足 `> 0`）。
 
@@ -751,6 +755,31 @@ contrastRatio('#ffffff', '#228055'); // 4.9
 
 `color-mix()` 做不了「不达标就继续调」的闭环，而且老 WebView（Capacitor 壳）未必支持。
 这里在 JS 里算完，由 `composables/useTheme.ts` 写成 `<html>` 的 inline style，最稳。
+
+---
+
+## settings.ts — 设置归一（**v1.0.1**）
+
+`Settings` 有两个来源都可能是脏的：**旧版本留下的 IndexedDB 记录**（没有新字段）和**手改过的备份 JSON**
+（`"remindEnabled": "false"` 是真值、`lastBackupAt: "abc"` 让「上次备份」算出 NaN、`id` 不是 `'singleton'`
+时整条被忽略还留一行垃圾）。所以归一规则**只能住 domain**：导入路径不经过 store，写在 store 里就漏了一条。
+
+```ts
+import { normalizeSettings } from '@/domain/settings';
+
+normalizeSettings({ id: 'x', remindEnabled: 'false', lastBackupAt: 'abc' });
+// → { id: 'singleton', remindEnabled: true, lastBackupAt: null, … }（缺的字段全用 DEFAULT_SETTINGS）
+```
+
+| 规则 | 做法 |
+| --- | --- |
+| `id` | 恒为 `'singleton'`（单例表，主键写错就该纠正，不是丢弃） |
+| 布尔 | `typeof v === 'boolean'` 才算数，字符串一律回落 `DEFAULT_SETTINGS` |
+| 枚举 | `themeMode` / `stockViewMode` / `accent` 白名单或格式校验后回落 |
+| 数值 | `soonDays` / `urgentDays` / `remindHour` / `remindMinute` clamp；`urgentDays ≤ soonDays` |
+| 时间戳 | 非有限正数 → `null`（`null` 是合法语义：从没备份 / 从没提醒过） |
+
+`now` 参数只为可测试性；store 与 `importBackup` 共用这一个函数，**不要再在别处拼一份 `{ ...DEFAULT_SETTINGS }`**。
 
 ---
 

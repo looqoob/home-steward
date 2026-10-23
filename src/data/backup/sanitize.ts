@@ -26,11 +26,16 @@
 
 export { isDateStr } from '@/domain/dates';
 
-import type { ConsumeLog, Item, Location, ShoppingItem } from '@/domain/types';
+import type { ConsumeLog, DictEntry, EnvType, Item, Location, ShelfLifeValue, ShoppingItem } from '@/domain/types';
+import { NOT_RECOMMENDED } from '@/domain/types';
 import { isDateStr } from '@/domain/dates';
 // 金额口径复用 domain/price：`null`=没填价、必须有限非负的规则只有那一份定义。
 // 早期这里只校验了日志侧的 price，物品侧原样穿透 —— 就是漏了这一行 import。
 import { normalizePrice } from '@/domain/price';
+import { normalizeName } from '@/domain/normalize';
+
+/** 合法的环境枚举（位置的配色与保质期链都按它查表，非法值会让查询落空） */
+const KNOWN_ENV = new Set<string>(['chilled', 'frozen', 'cool', 'dry', 'ventilated', 'dark', 'none']);
 
 // 日期格式判断住在 `domain/dates`（纯函数、不碰数据源），
 // 与 `normalizeName` 当初从 data 迁到 domain 是同一回事：data 可以依赖 domain，反之不行。
@@ -48,6 +53,33 @@ function moneyFixed(raw: unknown, cleaned: number | null): 0 | 1 {
   return raw != null && cleaned !== raw ? 1 : 0;
 }
 
+/**
+ * 时间戳归一：`null` / `undefined` → `fallback`（缺失不算脏）；其它非法值 → `fallback` + 计一次修正。
+ *
+ * ⚠️ 这不是洁癖：`createdAt` / `updatedAt` 是合并导入的**排序键**
+ * （`mergeById` 用 `updatedAt ?? createdAt` 取较新者），`"2026-10-01"` 或 `NaN` 会让
+ * 比较恒为 `false`，本地旧数据就永远压过备份里的新数据。
+ */
+function epoch(v: unknown, fallback: number, onFixed: () => void): number {
+  if (v == null) return fallback;
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+  onFixed();
+  return fallback;
+}
+
+/**
+ * 软删时间戳：`null` / `undefined` → `null`；非法值（`"0"`、负数、字符串）→ `null` + 计一次修正。
+ *
+ * ⚠️ 仓库层用 `!r.deletedAt` 过滤，而字符串 `"0"` 是**真值** —— 不清洗的话这条记录
+ * 会永久隐身，用户还看到 `dropped: 0 fixed: 0`，无从查证。
+ */
+function deletedAtOf(v: unknown, onFixed: () => void): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+  onFixed();
+  return null;
+}
+
 /** 清洗结果：可用记录 + 各类被丢弃 / 被修正的条数 */
 export interface SanitizeResult<T> {
   rows: T[];
@@ -61,10 +93,11 @@ export interface SanitizeResult<T> {
  * 物品清洗。
  *
  * ⚠️ 丢 `status`：合并两种消耗状态会直接算错「在库」与浪费统计；宁可这条不进统计。
- * ⚠️ 丢 `deletedAt`：导入时上游已过滤，这里再滤一次是防御 `sanitizeLogs` 之外的路径。
+ * ⚠️ `deletedAt` 也要归一：仓库层用 `!r.deletedAt` 过滤，字符串 `"0"` 是真值 → 记录永久隐身。
  * @param fallbackDate 记录缺 `storedAt` 时补的日期（一般是导入当天的 'YYYY-MM-DD'）
+ * @param now 缺 `createdAt` / `updatedAt` 时补的时间戳（测试传入固定值）
  */
-export function sanitizeItems(input: unknown[], fallbackDate: string): SanitizeResult<Item> {
+export function sanitizeItems(input: unknown[], fallbackDate: string, now: number = Date.now()): SanitizeResult<Item> {
   const rows: Item[] = [];
   let dropped = 0;
   let fixed = 0;
@@ -103,6 +136,7 @@ export function sanitizeItems(input: unknown[], fallbackDate: string): SanitizeR
     fixed += moneyFixed(o.price, price);
     const note = typeof o.note === 'string' ? o.note : null;
     if (o.note != null && note !== o.note) fixed++;
+    const createdAt = epoch(o.createdAt, now, () => fixed++);
 
     rows.push({
       ...(o as unknown as Item),
@@ -118,6 +152,9 @@ export function sanitizeItems(input: unknown[], fallbackDate: string): SanitizeR
       // 这两个字段被列表按字符串用，非字符串会在渲染时炸掉
       locationId: str(o.locationId, ''),
       unit: str(o.unit, '个') || '个',
+      createdAt,
+      updatedAt: epoch(o.updatedAt, createdAt, () => fixed++),
+      deletedAt: deletedAtOf(o.deletedAt, () => fixed++),
     });
   }
   return { rows, dropped, fixed };
@@ -161,13 +198,14 @@ export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog> {
     fixed += moneyFixed(o.unitPrice, unitPrice);
     const note = typeof o.note === 'string' ? o.note : null;
     if (o.note != null && note !== o.note) fixed++;
+    const createdAt = epoch(o.createdAt, at, () => fixed++);
 
     rows.push({
       ...(o as unknown as ConsumeLog),
       id,
       name,
       at,
-      createdAt: num(o.createdAt, at),
+      createdAt,
       quantity: goodQty ? rawQty : 1,
       type,
       expireAt,
@@ -176,17 +214,17 @@ export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog> {
       price,
       unitPrice,
       note,
+      deletedAt: deletedAtOf(o.deletedAt, () => fixed++),
     });
   }
   return { rows, dropped, fixed };
 }
 
 /** 位置清洗：`sort` 非数字会让位置管理页的排序错乱，`env` 非法会让配色查询拿不到值 */
-export function sanitizeLocations(input: unknown[]): SanitizeResult<Location> {
+export function sanitizeLocations(input: unknown[], now: number = Date.now()): SanitizeResult<Location> {
   const rows: Location[] = [];
   let dropped = 0;
   let fixed = 0;
-  const KNOWN_ENV = new Set(['chilled', 'frozen', 'cool', 'dry', 'ventilated', 'dark', 'none']);
   for (const raw of input) {
     if (!raw || typeof raw !== 'object') {
       dropped++;
@@ -201,6 +239,7 @@ export function sanitizeLocations(input: unknown[]): SanitizeResult<Location> {
     if (!Number.isFinite(sort)) fixed++;
     const env: Location['env'] =
       typeof o.env === 'string' && KNOWN_ENV.has(o.env) ? (o.env as Location['env']) : (fixed++, 'cool');
+    const createdAt = epoch(o.createdAt, now, () => fixed++);
     rows.push({
       ...(o as unknown as Location),
       id: o.id,
@@ -208,13 +247,16 @@ export function sanitizeLocations(input: unknown[]): SanitizeResult<Location> {
       env,
       sort: Number.isFinite(sort) ? sort : 999,
       enabled: o.enabled !== false,
+      createdAt,
+      updatedAt: epoch(o.updatedAt, createdAt, () => fixed++),
+      deletedAt: deletedAtOf(o.deletedAt, () => fixed++),
     });
   }
   return { rows, dropped, fixed };
 }
 
 /** 清单项清洗：`locationId` 脏值会让「按位置分组」把它塞进错误的位置桶 */
-export function sanitizeShopping(input: unknown[]): SanitizeResult<ShoppingItem> {
+export function sanitizeShopping(input: unknown[], now: number = Date.now()): SanitizeResult<ShoppingItem> {
   const rows: ShoppingItem[] = [];
   let dropped = 0;
   let fixed = 0;
@@ -236,13 +278,96 @@ export function sanitizeShopping(input: unknown[]): SanitizeResult<ShoppingItem>
     const rawLoc = o.locationId;
     const locationId: string | null = typeof rawLoc === 'string' && rawLoc ? rawLoc : null;
     if (rawLoc !== undefined && rawLoc !== locationId) fixed++;
+    const createdAt = epoch(o.createdAt, now, () => fixed++);
     rows.push({
       ...(o as unknown as ShoppingItem),
       id: o.id,
       name: o.name,
       reason,
       locationId,
+      createdAt,
+      updatedAt: epoch(o.updatedAt, createdAt, () => fixed++),
+      deletedAt: deletedAtOf(o.deletedAt, () => fixed++),
     });
   }
   return { rows, dropped, fixed };
+}
+
+/**
+ * 自定义字典清洗。
+ *
+ * ⚠️ 这里是**白屏级**防线：`stores/dict` 的 `buildCustomMap` 会对每条记录的
+ * `dictKey` 调 `normalizeName`（内部 `.trim()`），一旦 `dictKey` 是数字 / `null`，
+ * `map` 这个 computed 就抛 TypeError —— 物品编辑、快速入库、扫码、清单行内入库
+ * **四处页面一起永久白屏**，重启也一样，而数据只在本机、没有副本可回滚。
+ *
+ * 规则：
+ * - 缺 `id`、缺可用 `dictKey`、`days` 不是「正整数或 -1（不建议）」→ **整条丢弃**并计数；
+ *   做不到「猜一个天数」—— 猜错等于给用户错误保质期，比丢掉这条规则更糟。
+ * - `dictKey` 用 `normalizeName` 归一（与运行时索引键一致）；`env` 非法回落 `cool`；
+ * - 同 `dictKey|env` 只保留**最后一条**（导入顺序靠后视为用户的新意图）。
+ *
+ * @param now 缺 `createdAt` / `updatedAt` 时补的时间戳
+ */
+export function sanitizeDict(input: unknown[], now: number = Date.now()): SanitizeResult<DictEntry> {
+  const byKey = new Map<string, DictEntry>();
+  let dropped = 0;
+  let fixed = 0;
+
+  for (const raw of input) {
+    if (!raw || typeof raw !== 'object') {
+      dropped++;
+      continue;
+    }
+    const o = raw as Record<string, unknown>;
+    if (typeof o.id !== 'string' || !o.id) {
+      dropped++;
+      continue;
+    }
+    const rawKey = o.dictKey;
+    const dictKey = typeof rawKey === 'string' ? normalizeName(rawKey) : '';
+    if (!dictKey) {
+      dropped++;
+      continue;
+    }
+    if (rawKey !== dictKey) fixed++;
+
+    const days = o.days;
+    const goodDays = typeof days === 'number' && Number.isFinite(days) && (days === NOT_RECOMMENDED || days > 0);
+    if (!goodDays) {
+      dropped++;
+      continue;
+    }
+
+    const env: EnvType = typeof o.env === 'string' && KNOWN_ENV.has(o.env) ? (o.env as EnvType) : (fixed++, 'cool');
+    const displayName =
+      typeof o.displayName === 'string' && o.displayName.trim() ? o.displayName.trim() : dictKey;
+    if (o.displayName !== undefined && displayName !== o.displayName) fixed++;
+    const reason = typeof o.reason === 'string' ? o.reason : null;
+    if (o.reason != null && reason !== o.reason) fixed++;
+    const createdAt = epoch(o.createdAt, now, () => fixed++);
+
+    const row: DictEntry = {
+      id: o.id,
+      dictKey,
+      displayName,
+      env,
+      days: days as ShelfLifeValue,
+      reason,
+      // 导入的条目一律是自定义规则（内置字典在代码里，不进备份）
+      origin: 'custom',
+      createdAt,
+      updatedAt: epoch(o.updatedAt, createdAt, () => fixed++),
+      deletedAt: deletedAtOf(o.deletedAt, () => fixed++),
+    };
+
+    const slot = `${dictKey}|${env}`;
+    if (byKey.has(slot)) {
+      dropped++;
+      fixed++;
+    }
+    byKey.delete(slot);
+    byKey.set(slot, row);
+  }
+  return { rows: Array.from(byKey.values()), dropped, fixed };
 }

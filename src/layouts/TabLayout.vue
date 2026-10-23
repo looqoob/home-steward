@@ -100,8 +100,13 @@ function go(path: string) {
     <!--
       有标题栏的页面由 NavBar 自己承担状态栏安全区（它是容器首个元素），这里不能再叠占位，
       否则白色区域会多出 12px。三个主 Tab 没有标题，才用纯白占位撑开安全区，避免顶部露灰缝。
+
+      高度 = `--safe-top`（状态栏 / 刘海，见 composables/useSafeArea.ts）+ 12px：
+      前者让白色铺满状态栏背后，后者是状态栏下方那一"点点"呼吸空间。
+      ⚠️ 别写回 `env(safe-area-inset-top)`：它在 Android WebView 里恒为 0，
+      主 Tab 页的标题行会整体压在状态栏下面。
     -->
-    <div v-if="!headerTitle" class="flex-none bg-card h-[calc(env(safe-area-inset-top,0px)+12px)]"></div>
+    <div v-if="!headerTitle" class="flex-none bg-card h-[calc(var(--safe-top)+12px)]"></div>
     <NavBar v-else :title="headerTitle" show-back @back="router.back()" />
 
     <!--
