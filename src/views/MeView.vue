@@ -40,6 +40,14 @@ const themeHint = computed(() => {
   return '跟随系统';
 });
 
+/**
+ * 进设置（v1.1 F13 自库存页迁来）。用 `push` 而不是 `replace`：改完设置要靠
+ * 返回键回到本页。列表展示方式在「设置 → 库存设置」里。
+ */
+function openSettings() {
+  router.push('/settings');
+}
+
 const links = computed(() => [
   { label: '更新日志', to: '/changelog', hint: 'v1.1' },
   { label: '统计', to: '/stats', hint: '' },
@@ -54,8 +62,7 @@ const links = computed(() => [
     hint: barcodes.list.length > 0 ? `${barcodes.list.length} 条` : '',
   },
   { label: '外观与主题', to: '/appearance', hint: themeHint.value },
-  // 页面标题已改为「设置」：它现在同时承载「库存设置」与「提醒设置」两个分区
-  { label: '设置', to: '/settings', hint: '' },
+  // 「设置」入口在页面顶部齿轮（v1.1 F13）：一处入口即可，列表里不再重复
   { label: '数据备份', to: '/backup', hint: '' },
 ]);
 /**
@@ -74,7 +81,22 @@ const backupTip = computed(() =>
     <!-- v1.1 F9：标题行固定，其余内容内部滚动（与其他 Tab 页同一模式）。
          ⚠️ 不要加 pt-4：顶部 16px 留白由 PageHeader 的 topGap 唯一承担，
          叠加会把标题行顶到比库存/清单页低 16px（v1.1 F12 实测抓到）。 -->
-    <PageHeader title="我的" />
+    <PageHeader title="我的">
+      <template #actions>
+        <!-- 设置齿轮（v1.1 F13 自库存页迁来）：独立图标（无文字伴随）按规范用 md(20) -->
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="设置"
+          @click="openSettings"
+        >
+          <svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.2" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      </template>
+    </PageHeader>
     <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain pb-3">
 
     <button
