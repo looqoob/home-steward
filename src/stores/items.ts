@@ -11,7 +11,7 @@ import { normalizePrice, normalizeQty } from '@/domain/price';
 import { lookupFood, foodKeyOf } from '@/data/dict';
 import { snoozeUntilOf } from '@/domain/todo';
 import { planBulkConsume, planBulkMove, planBulkRemove, buildConsumeLog, type BulkOp } from '@/domain/bulk';
-import { planGroupConsume, findMergeTarget } from '@/domain/grouping';
+import { planGroupConsume, foldKeyOf, expiryCompatible } from '@/domain/grouping';
 import { useDictStore } from './dict';
 import { useLocationsStore } from './locations';
 
@@ -52,7 +52,8 @@ export const useItemsStore = defineStore('items', () => {
     const dict = useDictStore();
     const locs = useLocationsStore();
     const category = lookupFood(input.name)?.category ?? null;
-    const item = createItem(input, locs.envOf(input.locationId), dict.resolve, fallbackDays, Date.now(), category);
+    // aliasKey 必传：dictKey 取字典规范词根，「番茄」/「西红柿」才折叠得起来（REV-14）
+    const item = createItem(input, locs.envOf(input.locationId), dict.resolve, fallbackDays, Date.now(), category, foodKeyOf);
     await db.items.put(item);
     await load();
     return item;
@@ -83,7 +84,7 @@ export const useItemsStore = defineStore('items', () => {
     const locs = useLocationsStore();
     const now = Date.now();
     const created = inputs.map((input) =>
-      createItem(input, locs.envOf(input.locationId), dict.resolve, fallbackDays, now, lookupFood(input.name)?.category ?? null),
+      createItem(input, locs.envOf(input.locationId), dict.resolve, fallbackDays, now, lookupFood(input.name)?.category ?? null, foodKeyOf),
     );
 
     // 一次遍历同时算出「要写哪些行」和「每个 input 最终落在哪一行」。
@@ -92,17 +93,30 @@ export const useItemsStore = defineStore('items', () => {
     // 所以每合并一次就把目标换成合并后的那份，后面的 input 继续往它上面加。
     // `landed[i]` 与 `inputs[i]` 严格一一对应 —— 调用方（清单入库的 `inboundItemId`
     // 与「撤销入库」）靠这个对应关系反查，按名字 find 是靠不住的。
+    //
+    // 合并候选用 `折叠键 → 目标行` 的 Map 索引（REV-35）：此前每个 input 都
+    // `[...byId.values()]` 重建数组再线性扫，200 行清单入库是 O(n²) 次比较。
+    // 折叠键与 `findMergeTarget` 同源（foldKeyOf + expiryCompatible），结果不变。
     const byId = new Map<string, Item>();
+    const byFoldKey = new Map<string, Item>();
     const landed: Item[] = [];
     for (const item of created) {
-      const hit = merge ? findMergeTarget(item, [...byId.values()], foodKeyOf) : null;
+      let hit: Item | undefined;
+      if (merge) {
+        const key = foldKeyOf(item, foodKeyOf);
+        const candidate = byFoldKey.get(key);
+        // 折叠键命中还要过到期日兼容判定（与 findMergeTarget 完全同一套规则）
+        if (candidate && expiryCompatible(candidate.expireAt, item.expireAt)) hit = candidate;
+      }
       if (hit) {
         const next = { ...hit, quantity: round2(hit.quantity + item.quantity), updatedAt: now };
         byId.set(hit.id, next);
+        byFoldKey.set(foldKeyOf(next, foodKeyOf), next);
         landed.push(next);
         continue;
       }
       byId.set(item.id, item);
+      byFoldKey.set(foldKeyOf(item, foodKeyOf), item);
       landed.push(item);
     }
 
@@ -242,8 +256,15 @@ export const useItemsStore = defineStore('items', () => {
    *
    * @param logId `consume()` 返回的日志 id
    * @remarks
-   * 整条消耗时 `quantity` 并未被扣减（仍是原值），只有**部分消耗**需要回加；
-   * 靠 `status` 判断：撤销时若商品仍是 `in_stock`，说明当初是部分消耗。
+   * 回加与否**不能只看 `status`**（REV-32）：「部分消耗 + 整条消耗」后撤销那条部分消耗时，
+   * `status` 已是 `finished`，按 status 判定会漏加。改用**数量对账**：
+   * - 整条消耗（无论是否跟在部分消耗后）的 `take` 恰好等于落库时保留的 `quantity`
+   *   （`take >= 剩余` 时数量不减只置 finished）→ `cur.quantity === log.quantity` → 不加回；
+   * - 部分消耗必然 `cur.quantity > log.quantity`（扣减过）→ 回加 `log.quantity`；
+   * - 部分消耗后紧跟整条消耗、撤销部分那条：`cur.quantity`（= 整条时保留的剩余）> take → 回加，
+   *   与用户「撤销就是加回来」的直觉一致。
+   * 已知极限：两次操作的数量恰好相等（如 4 件分两次各 2）时无法区分，按「不加回」处理，
+   * 宁可少给也不凭空造库存。
    * @example await items.undoConsume(logId)
    */
   async function undoConsume(logId: string) {
@@ -255,13 +276,10 @@ export const useItemsStore = defineStore('items', () => {
     // 日志仍在，用户再点撤销会二次加回数量。此前这两步没包事务。
     await db.transaction(async () => {
       if (cur) {
-        // addBack 判定：item 仍是 in_stock → 当初是部分消耗，需要回加 take；
-        // item 是 finished → 当初是整条消耗，quantity 保留原值，不需要加回。
-        // 但连续两次 partial + full 后撤销第一条 partial 会漏加（status 已被 full 改成 finished），
-        // 所以更稳的做法是：用 `log.quantity` 与 `cur.quantity` 的对账来兜底——
-        // 若 cur.quantity < log.quantity，说明 quantity 被扣减过，需要加回。
-        const addBack = cur.status === 'in_stock' ? normalizeQty(log.quantity) : 0;
-        const newQty = addBack ? round2(normalizeQty(cur.quantity) + addBack) : cur.quantity;
+        const q = normalizeQty(cur.quantity);
+        const take = normalizeQty(log.quantity);
+        const addBack = q === take ? 0 : take;
+        const newQty = addBack ? round2(q + addBack) : cur.quantity;
         await db.items.put({
           ...cur,
           status: 'in_stock',

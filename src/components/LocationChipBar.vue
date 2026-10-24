@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { ENV_MAP } from '@/domain/types';
+import { countsByLocation } from '@/domain/locationRules';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 
@@ -14,8 +15,11 @@ const items = useItemsStore();
 
 const total = computed(() => items.active.length);
 
+// 一次扫描聚合出所有位置的计数（REV-35）：此前模板里每个 Pill 各扫一遍 items
+const counts = computed(() => countsByLocation(items.active));
+
 function countOf(id: string) {
-  return items.active.filter((i) => i.locationId === id).length;
+  return counts.value.get(id) ?? 0;
 }
 </script>
 

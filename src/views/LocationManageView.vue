@@ -8,6 +8,7 @@ import FormField from '@/components/FormField.vue';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { ENV_LIST, ENV_MAP, type EnvType, type Location } from '@/domain/types';
+import { countsByLocation } from '@/domain/locationRules';
 import { useToast } from '@/composables/useToast';
 
 const locations = useLocationsStore();
@@ -21,8 +22,11 @@ const form = ref({ name: '', icon: '储', env: 'cool' as EnvType });
 
 const list = computed(() => locations.all);
 
+// 一次扫描聚合出所有位置的在库数（REV-35）：此前每行各扫一遍 items，O(位置×物品)
+const counts = computed(() => countsByLocation(items.list));
+
 function countOf(id: string) {
-  return locations.countOf(id, items.list);
+  return counts.value.get(id) ?? 0;
 }
 
 async function move(id: string, dir: -1 | 1) {
