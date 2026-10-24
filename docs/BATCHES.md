@@ -27,6 +27,7 @@
 | 批次 F3 | 2026-10-24 完成 | 通知点击直达物品（原生壳；PWA 侧需 injectManifest 留二期） | ✅ 完成（commit 42341e0） | ITERATION-REVIEW §15 F3 |
 | 批次 F4 | 2026-10-24 完成 | 月末库存快照对比：snapshots 表（Dexie v3、SCHEMA_VERSION 3、备份全链路同步）+ 统计页「本月 vs 上月末」 | ✅ 完成（commit c7b5b5a） | ITERATION-REVIEW §15 F4 |
 | 批次 F5 | 2026-10-24 完成 | 自定义食材图标：IconPicker（内置集 + 从既有物品统计「你的常用」），入库/编辑两处接入 | ✅ 完成（commit f3ab502） | ITERATION-REVIEW §15 F5 |
+| 批次 F6 | 2026-10-24 完成 | v1.1 追加：更新日志页（首条 F1~F5，用户视角文案，发版强制追加）、今日待办默认收起、整页滚动架构核查（确认外壳固定/内容区滚动已全面成立） | ✅ 完成 | 本行即登记 |
 
 > v1.1 功能批次 **F1~F5 已全部落地**（2026-10-24，typecheck / 268 例单测 / build 三验全绿）。
 

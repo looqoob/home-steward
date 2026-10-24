@@ -36,15 +36,17 @@ const entries = computed<TodoEntry[]>(
 );
 
 /**
- * 折叠态由**数据**驱动而非用户手动记忆：
- * 有待办就展开，处理完自动收起。手动折叠只在会话内有效（`manualCollapsed`）。
+ * 折叠态：**默认收起**（v1.1 起调整）——待办常驻在概览数字里，
+ * 区块默认只露一行标题，想逐条处理时再展开；处理完自动收回。
+ * 手动展开只在会话内有效（`expanded`），不持久化。
  */
-const manualCollapsed = ref(false);
+const expanded = ref(false);
 watch(entries, (list) => {
-  if (!list.length) manualCollapsed.value = false;
+  // 待办清空后收回展开态：下次有待办仍从「收起」开始
+  if (!list.length) expanded.value = false;
 });
 
-const collapsed = computed(() => manualCollapsed.value || entries.value.length === 0);
+const collapsed = computed(() => !expanded.value || entries.value.length === 0);
 
 function locName(item: Item): string {
   return locations.byId(item.locationId)?.name ?? '';
@@ -101,7 +103,7 @@ async function snooze(item: Item) {
       type="button"
       class="flex items-center justify-between gap-2 w-full text-left card px-3 py-2.5 cursor-pointer mb-2"
       :aria-expanded="!collapsed"
-      @click="manualCollapsed = !manualCollapsed"
+      @click="expanded = !expanded"
     >
       <span class="text-[13px] font-medium text-ink-1">今日待办 {{ entries.length }} 件</span>
       <span class="text-[12px] text-ink-3">{{ collapsed ? '展开' : '收起' }}</span>

@@ -41,6 +41,7 @@ const themeHint = computed(() => {
 });
 
 const links = computed(() => [
+  { label: '更新日志', to: '/changelog', hint: 'v1.1' },
   { label: '统计', to: '/stats', hint: '' },
   { label: '消耗明细', to: '/consume-log', hint: '' },
   { label: '最近操作', to: '/recent-ops', hint: '可撤销' },

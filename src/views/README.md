@@ -19,6 +19,7 @@
 | `/backup` | `BackupView.vue` | NavBar | 备份导出/导入（顶部显示上次备份时间） |
 | `/barcodes` | `BarcodeManageView.vue` | NavBar | **v2**：条码映射的查看/改名/删除 |
 | `/recent-ops` | `RecentOpsView.vue` | NavBar(PageShell) | **v1.1 F1**：最近操作（消耗流水逐条撤销） |
+| `/changelog` | `ChangelogView.vue` | NavBar(PageShell) | **v1.1**：更新日志（面向用户，发版必须追加条目） |
 | `/consume-log` | `ConsumeLogView.vue` | TabLayout + 顶栏（`meta.header`） | 消耗明细（每次用掉/扔掉的逐条记录） |
 | `/stats` | `StatsView.vue` | TabLayout + 顶栏（`meta.header`） | **v3**：统计（趋势 / Top 浪费 / 周转天数 / 品类分布） |
 

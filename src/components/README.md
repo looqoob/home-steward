@@ -36,7 +36,7 @@
 | `FormField.vue` | 表单字段结构：标签 + 控件 + 说明，配合 `.field-input` 组件类 | 8 个页面 |
 | `PageShell.vue` | 二级页外壳：NavBar + 返回 + 可滚动内容区（含 `padding` 预置） | 7 个独立页 |
 | `PageHeader.vue` | Tab 页页内标题行：标题 + 右侧操作，自带顶部 16px 占位 | StockView、ListView、MeView |
-| `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」 | StockView |
+| `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」。**v1.1 起默认收起**（数字在概览卡，处理时再展开） | StockView |
 | `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/单价/位置/到期日预览）。**v3**：单价预填「上次买这个的价格」 | ListView |
 | `BulkActionBar.vue` | **v2**：多选态吸底操作条（用掉/扔掉/换位置/删除） | StockView |
 | `LocationPickerSheet.vue` | **v2**：选择存放位置的弹层，带到期日预览 | StockView |

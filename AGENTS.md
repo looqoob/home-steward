@@ -148,7 +148,8 @@ home-steward/
     │   ├── AppearanceView.vue    # 外观与主题
     │   ├── SettingsView.vue      # 设置（提醒 + 库存视图偏好）
     │   ├── BackupView.vue        # 备份导出导入（清洗结果上报 + 覆盖快照撤销）
-    │   └── RecentOpsView.vue     # v1.1 F1：最近操作（消耗流水逐条撤销）
+    │   ├── RecentOpsView.vue     # v1.1 F1：最近操作（消耗流水逐条撤销）
+    │   └── ChangelogView.vue     # v1.1：更新日志（发版必须追加条目）
     │
     ├── components/           # 可复用 UI 组件（详见 src/components/README.md）
     │   ├── ItemGroupCard.vue     # ★ 库存列表主体：同名折叠组卡（单份退化为普通卡）
@@ -469,6 +470,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | 多标签数据同步 | `src/data/sync.ts`（BroadcastChannel） |
 | 列表页搜索框 | `src/components/SearchField.vue` |
 | 新增路由 | `src/router/index.ts`（懒加载；**不要**加静态 `/item/new`，坑位 #13） |
+| 更新日志（面向用户） | `src/views/ChangelogView.vue`（发版在 ENTRIES 顶部追加条目，与 BATCHES 台账同步） |
 | 主题色 / 间距 / 圆角 | `src/styles/index.css` |
 | 提醒时间 / 通知方式 | `src/composables/useReminder.ts` |
 | release 签名 / 打 APK | `scripts/apk.mjs` + `android/keystore.properties.example`（坑位 #61/#62） |
