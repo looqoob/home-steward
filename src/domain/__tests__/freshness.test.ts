@@ -107,28 +107,3 @@ describe('脏数据不炸（导入前就存在的坏记录）', () => {
     expect(freshnessOf(mkItem({ expireIn: 2 }), TODAY, SETTINGS).state).toBe('urgent');
   });
 });
-
-/* ==================== 脏数据防御 ==================== */
-
-describe('脏数据不炸（导入前就存在的坏记录）', () => {
-  it('expireAt 是数字 0 / 空串 / 非日期字符串 → 当作「未设保质期」，不抛错', () => {
-    for (const bad of [0, '', 'abc', '2026/10/08', null, undefined]) {
-      const f = freshnessOf({ ...mkItem({ expireIn: 5 }), expireAt: bad } as never, TODAY, SETTINGS);
-      expect(f.state).toBe('none');
-      expect(f.remainDays).toBeNull();
-    }
-  });
-
-  it('expireAt 脏 + notRecommended → warn（而不是 none）', () => {
-    const f = freshnessOf(
-      { ...mkItem({ expireIn: null }), expireAt: 'abc', notRecommended: true } as never,
-      TODAY,
-      SETTINGS,
-    );
-    expect(f.state).toBe('warn');
-  });
-
-  it('合法日期不受影响', () => {
-    expect(freshnessOf(mkItem({ expireIn: 2 }), TODAY, SETTINGS).state).toBe('urgent');
-  });
-});

@@ -1,5 +1,5 @@
 import type { EnvType, Item, Location, ShelfLifeSource } from './types';
-import { NOT_RECOMMENDED } from './types';
+import { NOT_RECOMMENDED, ENV_MAP } from './types';
 import { addDays } from './dates';
 
 export interface ResolveResult {
@@ -83,7 +83,9 @@ export function compareLocations(input: ExpiryInput, locations: Location[], reso
       locationId: loc.id,
       locationName: loc.name,
       env: loc.env,
-      envLabel: loc.env,
+      // 必须给「冷藏」这类文案而不是 'chilled' 枚举值 —— 字段语义是 label。
+      // 此前返回枚举恰好没被直接消费才没暴露，下一个调用者会把它当真（REV-31）
+      envLabel: ENV_MAP[loc.env].label,
       expireAt: r.expireAt,
       days: r.days,
       notRecommended: r.notRecommended,

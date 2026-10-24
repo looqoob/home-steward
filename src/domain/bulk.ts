@@ -123,12 +123,16 @@ export function planBulkMove(
 ): Item[] {
   const out: Item[] = [];
   for (const it of activeOnly(items)) {
+    // §5.7 契约：进 computeExpiry 的日期必须是合法 YYYY-MM-DD，否则 addDays → parseDate
+    // 会在 `.split` 上抛 TypeError，一脏全批失败。脏值按「入库日缺失 → 今天 / 生产日非法 → 忽略」处理。
+    const storedAt = isDateStr(it.storedAt) ? it.storedAt : todayStr(now);
+    const producedAt = isDateStr(it.producedAt) ? it.producedAt : null;
     const r = computeExpiry(
       {
         name: it.name,
         category: it.category,
-        storedAt: it.storedAt,
-        producedAt: it.producedAt,
+        storedAt,
+        producedAt,
         manualShelfLife: it.manualShelfLife,
       },
       env,
