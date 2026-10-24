@@ -7,6 +7,7 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { lookupFood, foodKeyOf } from '@/data/dict';
+import { isEmojiIcon } from '@/domain/itemFactory';
 import { computeExpiry, compareLocations } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP, type Item } from '@/domain/types';
@@ -18,6 +19,7 @@ import { useToast } from '@/composables/useToast';
 import QtyStepper from '@/components/QtyStepper.vue';
 import FormField from '@/components/FormField.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import IconPicker from '@/components/IconPicker.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 
@@ -42,6 +44,7 @@ const item = computed(() => (isNew.value ? undefined : items.byId(id.value)));
 
 const draft = reactive({
   name: '',
+  icon: null as string | null,
   quantity: 1,
   unit: '个',
   locationId: '',
@@ -55,6 +58,7 @@ function init() {
   if (item.value) {
     const i = item.value;
     draft.name = i.name;
+    draft.icon = isEmojiIcon(i.icon) ? i.icon : null;
     draft.quantity = i.quantity;
     draft.unit = i.unit;
     draft.locationId = i.locationId;
@@ -64,6 +68,7 @@ function init() {
     draft.note = i.note;
   } else {
     draft.name = '';
+    draft.icon = null;
     draft.quantity = 1;
     draft.unit = '个';
     draft.locationId = locations.enabled[0]?.id ?? locations.all[0]?.id ?? '';
@@ -119,6 +124,7 @@ async function save() {
     if (isNew.value) {
       await items.add({
         name,
+        icon: draft.icon,
         quantity: draft.quantity,
         unit: draft.unit || '个',
         locationId: draft.locationId,
@@ -135,6 +141,8 @@ async function save() {
         // 改名后同步刷新折叠词根（REV-14）：dictKey 的语义是「定格于最近一次命名」，
         // 不刷新的话改名后的物品仍按旧词根折叠，与新入库的同名物品分属两卡
         dictKey: foodKeyOf(name) ?? normalizeName(name),
+        // 图标：选了 emoji 用 emoji，否则回落名字首字（改了名也要跟着换默认字）
+        icon: (draft.icon ?? '').trim() || Array.from(name)[0] || '?',
         quantity: draft.quantity,
         unit: draft.unit || '个',
         price: normalizePrice(draft.price),
@@ -204,6 +212,11 @@ async function removeItem() {
     <template v-else>
       <FormField label="名称">
         <input v-model="draft.name" class="field-input" placeholder="如 西红柿 / 牛奶" />
+      </FormField>
+
+      <!-- v1.1 F5：图标（可选）。「默认」= 名字首字，改名后自动跟着换 -->
+      <FormField label="图标" hint="不选就用名字首字；选过的会进入「你的常用」">
+        <IconPicker v-model="draft.icon" />
       </FormField>
 
       <FormField label="数量 / 单位" for-id="item-qty">

@@ -13,10 +13,24 @@ export interface NewItemInput {
   unit: string;
   locationId: string;
   price?: number | null;
+  /** 自定义图标（emoji）；空 / null = 默认用名字首字（v1.1 F5） */
+  icon?: string | null;
   storedAt?: string;
   producedAt?: string | null;
   manualShelfLife?: number | null;
   note?: string | null;
+}
+
+/**
+ * 图标是否为用户挑选的 emoji（v1.1 F5）。
+ *
+ * 判据：首码点 ≥ U+1F000（emoji 主区段；汉字首字在 U+4E00–9FFF、
+ * 字母数字更低，天然不会误判）。编辑页用它区分「默认首字」与「选过的 emoji」。
+ */
+export function isEmojiIcon(icon: string | null | undefined): boolean {
+  if (!icon) return false;
+  const cp = icon.codePointAt(0);
+  return cp !== undefined && cp >= 0x1f000 && [...icon].length <= 2;
 }
 
 /**
@@ -48,11 +62,12 @@ export function createItem(
   return {
     id: newId(),
     name,
+    // 图标：选了 emoji 用 emoji，否则名字首字（Array.from 正确处理代理对）
+    icon: (input.icon ?? '').trim() || Array.from(name)[0] || '?',
     // 折叠键的词根：入库时定格。取「字典规范 key」而不是原始输入名 ——
     // 原始名会让「番茄」「西红柿」两条记录的键永不相等，折叠与合并都失效。
     dictKey: aliasKey?.(name) ?? normalizeName(name),
     category,
-    icon: Array.from(name)[0] ?? '?',
     quantity: input.quantity,
     unit: input.unit,
     // 这是所有物品的**唯一诞生点**，价格口径在这里兜一次底：

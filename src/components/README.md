@@ -29,6 +29,7 @@
 | `PageHeader.vue` | Tab 页页内标题行：标题 + 右侧操作，自带顶部 16px 占位 | StockView、ListView、MeView |
 | `StatCard.vue` | 统计数字卡：20px 数字 + 12px 标签，`tone` 语义色、`clickable` 可点击筛选 | StockView、MeView、StatsView、ConsumeLogView |
 | `EmptyState.vue` | 空状态：可选 `#icon` 插画 + 文案 + 可选 `#action` 按钮 | 6 处列表 / 详情 |
+| `IconPicker.vue` | **v1.1 F5**：emoji 图标选择器（横滚胶囊 + 「默认」档；「你的常用」由调用方从 items 统计传入） | QuickAddSheet、ItemEditView |
 | `BottomSheet.vue` | 底部弹层外壳：遮罩、Esc/点遮罩关闭、焦点管理、可选固定底栏 | 6 个 Sheet |
 | `QtyStepper.vue` | 数量步进器：− 输入 ＋，上下限钳制、步长自适应、单位后缀 | 消耗 / 盘点 / 编辑 / 清单 / 扫码 |
 | `Pill.vue` / `PillGroup.vue` | 胶囊筛选按钮与容器：选中态、环境色点、`aria-pressed`、换行/横滑布局 | 12 个页面 |

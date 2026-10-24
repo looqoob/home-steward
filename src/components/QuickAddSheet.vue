@@ -11,6 +11,7 @@ import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { findRecentByName } from '@/domain/inbound';
+import { isEmojiIcon } from '@/domain/itemFactory';
 import { useToast } from '@/composables/useToast';
 import { useToday } from '@/composables/useNow';
 import BottomSheet from '@/components/BottomSheet.vue';
@@ -18,6 +19,7 @@ import QtyStepper from '@/components/QtyStepper.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import FormField from '@/components/FormField.vue';
+import IconPicker from '@/components/IconPicker.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
@@ -42,8 +44,19 @@ const today = useToday();
  * `null` = 没填价（不是 0）。
  */
 const price = ref<number | null>(null);
+/** 自定义图标（v1.1 F5）：null = 默认（名字首字） */
+const icon = ref<string | null>(null);
 /** 自定义食材名：与九宫格共用 `selected`，非空时九宫格自动取消高亮 */
 const customName = ref('');
+
+/** 用户挑过的高频 emoji（从既有物品统计，不新增任何存储） */
+const recentIcons = computed(() => {
+  const freq = new Map<string, number>();
+  for (const i of items.list) {
+    if (isEmojiIcon(i.icon)) freq.set(i.icon, (freq.get(i.icon) ?? 0) + 1);
+  }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([e]) => e);
+});
 
 const canAdd = computed(() => !!selected.value && !!locId.value);
 
@@ -129,6 +142,7 @@ watch(
       qty.value = 1;
       unit.value = '个';
       price.value = null;
+      icon.value = null;
       locId.value = locations.enabled[0]?.id ?? null;
     }
   },
@@ -156,6 +170,7 @@ async function confirm(keepOpen = false) {
       unit: unit.value || '个',
       locationId: locId.value,
       price: normalizePrice(price.value),
+      icon: icon.value,
     });
     show(`已加入：${name}`);
     if (keepOpen) {
@@ -164,6 +179,8 @@ async function confirm(keepOpen = false) {
       qty.value = 1;
       // 单价也重置：连续录入的是**不同**商品，沿用上一件的价格多半是错的
       price.value = null;
+      // 图标同理：下一件是别的东西
+      icon.value = null;
       return;
     }
     close();
@@ -265,6 +282,12 @@ function openScan() {
         </FormField>
 
         <template v-if="selected">
+          <!-- v1.1 F5：图标（可选）。不选就用名字首字，选过的 emoji 会进「你的常用」 -->
+          <div class="mb-3.5">
+            <div class="text-[12px] text-ink-2 mb-1.5">图标（可选，默认用名字首字）</div>
+            <IconPicker v-model="icon" :recent="recentIcons" />
+          </div>
+
           <div class="mb-3.5">
             <div class="text-[12px] text-ink-2 mb-1.5">数量 / 单位</div>
             <div class="bg-card border border-line rounded-md px-2.5 py-1.5">
