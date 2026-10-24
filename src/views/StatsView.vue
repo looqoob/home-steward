@@ -11,7 +11,10 @@ import {
   wasteTrend,
 } from '@/domain/stats';
 import { todayStr } from '@/domain/dates';
+import { buildStatsCsv } from '@/domain/statsCsv';
+import { downloadText, copyToClipboard } from '@/data/backup/export';
 import { useNow } from '@/composables/useNow';
+import { useToast } from '@/composables/useToast';
 import StatCard from '@/components/StatCard.vue';
 
 /**
@@ -22,6 +25,7 @@ import StatCard from '@/components/StatCard.vue';
  */
 const router = useRouter();
 const items = useItemsStore();
+const { show } = useToast();
 // 响应式时刻（REV-28）：`Date.now()` / `todayStr()` 在 computed 里也不行——
 // computed 只在响应式依赖变化时重算，跨零点若无数据变动，「本月」就停在昨天
 const now = useNow();
@@ -72,6 +76,30 @@ const wastedNoPriceHint = computed(() => {
 
 /** Top 里只要有一条是 0 金额（显示「—」），就要说明「—」是什么意思 */
 const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
+
+/* ==================== 导出 CSV（v1.1 F2） ==================== */
+
+/**
+ * 导出统计 CSV。文本拼装走纯函数 `domain/statsCsv`（可单测），
+ * 下载通道与备份共用 `downloadText`；WebView 不支持下载时降级「复制到剪贴板」，
+ * 两者都失败才报错 —— 与 BackupView 的降级链路同一套约定。
+ */
+async function exportCsv() {
+  const csv = buildStatsCsv({
+    monthLabel: todayStr(now.value).slice(0, 7),
+    overview: ms.value,
+    trend: trend.value,
+    top: top.value,
+    categories: cats.value,
+    value: value.value,
+  });
+  if (downloadText(`home-steward-stats-${todayStr(now.value)}.csv`, csv, 'text/csv;charset=utf-8')) {
+    show('已导出 CSV');
+    return;
+  }
+  const copied = await copyToClipboard(csv);
+  show(copied ? '当前环境不支持下载，CSV 已复制到剪贴板' : '导出失败，请重试', copied ? 3000 : 2200);
+}
 </script>
 
 <template>
@@ -199,6 +227,12 @@ const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
 
     <div class="tip">
       统计只覆盖本机记录。样本不足时会直接写「数据不足」而不是画一条看起来很确定的曲线。
+    </div>
+
+    <!-- v1.1 F2：导出 CSV——纯本地无账号下，文件是分享给家人的唯一途径 -->
+    <van-button block type="primary" class="mt-1" @click="exportCsv">导出 CSV</van-button>
+    <div class="text-[11px] text-ink-3 mt-2 leading-relaxed">
+      导出本月概览 / 浪费趋势 / Top 浪费 / 品类分布 / 在库价值。下载不可用时自动改为复制到剪贴板。
     </div>
   </div>
 </template>

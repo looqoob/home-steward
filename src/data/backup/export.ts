@@ -36,10 +36,13 @@ export function backupFileName(now: number = Date.now()): string {
   return `home-steward-backup-${todayStr(now)}.json`;
 }
 
-/** 触发下载。原生 WebView 不支持时返回 false，由 UI 提示改用「复制 JSON」 */
-export function downloadJson(filename: string, json: string): boolean {
+/**
+ * 触发文本文件下载（`<a download>` + Blob URL）。`downloadJson` 的通用版，
+ * 供 CSV 等其它导出复用（v1.1 F2）。原生 WebView 不支持时返回 false，由 UI 提示改用「复制」。
+ */
+export function downloadText(filename: string, text: string, mime: string): boolean {
   try {
-    const blob = new Blob([json], { type: 'application/json' });
+    const blob = new Blob([text], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -55,6 +58,11 @@ export function downloadJson(filename: string, json: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** 触发下载。原生 WebView 不支持时返回 false，由 UI 提示改用「复制 JSON」 */
+export function downloadJson(filename: string, json: string): boolean {
+  return downloadText(filename, json, 'application/json');
 }
 
 export async function copyToClipboard(text: string): Promise<boolean> {
