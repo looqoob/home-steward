@@ -22,13 +22,13 @@
 | 批次 5 | 2026-10-24 | 优化：跨零点刷新 / 归一化搜索与聚合 / 统计守卫 / 撤销对账 / 导入 tombstone / 配额兜底 / NUL 转义 / SW 通知 / 配置收敛（REV-28~50，除 38/39 有意保留） | ✅ 完成（同上提交区间） | ITERATION-REVIEW §14 |
 | 批次 D1 | 2026-10-24 | 文档治理：AGENTS.md 简化重构（675→512 行）、坑位表迁出为 `docs/PITFALLS.md`、建立本台账、目录树与跨文档失效引用修正 | ✅ 完成（提交信息「docs: 批次 D1 文档治理」，2026-10-24） | 本文档 |
 | — | 2026-10-24 | 性能与健壮性（虚拟滚动 / REV-15 深度并发写保护 / 持久存储状态 UI / REV-38 base·CSP / REV-39 minify）与真机走查 | ⏸ 暂缓（需求方 2026-10-24 决定；恢复条件：v1.1 功能批次之后或真机可用时） | ITERATION-REVIEW §13/§14「有意未做」+ §7 |
-| 批次 F1 | 2026-10-24 规划 | 消耗撤销历史面板（复用 ConsumeLog 流水；批量撤销快照内存态需标注） | 📋 规划中 | ITERATION-REVIEW §15 |
-| 批次 F2 | 2026-10-24 规划 | 统计导出 CSV / 分享图（纯本地导出通道，WebView 降级剪贴板） | 📋 规划中 | ITERATION-REVIEW §15 |
-| 批次 F3 | 2026-10-24 规划 | 通知点击直达物品（原生 `actionPerformed` + PWA `notificationclick`） | 📋 规划中 | ITERATION-REVIEW §15 |
-| 批次 F4 | 2026-10-24 规划 | 月末库存快照对比（新增 snapshots 表，Dexie v3 + 备份五处同步，单独升版） | 📋 规划中 | ITERATION-REVIEW §15 |
-| 批次 F5 | 2026-10-24 规划 | 自定义食材图标（emoji 选择器，`Item.icon` 语义不变） | 📋 规划中 | ITERATION-REVIEW §15 |
+| 批次 F1 | 2026-10-24 完成 | 消耗撤销历史面板：/recent-ops 最近 30 条逐条撤销，物品已删则置灰 | ✅ 完成（commit 1c00bf5） | ITERATION-REVIEW §15 F1 |
+| 批次 F2 | 2026-10-24 完成 | 统计导出 CSV（分享图留二期）：BOM+RFC4180，下载降级剪贴板 | ✅ 完成（commit ab034eb） | ITERATION-REVIEW §15 F2 |
+| 批次 F3 | 2026-10-24 完成 | 通知点击直达物品（原生壳；PWA 侧需 injectManifest 留二期） | ✅ 完成（commit 42341e0） | ITERATION-REVIEW §15 F3 |
+| 批次 F4 | 2026-10-24 完成 | 月末库存快照对比：snapshots 表（Dexie v3、SCHEMA_VERSION 3、备份全链路同步）+ 统计页「本月 vs 上月末」 | ✅ 完成（commit c7b5b5a） | ITERATION-REVIEW §15 F4 |
+| 批次 F5 | 2026-10-24 完成 | 自定义食材图标：IconPicker（内置集 + 从既有物品统计「你的常用」），入库/编辑两处接入 | ✅ 完成（commit f3ab502） | ITERATION-REVIEW §15 F5 |
 
-> v1.1 功能建议落地顺序：F1 → F3 → F2 → F5 → F4（详见 ITERATION-REVIEW §15）。
+> v1.1 功能批次 **F1~F5 已全部落地**（2026-10-24，typecheck / 268 例单测 / build 三验全绿）。
 
 ## 登记示例
 

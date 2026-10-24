@@ -147,7 +147,8 @@ home-steward/
     │   ├── BarcodeManageView.vue # 条码映射管理
     │   ├── AppearanceView.vue    # 外观与主题
     │   ├── SettingsView.vue      # 设置（提醒 + 库存视图偏好）
-    │   └── BackupView.vue        # 备份导出导入（清洗结果上报 + 覆盖快照撤销）
+    │   ├── BackupView.vue        # 备份导出导入（清洗结果上报 + 覆盖快照撤销）
+    │   └── RecentOpsView.vue     # v1.1 F1：最近操作（消耗流水逐条撤销）
     │
     ├── components/           # 可复用 UI 组件（详见 src/components/README.md）
     │   ├── ItemGroupCard.vue     # ★ 库存列表主体：同名折叠组卡（单份退化为普通卡）

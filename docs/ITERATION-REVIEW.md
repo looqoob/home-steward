@@ -359,3 +359,24 @@
 ### 建议落地顺序
 
 F1（复用现有流水，成本最低）→ F3（原生壳体验短板）→ F2 → F5 → F4（唯一动 schema 的，放最后单独升版）。
+
+---
+
+## 16. v1.1 批次 F1~F5 落地记录（2026-10-24）
+
+| 批次 | 改动 | 验证 |
+| --- | --- | --- |
+| F1 最近操作（commit `1c00bf5`） | 新页 `/recent-ops`（PageShell）：最近 30 条消耗流水逐条撤销；物品已删则按钮置灰「已失效」（撤销需写回数量）；数据源即 ConsumeLog，无新表 | typecheck ✓ / 253 例 ✓ |
+| F3 通知点击直达（`42341e0`） | App 启动注册 `localNotificationActionPerformed`：通知 id=`hashId(item.id)` 反查跳详情，查不到落库存页；冷启动竞态用 `pendingNavId` 挂起到 boot 完成 | typecheck ✓ |
+| F2 统计导出 CSV（`ab034eb`） | `domain/statsCsv` 纯函数（BOM/CRLF/RFC4180 转义）+ `downloadText` 通用下载通道 + 统计页导出按钮，WebView 降级剪贴板 | +5 例 |
+| F5 自定义图标（`f3ab502`） | `IconPicker`（内置 26 emoji +「你的常用」从既有物品频次统计，零新增存储）；`NewItemInput.icon` 可选；`isEmojiIcon` 区分默认首字 | +4 例 |
+| F4 月末快照（`c7b5b5a`） | snapshots 表（Dexie v3 / SCHEMA_VERSION 3，备份 replace+merge 全链路同步）；`domain/snapshot`：次月首启幂等补写 + `diffMonth` 差集（折叠键与库存同一把）；统计页「本月 vs 上月末」 | +7 例 |
+
+**收尾验证**：`vue-tsc` 0 错误；vitest **18 文件 / 268 用例全通过**；`vite build` 成功（precache 60 项 / 931 KiB）。
+
+**有意未做 / 已知边界**：
+
+- **F2 分享图**（Canvas 月度摘要卡）：留二期，先把 CSV 链路跑稳。
+- **F3 PWA 深链**：需 `injectManifest` 自定义 SW（现为 generateSW），保持默认聚焦行为。
+- **F4 跨多月缺口**：连续多月未打开 App 时只补最近一个月，更早月份无数据源，对比页按「无快照」明示。
+- 真机走查（通知点击 / 扫码 / 盘点手势）仍待设备可用后补。
