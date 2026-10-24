@@ -3,12 +3,16 @@ import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, Sho
 import { DEFAULT_SETTINGS } from '@/domain/types';
 import type { Table } from 'dexie';
 import { dexieDb } from './db';
+import { broadcastChange } from '../sync';
 
 function base<T extends { id: string; deletedAt: number | null }>(table: Table<T, string>) {
   return {
     async all(): Promise<T[]> {
       const rows = await table.toArray();
       return rows.filter((r) => !r.deletedAt);
+    },
+    async allIncludingDeleted(): Promise<T[]> {
+      return table.toArray();
     },
     async countAll(): Promise<number> {
       return table.count();
@@ -19,9 +23,11 @@ function base<T extends { id: string; deletedAt: number | null }>(table: Table<T
     },
     async put(entity: T) {
       await table.put(entity);
+      broadcastChange();
     },
     async bulkPut(entities: T[]) {
       await table.bulkPut(entities);
+      broadcastChange();
     },
     async softDelete(id: string) {
       // ⚠️ 用 table.update 而非 get+put：get 与 put 是两个独立事务，
@@ -30,17 +36,21 @@ function base<T extends { id: string; deletedAt: number | null }>(table: Table<T
       // Dexie 的 UpdateSpec<T> 对泛型 T 约束过严，这里 as any 绕类型层，
       // 运行时 update(key, changes) 接受任意 partial 对象。
       await table.update(id, { deletedAt: Date.now(), updatedAt: Date.now() } as any);
+      broadcastChange();
     },
     async hardDelete(id: string) {
       await table.delete(id);
+      broadcastChange();
     },
     async bulkDelete(ids: string[]) {
       // ⚠️ 一次性删，替代 for-await：串行 await 在 Dexie 事务里逐次 yield 事件循环，
       // ids 多时可能撞事务超时（TransactionInactiveError）。
       await table.bulkDelete(ids);
+      broadcastChange();
     },
     async clear() {
       await table.clear();
+      broadcastChange();
     },
   };
 }
@@ -90,6 +100,7 @@ const settings: SettingsRepository = {
   },
   async save(s: Settings) {
     await dexieDb.settings.put({ ...s, updatedAt: Date.now() });
+    broadcastChange();
   },
 };
 
@@ -128,6 +139,7 @@ export function createDexieSources(): DataSources {
         // ⚠️ 别漏：漏了会导致「覆盖导入」后旧条码映射残留
         await dexieDb.barcodes.clear();
       });
+      broadcastChange();
     },
     async probe(): Promise<boolean> {
       // 只读探测 + 缺失时补写默认设置（绝不覆盖已有设置）

@@ -36,6 +36,7 @@ export const db: DataSources = createDexieSources();   // ← 换成 createSqlit
 ```ts
 interface Repository<T extends { id: string }> {
   all(): Promise<T[]>;              // 已自动过滤 soft-deleted
+  allIncludingDeleted(): Promise<T[]>; // 不做任何过滤；「忽略抑制」与 merge 的 tombstone 比较都靠它
   countAll(): Promise<number>;      // 含软删除行；判「是否首次启动」只能用它
   byId(id: string): Promise<T | undefined>;
   put(entity: T): Promise<void>;    // upsert：存在则整条替换
@@ -288,6 +289,13 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
 > ⚠️ v3 起 `importBackup` 在**写库之前**对四张表分别调 `sanitize`（v1.0.1 起加第五张 `dict`，
 > 见 `sanitizeDict`）；设置对象在 `save` 前过 `domain/settings.normalizeSettings`。
 > 顺序不能反 —— 先写进去再清洗就来不及了，脏数据已经在 `bulkPut` 里了。
+
+> ⚠️ **tombstone 参与合并（批次 4，REV-33）**：merge 模式读取现状用的是
+> `allIncludingDeleted()`（含软删行）。只拿活行的话，本地删除的记录在旧备份里仍然存在、
+> `updatedAt` 可能更新，会被原样写回 —— 用户删掉的东西随导入复活。本地 tombstone 的
+> `updatedAt`（删除时刻）更新时同样压过备份行，删除意图得以保留。
+> 位置排序重排也移进了**同一事务**：放在事务外会出现「数据已导入却返回 ok:false」，
+> 且逐行刷新 `updatedAt` 会让本机位置永远「更新」、合并导入的位置改名进不来。
 
 > ⚠️ **防空覆盖守卫（v1.0.1）**：备份里 `items` 原始条数 > 0、但清洗后为 0 时，
 > `importBackup` 直接返回 `{ ok: false, message: …已中止导入，本机数据未改动 }`。

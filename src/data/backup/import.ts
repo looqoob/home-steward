@@ -91,28 +91,32 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
       }
 
       // merge
+      // ⚠️ 现状必须读「含软删除」的全量行（tombstone）：本地删除（deletedAt 非空）也要参与
+      // 新旧比较。只拿活行的话，本地删掉的记录在旧备份里仍然存在且 updatedAt 可能更新，
+      // 会被原样写回 —— 用户删掉的东西随导入复活（REV-33）。
       const [curLocations, curItems, curLogs, curShopping, curDict, curBarcodes] = await Promise.all([
-        db.locations.all(),
-        db.items.all(),
-        db.logs.all(),
-        db.shopping.all(),
-        db.dict.all(),
-        db.barcodes.all(),
+        db.locations.allIncludingDeleted(),
+        db.items.allIncludingDeleted(),
+        db.logs.allIncludingDeleted(),
+        db.shopping.allIncludingDeleted(),
+        db.dict.allIncludingDeleted(),
+        db.barcodes.allIncludingDeleted(),
       ]);
 
-      await db.locations.bulkPut(mergeById<Location>(curLocations, incomingLocations));
+      const mergedLocations = mergeById<Location>(curLocations, incomingLocations);
+      await db.locations.bulkPut(mergedLocations);
       await db.items.bulkPut(mergeById<Item>(curItems, incomingItems));
       await db.logs.bulkPut(mergeById<ConsumeLog>(curLogs, incomingLogs));
       await db.shopping.bulkPut(mergeById<ShoppingItem>(curShopping, incomingShopping));
       await db.dict.bulkPut(mergeById<DictEntry>(curDict, incomingDict));
       await db.barcodes.bulkPut(mergeById<BarcodeEntry>(curBarcodes, incomingBarcodes));
-    });
 
-    // 位置排序重排（在事务外做，避免与 bulkPut 冲突）
-    const locs = await db.locations.all();
-    const sorted = [...locs].sort((a, b) => a.sort - b.sort);
-    const now = Date.now();
-    await db.locations.bulkPut(sorted.map((l, i) => ({ ...l, sort: (i + 1) * 10, updatedAt: now })));
+      // 位置排序重排必须在**同一事务**内收尾（REV-33）：放在事务外的话，
+      // 重排失败会得到「数据已导入但返回 ok:false」，本机状态与提示不一致；
+      // 且每行都刷 updatedAt 会让本机位置永远「更新」、合并导入的位置改名进不来。
+      const sorted = [...mergedLocations].sort((a, b) => a.sort - b.sort);
+      await db.locations.bulkPut(sorted.map((l, i) => ({ ...l, sort: (i + 1) * 10 })));
+    });
 
     return {
       ok: true,

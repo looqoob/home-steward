@@ -8,6 +8,16 @@ import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, Sho
 export interface Repository<T extends { id: string }> {
   all(): Promise<T[]>;
   /**
+   * 表内**全部**行（**包含软删除的行**，不做任何过滤）。
+   *
+   * 两个用途：
+   * - 「忽略 N 天」这类抑制规则要读**软删除行**做依据（`planShopping` 的 dismissed 集合）；
+   * - 合并导入要让本地 tombstone 参与新旧比较，否则本地删除会被旧备份复活。
+   *
+   * ⚠️ 拿到软删除行后按需自行过滤 `deletedAt`，不要把它当成「另一个 all()」混用。
+   */
+  allIncludingDeleted(): Promise<T[]>;
+  /**
    * 表内**全部**行数，**包含软删除的行**。
    *
    * ⚠️ 与 `all().length` 不是一回事：`all()` 过滤了 `deletedAt`，所以「用户把所有位置
@@ -36,6 +46,12 @@ export interface LogRepository extends Repository<ConsumeLog> {
   since(ts: number): Promise<ConsumeLog[]>;
 }
 
+/**
+ * 购物清单仓储。
+ *
+ * ⚠️ `generate()` 必须走继承来的 `allIncludingDeleted()` 喂 `planShopping`：
+ * 「忽略自动建议 7 天」的抑制依据住在软删除行里（REV-43）。
+ */
 export interface ShoppingRepository extends Repository<ShoppingItem> {}
 
 export interface DictRepository extends Repository<DictEntry> {
