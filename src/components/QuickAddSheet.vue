@@ -9,10 +9,10 @@ import { lookupFood, foodKeyOf } from '@/data/dict';
 import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
-import { todayStr } from '@/domain/dates';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { findRecentByName } from '@/domain/inbound';
 import { useToast } from '@/composables/useToast';
+import { useToday } from '@/composables/useNow';
 import BottomSheet from '@/components/BottomSheet.vue';
 import QtyStepper from '@/components/QtyStepper.vue';
 import Pill from '@/components/Pill.vue';
@@ -35,6 +35,7 @@ const selected = ref<string | null>(null);
 const qty = ref(1);
 const unit = ref('个');
 const locId = ref<string | null>(null);
+const today = useToday();
 /**
  * 单价（元 / 单位）。快速入库以前**根本没有这个字段**，新建物品的价格恒为 `null`，
  * 于是「浪费金额」统计永远是 0 —— 用户得回头进详情页一件件补，那条路径基本没人走。
@@ -71,9 +72,18 @@ const recentNames = computed(() => {
   return seen;
 });
 
-watch(customName, (v) => {
+watch(customName, (v, old) => {
   const n = v.trim();
-  if (n) selected.value = n;
+  if (n) {
+    selected.value = n;
+    return;
+  }
+  // 输入框删光时把「来自输入」的 selected 一起复位（REV-20），否则 canAdd 仍为 true，
+  // 「输入『鸭血』再全删」会按『鸭血』入库。
+  // ⚠️ 用 old 值判定 selected 的来源：点九宫格（pickFood）也会把 customName 清成 ''，
+  // 但那时 selected 是格子名、不等于上一次输入，不该被复位。
+  const prevTyped = old.trim();
+  if (prevTyped && selected.value === prevTyped) selected.value = null;
 });
 
 /**
@@ -101,7 +111,7 @@ const note = computed(() => {
   if (!selected.value || !locId.value) return '';
   const env = locations.envOf(locId.value);
   const r = computeExpiry(
-    { name: selected.value, category: lookupFood(selected.value)?.category ?? null, storedAt: todayStr(), producedAt: null },
+    { name: selected.value, category: lookupFood(selected.value)?.category ?? null, storedAt: today.value, producedAt: null },
     env,
     dict.resolve,
     fallbackDays,

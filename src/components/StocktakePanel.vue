@@ -4,10 +4,11 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
 import { freshnessOf } from '@/domain/freshness';
-import { formatMD, todayStr } from '@/domain/dates';
+import { formatMD } from '@/domain/dates';
 import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
+import { useToday } from '@/composables/useNow';
 import type { ConsumeType } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
 import EmptyState from '@/components/EmptyState.vue';
@@ -24,7 +25,7 @@ const locations = useLocationsStore();
 const settings = useSettingsStore();
 const { show } = useToast();
 
-const today = todayStr();
+const today = useToday();
 
 /**
  * 盘点队列：进入时对当前筛选结果拍一个快照。
@@ -47,7 +48,7 @@ const current = computed(() => {
   return id ? items.byId(id) : undefined;
 });
 const currentFresh = computed(() =>
-  current.value ? freshnessOf(current.value, today, settings.settings) : null,
+  current.value ? freshnessOf(current.value, today.value, settings.settings) : null,
 );
 const currentLoc = computed(() => (current.value ? locations.byId(current.value.locationId) : undefined));
 

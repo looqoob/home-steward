@@ -7,7 +7,7 @@ import { inboundDefaults } from '@/domain/inbound';
 import { foodKeyOf } from '@/data/dict';
 import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
-import { todayStr } from '@/domain/dates';
+import { useToday } from '@/composables/useNow';
 import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP, type ShoppingItem } from '@/domain/types';
@@ -36,6 +36,7 @@ const emit = defineEmits<{
 const items = useItemsStore();
 const locations = useLocationsStore();
 const dict = useDictStore();
+const today = useToday();
 
 /** 打开时按「清单项自带值 → 上次同名称历史 → 默认」预填（见 domain/inbound） */
 // 传别名解析器：「西红柿」也能命中历史里的「番茄」，与 stores/shopping 用同一个 foodKeyOf
@@ -69,7 +70,7 @@ const preview = computed(() => {
   const loc = locations.byId(locId.value);
   if (!loc) return '';
   const r = computeExpiry(
-    { name: props.item.name, category: null, storedAt: todayStr(), producedAt: null, manualShelfLife: null },
+    { name: props.item.name, category: null, storedAt: today.value, producedAt: null, manualShelfLife: null },
     loc.env,
     dict.resolve,
     fallbackDays,

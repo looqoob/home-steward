@@ -11,6 +11,7 @@ import {
   wasteTrend,
 } from '@/domain/stats';
 import { todayStr } from '@/domain/dates';
+import { useNow } from '@/composables/useNow';
 import StatCard from '@/components/StatCard.vue';
 
 /**
@@ -21,14 +22,17 @@ import StatCard from '@/components/StatCard.vue';
  */
 const router = useRouter();
 const items = useItemsStore();
+// 响应式时刻（REV-28）：`Date.now()` / `todayStr()` 在 computed 里也不行——
+// computed 只在响应式依赖变化时重算，跨零点若无数据变动，「本月」就停在昨天
+const now = useNow();
 
-const ms = computed(() => monthStats(items.list, items.logs, Date.now()));
-const trend = computed(() => wasteTrend(items.logs, 6, Date.now()));
+const ms = computed(() => monthStats(items.list, items.logs, now.value));
+const trend = computed(() => wasteTrend(items.logs, 6, now.value));
 const top = computed(() => topWasted(items.logs, 5));
 const turnover = computed(() => turnoverDays(items.list, items.logs));
 const cats = computed(() => categoryDistribution(items.list));
 /** 在库总价值（**含已过期**，过期部分单独给出） */
-const value = computed(() => stockValue(items.list, todayStr()));
+const value = computed(() => stockValue(items.list, todayStr(now.value)));
 
 /**
  * 在库价值的脚注。

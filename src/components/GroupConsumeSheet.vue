@@ -7,7 +7,7 @@ import { barColor, freshnessOf } from '@/domain/freshness';
 import type { ItemGroup } from '@/domain/grouping';
 import { formatMD } from '@/domain/dates';
 import { useSettingsStore } from '@/stores/settings';
-import { todayStr } from '@/domain/dates';
+import { useToday } from '@/composables/useNow';
 import { amountOf } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 
@@ -29,7 +29,7 @@ const emit = defineEmits<{
 }>();
 
 const settings = useSettingsStore();
-const today = todayStr();
+const today = useToday();
 
 /** 当前选中的那份，默认 FEFO 的第一份（最早到期） */
 const pickedId = ref<string | null>(null);
@@ -68,7 +68,7 @@ const fefoWarning = computed(() => {
   if (!g || !p || g.members.length < 2) return '';
   const lead = g.lead;
   if (lead.id === p.id) return '';
-  const lf = freshnessOf(lead, today, settings.settings);
+  const lf = freshnessOf(lead, today.value, settings.settings);
   return `还有更早到期的：第 1 份 ${formatMD(lead.expireAt ?? '')}（${lf.label}）`;
 });
 

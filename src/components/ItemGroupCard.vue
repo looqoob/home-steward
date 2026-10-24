@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { ConsumeType, Item, Location } from '@/domain/types';
 import { ENV_MAP } from '@/domain/types';
 import { barColor, freshnessOf } from '@/domain/freshness';
@@ -8,7 +8,7 @@ import { normalizePrice, unitPriceText } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { formatMD } from '@/domain/dates';
 import { useSettingsStore } from '@/stores/settings';
-import { todayStr } from '@/domain/dates';
+import { useToday } from '@/composables/useNow';
 
 const props = withDefaults(
   defineProps<{
@@ -92,7 +92,7 @@ function onClick() {
 onBeforeUnmount(clearTimer);
 
 const settings = useSettingsStore();
-const today = todayStr();
+const today = useToday();
 
 /**
  * 状态色 / 徽标 / 进度条**一律取 lead（组内最早到期那份）**。
@@ -101,7 +101,7 @@ const today = todayStr();
  * 如果按最新那份显示绿色，用户会以为不着急，等它也过期时就晚了 ——
  * 这正是「真合并」方案的根本缺陷，在这里被显式规避。
  */
-const leadFresh = computed(() => freshnessOf(props.group.lead, today, settings.settings));
+const leadFresh = computed(() => freshnessOf(props.group.lead, today.value, settings.settings));
 const env = computed(() => (props.location ? ENV_MAP[props.location.env] : null));
 
 const badgeColor: Record<string, string> = {
@@ -119,14 +119,22 @@ const badgeColor: Record<string, string> = {
  * 两份是「一眼能看完」的上限，超过就该先看卡头决定要不要展开；
  * 全部默认展开会让长列表被同名卡片撑爆，全部折叠则多一次无谓点击。
  * ⚠️ 展开状态**不持久化**（刷新回默认），避免多一个要同步的本地状态。
+ * ⚠️ 份数变化时要重算默认值（REV-21）：3 份消耗 1 份后应自动展开、
+ * 2 份变 3 份应收起。`:key` 是稳定的 `group.key`，不 watch 的话初始值永远不更新。
  */
 const expanded = ref(props.group.members.length <= 2);
+watch(
+  () => props.group.members.length,
+  (n) => {
+    expanded.value = n <= 2;
+  },
+);
 
 const memberRows = computed(() =>
   props.group.members.map((m, i) => ({
     item: m,
     index: i + 1,
-    f: freshnessOf(m, today, settings.settings),
+    f: freshnessOf(m, today.value, settings.settings),
     // 每份各自显示自己的单价：两次买入价格不同是很正常的，混成一个数反而失真
     priceText: unitPriceText(m.price, m.unit),
   })),

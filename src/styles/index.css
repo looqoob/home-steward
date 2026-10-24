@@ -344,11 +344,14 @@ html[data-theme='dark'] {
     color: var(--text-2);
   }
 
+  /* ⚠️ 输入类字号必须 ≥16px（REV-17）：iOS / 部分 Android WebView 对小于 16px 的输入框
+     聚焦时会触发整页缩放且失焦不还原，PWA 顶栏与底部 Tab 会被推出屏幕。
+     「看起来小」的视觉由 44px 高度与内边距承担，不靠字号。 */
   .field-input {
     width: 100%;
     height: 44px;
     padding-inline: 12px;
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text-1);
     background: var(--bg-card);
     border: 1px solid var(--line-strong);
@@ -366,7 +369,7 @@ html[data-theme='dark'] {
     width: 100%;
     min-height: 72px;
     padding: 10px;
-    font-size: 14px;
+    font-size: 16px; /* 同 .field-input：防 iOS 聚焦整页缩放（REV-17） */
     color: var(--text-1);
     background: var(--bg-card);
     border: 1px solid var(--line-strong);

@@ -24,7 +24,6 @@ import { freshnessOf, sortByFreshness, groupByFreshness, type FreshGroup } from 
 import { groupByTimeline } from '@/domain/timeline';
 import { foldItems, type ItemGroup } from '@/domain/grouping';
 import { buildTodayTodo } from '@/domain/todo';
-import { todayStr } from '@/domain/dates';
 import { fmtQty } from '@/domain/quantity';
 import { priceFromInput, normalizePrice } from '@/domain/price';
 import { lookupFood } from '@/data/dict';
@@ -34,6 +33,7 @@ import type { ConsumeType, Item } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
 import { useToast } from '@/composables/useToast';
 import { useStickyFilterOffset } from '@/composables/useStickyFilterOffset';
+import { useToday } from '@/composables/useNow';
 
 const router = useRouter();
 const route = useRoute();
@@ -42,7 +42,7 @@ const locations = useLocationsStore();
 const settings = useSettingsStore();
 const { show } = useToast();
 
-const today = todayStr();
+const today = useToday();
 const keyword = ref('');
 const filterLoc = ref<string | null>(null);
 
@@ -86,21 +86,23 @@ const viewMode = computed(() => settings.settings.stockViewMode);
  *
  * ⚠️ 必须与 `TodayTodo` 用**同一个** `buildTodayTodo`：
  * 概览卡显示 3 而待办列表只有 2 条（因为有 items 被「明天再说」延后了），
- * 用户点进去会觉得数字在骗人。这里的 `overdue` 另行统计已过期数。
+ * 用户点进去会觉得数字在骗人。
  */
-const todo = computed(() => buildTodayTodo(items.list, today, settings.settings));
+const todo = computed(() => buildTodayTodo(items.list, today.value, settings.settings));
 const total = computed(() => items.active.length);
 
 /**
- * 「已过期」单独计数。
+ * 「已过期」从 `todo` 里数，而不是从筛选后的 `rows` 里数（REV-18）。
  *
- * 用 `rows`（已过滤/已排序的列表）而不是全量物品：概览卡应该与点进去看到的列表一致。
- * 其中被「明天再说」延后的**不计入**——它今天不打算处理，就不该占着这个数字。
+ * 三个概览数字必须是**同一套口径**（全量、排除「明天再说」）：
+ * 「在库 20 / 已过期 0」配一个红色列表，或切了位置筛选后「已过期」跟着跳，
+ * 用户都会得出「数字是瞎编的」的结论。此前它读 `rows`（受搜索/位置筛选影响、
+ * 也不排除延后项），与旁边的 `total`（全量）、`todo.length`（全量）三处口径各不相同。
  */
-const overdueCount = computed(() => rows.value.filter((r) => r.f.state === 'over').length);
+const overdueCount = computed(() => todo.value.filter((t) => t.state === 'over').length);
 
 const dateLabel = computed(() => {
-  const [, m, d] = today.split('-');
+  const [, m, d] = today.value.split('-');
   return `${Number(m)} 月 ${ Number(d)} 日`;
 });
 
@@ -109,7 +111,8 @@ function toggleStatus(next: FreshGroup | 'overdue') {
 }
 
 function matchName(name: string, kw: string): boolean {
-  if (name.toLowerCase().includes(kw)) return true;
+  // 先按归一名比（全角/括号/空白/大小写差异不再挡搜索），再走字典别名（西红柿 ↔ 番茄）
+  if (normalizeName(name).includes(kw)) return true;
   const f = lookupFood(name);
   if (f) {
     if (normalizeName(f.key).includes(kw)) return true;
@@ -120,13 +123,13 @@ function matchName(name: string, kw: string): boolean {
 
 /** 过滤 + 新鲜度计算 + 排序，一次算完；附带的 `state` 供分组复用，避免二次计算 */
 const rows = computed(() => {
-  const kw = keyword.value.trim().toLowerCase();
+  const kw = normalizeName(keyword.value);
   const list = items.active.filter((i) => {
     if (filterLoc.value && i.locationId !== filterLoc.value) return false;
     if (kw && !matchName(i.name, kw)) return false;
     return true;
   });
-  const withF = list.map((i) => ({ item: i, f: freshnessOf(i, today, settings.settings) }));
+  const withF = list.map((i) => ({ item: i, f: freshnessOf(i, today.value, settings.settings) }));
   const sorted = sortByFreshness(withF.map((r) => ({ ...r, sortKey: r.f.sortKey, name: r.item.name })));
   return sorted.map((r) => ({ ...r, state: r.f.state }));
 });
@@ -155,7 +158,7 @@ const itemGroups = computed<ItemGroup[]>(() => foldItems(rows.value.map((r) => r
  */
 const foldedRows = computed(() => {
   const out = itemGroups.value.map((g) => {
-    const f = freshnessOf(g.lead, today, settings.settings);
+    const f = freshnessOf(g.lead, today.value, settings.settings);
     // `remainDays` 平铺出来：`groupByTimeline` 需要它来判桶，
     // 而 `groupByFreshness` 只看 `state` —— 两者共用同一份对象，不用各算一次。
     return { group: g, f, state: f.state, remainDays: f.remainDays, sortKey: f.sortKey, name: g.name };

@@ -41,8 +41,10 @@ function onInput(e: Event) {
       enterkeyhint="search"
       :placeholder="placeholder"
       :aria-label="placeholder || '搜索'"
-      class="flex-1 min-w-0 h-full bg-transparent border-0 text-[14px] text-ink-1 placeholder:text-ink-3 focus:outline-none"
+      class="flex-1 min-w-0 h-full bg-transparent border-0 text-[16px] text-ink-1 placeholder:text-ink-3 focus:outline-none"
       @input="onInput"
     />
+    <!-- ⚠️ 输入类字号必须 ≥16px：iOS Safari 对小于 16px 的输入框聚焦时会整页放大且失焦不还原（REV-17）。
+         视觉上的「小」靠外框高度与内边距控制，不靠字号。 -->
   </div>
 </template>

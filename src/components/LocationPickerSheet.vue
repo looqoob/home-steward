@@ -7,7 +7,7 @@ import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { fallbackDays } from '@/domain/categories';
 import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
-import { todayStr } from '@/domain/dates';
+import { useToday } from '@/composables/useNow';
 import { ENV_MAP } from '@/domain/types';
 
 const props = defineProps<{
@@ -27,6 +27,7 @@ const emit = defineEmits<{
 
 const locations = useLocationsStore();
 const dict = useDictStore();
+const today = useToday();
 
 const picked = ref<string | null>(null);
 
@@ -44,7 +45,7 @@ const preview = computed(() => {
   const loc = locations.byId(picked.value);
   if (!loc) return '';
   const r = computeExpiry(
-    { name: props.itemName, category: null, storedAt: todayStr(), producedAt: null, manualShelfLife: null },
+    { name: props.itemName, category: null, storedAt: today.value, producedAt: null, manualShelfLife: null },
     loc.env,
     dict.resolve,
     fallbackDays,

@@ -4,7 +4,7 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useSettingsStore } from '@/stores/settings';
 import { buildTodayTodo, type TodoEntry } from '@/domain/todo';
-import { todayStr } from '@/domain/dates';
+import { useToday } from '@/composables/useNow';
 import { ENV_MAP } from '@/domain/types';
 import ConsumeSheet from '@/components/ConsumeSheet.vue';
 import type { ConsumeType, Item } from '@/domain/types';
@@ -29,10 +29,10 @@ const locations = useLocationsStore();
 const settings = useSettingsStore();
 const { show } = useToast();
 
-const today = todayStr();
+const today = useToday();
 
-const entries = computed<TodoEntry[]>(() =>
-  buildTodayTodo(items.list, today, settings.settings),
+const entries = computed<TodoEntry[]>(
+  () => buildTodayTodo(items.list, today.value, settings.settings),
 );
 
 /**
