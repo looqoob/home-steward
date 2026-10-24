@@ -134,7 +134,7 @@ const wastedAmount = computed(() =>
   ) / 100,
 );
 
-/** 吸顶筛选条的实测高度（日期胶囊窄屏会换行，不能写死）→ 分组头偏移 */
+/** 吸顶头部块（概览卡 + 搜索 + 筛选）的实测高度 → 按天分组头偏移 */
 const { filterEl, filterH } = useStickyFilterOffset();
 const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
 </script>
@@ -147,27 +147,23 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
     -->
 
     <!--
-      顶部 20px 间距由本占位元素承担：TabLayout 给本页加了 flush-top（取消滚动容器的上内边距），
-      否则吸顶筛选条会被容器 padding 往下推、与顶栏之间漏出一条缝。详见 src/styles/README.md「吸顶层约定」。
+      ★ 吸顶头部块（v1.1 F7）：顶部留白 + 概览卡 + 搜索 + 筛选整体钉在顶栏下，
+      只有按天分组的记录列表滚动。占位元素必须在块**内部**（否则吸顶后顶栏下漏缝），
+      详见 src/styles/README.md「吸顶层约定」。
     -->
-    <div class="h-5" aria-hidden="true"></div>
+    <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pb-2">
+      <div class="h-5" aria-hidden="true"></div>
 
-    <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
-      <StatCard :value="totalCount" label="笔数" />
-      <StatCard :value="money(totalAmount)" label="合计金额" />
-      <StatCard
-        :value="money(wastedAmount)"
-        label="扔掉金额"
-        :tone="wastedAmount > 0 ? 'danger' : 'neutral'"
-      />
-    </div>
+      <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
+        <StatCard :value="totalCount" label="笔数" />
+        <StatCard :value="money(totalAmount)" label="合计金额" />
+        <StatCard
+          :value="money(wastedAmount)"
+          label="扔掉金额"
+          :tone="wastedAmount > 0 ? 'danger' : 'neutral'"
+        />
+      </div>
 
-    <!--
-      筛选区三行各占满整宽：搜索框 / 日期胶囊 / 分类分段。
-      之前把「分段控件」和「搜索框」塞进同一行各占一半，窄屏上两边都被压扁，
-      而且 items-stretch 会把搜索框拉到和分段控件一样高，视觉上错位。
-    -->
-    <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pt-1 pb-2">
       <SearchField v-model="kw" class="mb-2" placeholder="搜索名称" />
       <PillGroup role="group" aria-label="按日期筛选">
         <Pill

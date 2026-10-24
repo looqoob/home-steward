@@ -184,32 +184,37 @@ async function doClearDone() {
 
 <template>
   <div>
-    <!-- 与库存页保持同一套页头节奏：标题 + 右侧计数（顶部 16px 占位由 PageHeader 提供） -->
-    <PageHeader title="清单">
-      <template #actions>
-        <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
-             「需买 5 件」配 3 件划掉的行，用户只会觉得数字错了 -->
-        <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.pending.length }} 件</span>
-      </template>
-    </PageHeader>
+    <!--
+      ★ 吸顶头部（v1.1 F7）：标题 / 需买计数 / 分组切换钉在顶部，列表滚动。
+      「手动添加」表单属低频操作，随内容滚动，不占固定高度。
+    -->
+    <div class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pb-2">
+      <PageHeader title="清单">
+        <template #actions>
+          <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
+               「需买 5 件」配 3 件划掉的行，用户只会觉得数字错了 -->
+          <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.pending.length }} 件</span>
+        </template>
+      </PageHeader>
 
-    <div class="tip mb-3.5">
-      清单根据库存与消耗自动生成；手动项不会被自动清理。
-    </div>
+      <div class="tip mb-3">
+        清单根据库存与消耗自动生成；手动项不会被自动清理。
+      </div>
 
     <!--
       分组维度切换（V3-01）。只有一项时也显示：让用户看到「还有另一种看法」，
       代价只是一行 28px 的按钮；藏起来的话这个功能等于不存在。
     -->
-    <PillGroup gap="xs" class="mb-3" role="group" aria-label="清单分组方式">
-      <Pill
-        v-for="g in ([['reason', '按原因'], ['location', '按位置']] as const)"
-        :key="g[0]"
-        size="sm"
-        :selected="groupBy === g[0]"
-        @click="groupBy = g[0]"
-      >{{ g[1] }}</Pill>
-    </PillGroup>
+      <PillGroup gap="xs" role="group" aria-label="清单分组方式">
+        <Pill
+          v-for="g in ([['reason', '按原因'], ['location', '按位置']] as const)"
+          :key="g[0]"
+          size="sm"
+          :selected="groupBy === g[0]"
+          @click="groupBy = g[0]"
+        >{{ g[1] }}</Pill>
+      </PillGroup>
+    </div>
 
     <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
     <FormField label="手动添加" for-id="manual-name">

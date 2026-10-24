@@ -46,24 +46,17 @@ const today = useToday();
 const keyword = ref('');
 const filterLoc = ref<string | null>(null);
 
-/**
- * 吸顶筛选条的实测高度（ResizeObserver 跟随字体缩放与换行）。
- * 分组头 `sticky top` 用它减 1px，与筛选条重叠 1px，杜绝亚像素缝隙。
- */
+/** 吸顶头部块的实测高度（ResizeObserver 跟随内容增减与换行），分组头偏移用 */
 const { filterEl, filterH } = useStickyFilterOffset();
 
 /**
- * 分组头吸顶位置：有筛选条时紧贴其下沿（-1px 做重叠，避免发丝缝）。
+ * 分组头吸顶位置：紧贴吸顶头部块的下沿（-1px 做重叠，避免发丝缝）。
  *
- * ⚠️ 多选态（`?select=1`）与盘点态（`?check=1`）下筛选条被 `v-if` 移除，
- * 但 `filterH` 仍是它的实测高度——若继续用 `filterH - 1` 当偏移，分组头会悬在
- * 距顶 ~55px 处：上方露出滚动中的卡片、下方盖住第一张卡片的顶部。
- * 此时必须与筛选条同款约定：直接贴容器顶（-1px）。
+ * v1.1 起 filterEl 度量的是**整个吸顶头部块**（标题/概览/待办/搜索/筛选），
+ * 块本身在多选 / 盘点态只是把内部条目 v-if 掉、元素常驻——ResizeObserver
+ * 随块收缩即时更新高度，分组头偏移在三种模式下都准确，不再需要特判。
  */
-const groupTop = computed(() => {
-  if (selectMode.value || stocktakeMode.value) return '-1px';
-  return `${Math.max(0, Math.round(filterH.value) - 1)}px`;
-});
+const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
 
 /** 概览卡筛选：`FreshGroup` 走分组，'overdue' 单独筛「已过期」，null 表示不筛 */
 const statusFilter = ref<FreshGroup | 'overdue' | null>(null);
@@ -485,6 +478,12 @@ function exitStocktake() {
       三种字号挤在一起，再叠上 SVG 基线问题（见 .icon 的注释），观感自然乱。
       PageHeader 自带顶部 16px 占位（TabLayout 给本页取消了滚动容器上内边距）。
     -->
+    <!--
+      ★ 吸顶头部（v1.1 F7）：标题 / 概览卡 / 待办 / 搜索 / 筛选全部钉在顶部，
+      只有分组列表滚动——头部是"我现在在哪、有多少东西"，滚动时不该消失。
+      多选 / 盘点态块内条目被 v-if 收掉，块自动缩成一行标题。
+    -->
+    <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pb-2.5">
     <PageHeader :title="stocktakeMode ? '盘点' : '库存'">
       <!--
         右侧操作区：三种模式填不同内容，但**容器对齐方式与控件高度一致**
@@ -565,16 +564,10 @@ function exitStocktake() {
       </template>
     </PageHeader>
 
-    <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
-    <StocktakePanel
-      v-if="stocktakeMode"
-      :rows="rows"
-      @exit="exitStocktake"
-    />
-
-    <template v-else>
+    <!-- 头部条目（吸顶块内）：多选 / 盘点态整体收掉，块缩成一行标题 -->
+    <template v-if="!selectMode && !stocktakeMode">
       <!-- ② 统计 / 筛选：三张卡既是概览也是状态筛选器，点一下即过滤，再点一下取消 -->
-      <div v-if="!selectMode" class="grid grid-cols-3 gap-2 mb-3.5">
+      <div class="grid grid-cols-3 gap-2 mb-3.5">
         <StatCard
           :value="todo.length"
           label="今日待吃"
@@ -607,23 +600,29 @@ function exitStocktake() {
         ③ 今日待办：数字下面紧跟「是哪几件、怎么处理」，这是本页最高频的动线。
         空库时不显示收尾文案（`:show-empty="total > 0"`）。层间距由组件根元素的 mb-3.5 提供。
       -->
-      <TodayTodo v-if="!selectMode" :show-empty="total > 0" />
+      <TodayTodo :show-empty="total > 0" />
 
-      <SearchField v-if="!selectMode" v-model="keyword" class="mb-3.5" placeholder="搜索食材（支持别名，如 番茄）" />
+      <SearchField v-model="keyword" class="mb-3.5" placeholder="搜索食材（支持别名，如 番茄）" />
 
       <!--
         ④ 位置筛选条吸顶。多选态下整条隐藏 —— 多选是为批量操作服务的，
         此时改筛选只会让选中项「看不见」。
         （视图切换已从本页移到「设置 → 库存设置」，这里不再有那一行常驻按钮。）
       -->
-      <div v-if="!selectMode" class="flex items-center gap-2 mb-2.5">
-        <div
-          ref="filterEl"
-          class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pt-1 pb-2 flex-1 min-w-0"
-        >
-          <LocationChipBar v-model="filterLoc" @manage="router.push('/locations')" />
-        </div>
+      <div class="pt-1">
+        <LocationChipBar v-model="filterLoc" @manage="router.push('/locations')" />
       </div>
+    </template>
+    </div>
+
+    <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
+    <StocktakePanel
+      v-if="stocktakeMode"
+      :rows="rows"
+      @exit="exitStocktake"
+    />
+
+    <template v-else>
 
       <EmptyState
         v-if="rows.length === 0"

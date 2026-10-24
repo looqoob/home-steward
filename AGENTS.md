@@ -305,6 +305,7 @@ home-steward/
 - `TabLayout`（三个主 Tab）：纯白背景、不显示标题；顶部纯白占位负责「安全区 + 12px」。
 - **独立路由子页**：页面自己渲染 `NavBar.vue`，它是页面根容器首个 flex item——在滚动容器**外面**，不随内容滚动。
 - **★ TabLayout 下又需要标题栏的页面**：路由写 `meta: { header: '标题' }`，由外壳渲染 NavBar；**页面里不要再写 `<NavBar>`**。代价：滚动容器 `pt-0 pb-0`，留白由页面内普通流占位元素提供（`sticky` 偏移相对内容盒，容器 padding 会漏缝，坑位 #16b）。
+- **页内吸顶头部块（v1.1 F7 模式）**：库存 / 清单 / 消耗明细把「标题 + 概览 + 搜索 + 筛选」整体做成一个 `sticky top-[-1px] z-20 bg-page -mx-4 px-4` 块，`filterEl`（useStickyFilterOffset）度量**整块**高度供分组头偏移；占位元素（h-4 / h-5）必须在块**内部**。多选 / 盘点态用块内条目 v-if 收缩，块常驻。
 - `index.html` 的 `theme-color` / manifest 的 `theme_color` 只有**一份**，由 `useTheme` 切换时写入（浅 `#FFFFFF` / 深 `#1C211F`）。**不要改成两套 meta + media 查询**——用户手选深色但系统浅色时状态栏会错。
 
 ### 6.4 ★ 外观主题（深浅 + 主题色）
