@@ -70,8 +70,10 @@ const backupTip = computed(() =>
 </script>
 
 <template>
-  <div class="h-full flex flex-col pt-4">
-    <!-- v1.1 F9：标题行固定，其余内容内部滚动（与其他 Tab 页同一模式） -->
+  <div class="h-full flex flex-col">
+    <!-- v1.1 F9：标题行固定，其余内容内部滚动（与其他 Tab 页同一模式）。
+         ⚠️ 不要加 pt-4：顶部 16px 留白由 PageHeader 的 topGap 唯一承担，
+         叠加会把标题行顶到比库存/清单页低 16px（v1.1 F12 实测抓到）。 -->
     <PageHeader title="我的" />
     <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain pb-3">
 

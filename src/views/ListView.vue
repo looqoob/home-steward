@@ -202,12 +202,13 @@ async function doClearDone() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col pt-4">
+  <div class="h-full flex flex-col">
     <!--
-      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
+      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 的吸顶）：头部 flex-none 永不滚动，
       清单与表单 flex-1 内部滚动。「手动添加」属低频操作，随内容滚动不占固定高度。
+      ⚠️ 根容器不要加 pt-4：顶部 16px 留白由 PageHeader 的 topGap 唯一承担（v1.1 F12）。
     -->
-    <div class="flex-none -mx-4 px-4 pb-2">
+    <div class="flex-none -mx-4 px-4 pb-2.5">
       <PageHeader title="清单">
         <template #actions>
           <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
