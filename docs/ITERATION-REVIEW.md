@@ -6,7 +6,7 @@
 > 每条结论都回到源码逐行复核；无法在沙箱内复现的（构建、真机）单独标注。
 >
 > 已排除：`docs/DESIGN-REVIEW.md` 三批（A1–A7 / B1–B12 / C1–C6）已修的无障碍与视觉层级问题、
-> `AGENTS.md §10` 已知坑位已覆盖的行为。本文只写**尚未修**的。
+> `docs/PITFALLS.md` 已知坑位已覆盖的行为（2026-10-24 前记在 `AGENTS.md §10`，批次 D1 迁出）。本文只写**尚未修**的。
 
 ---
 
@@ -117,7 +117,7 @@
 | REV-36 | `src/domain/shoppingRules.ts:132` | `NO_LOCATION` 的哨兵值里含一个**真实 NUL 字节**（文件偏移 4857）→ git 把整个 `shoppingRules.ts` 当二进制，`git diff` 与内容搜索全部失效，这个文件的改动无法 review | 把该字节写成**转义序列**（源码里写作 `\u0000`）：运行时字符串完全不变、文件变纯文本；若要彻底避免控制字符，改成 `'__none__'` 并同步 `groupShoppingByLocation` 的映射 |
 | REV-37 | `src/composables/useReminder.ts:60-78` | PWA 分支用 `new Notification(...)`：Chrome for Android 上该构造函数非法（必须走 `ServiceWorkerRegistration.showNotification`），iOS Safari 不支持 → 目标平台上这条路径实际不生效（异常被 catch 吃掉），只有 App 内待办条兜底 | 改走 `navigator.serviceWorker.ready.then(r => r.showNotification(...))`，或明确删掉这条路径、只保留 App 内提醒（避免「以为有通知」） |
 | REV-38 | `vite.config.ts:82-86`、`:117-122`、`index.html:46-73` | ① 没有配 `base`（默认 `/`），而 AGENTS.md:43 称「base 相对路径」，`index.html` / manifest `start_url` / `workbox.navigateFallback` 全是根绝对 → 部署到子路径会白屏；② `host:'0.0.0.0'` + `allowedHosts:true`（LAN 预览可被任意 Host 访问，DNS rebinding）；③ 全仓无 CSP，注入脚本可直接读 IndexedDB 并调用剪贴板导出 | 要么配 `base: './'` 并改绝对路径，要么修正 AGENTS.md；`allowedHosts` 收窄；补一条保守的 CSP |
-| REV-39 | `android/app/build.gradle:32`、`package.json`、`android/…/AndroidManifest.xml` 合并结果 | release 构建 `minifyEnabled false`、无 `shrinkResources`；`@capacitor/app` 装了但 `src/` 零 import；合并 manifest 从 `local-notifications` 继承了 `SCHEDULE_EXACT_ALARM` / `RECEIVE_BOOT_COMPLETED` / `WAKE_LOCK`，与 AGENTS §10 #7「不设 exact 以避开精确定时」的说法不符（有权限但没用） | 打开 minify + 规则；移除未用依赖，或说明用途；在 AGENTS 里写清继承来的权限为什么留着 |
+| REV-39 | `android/app/build.gradle:32`、`package.json`、`android/…/AndroidManifest.xml` 合并结果 | release 构建 `minifyEnabled false`、无 `shrinkResources`；`@capacitor/app` 装了但 `src/` 零 import；合并 manifest 从 `local-notifications` 继承了 `SCHEDULE_EXACT_ALARM` / `RECEIVE_BOOT_COMPLETED` / `WAKE_LOCK`，与坑位 #7「不设 exact 以避开精确定时」的说法不符（见 `docs/PITFALLS.md`）（有权限但没用） | 打开 minify + 规则；移除未用依赖，或说明用途；在 AGENTS 里写清继承来的权限为什么留着 |
 | REV-40 | `tsconfig.json:16`、`vite.config.ts:120`、`:84-85` | `types` 只有 `vite/client` / `vite-plugin-pwa/client`，却 include `vite.config.ts`（用 `node:url`、`process.env`），`@types/node` 只靠传递提升；`vitest.config.ts` 从未参与 typecheck；`preview` 端口配置与 `package.json` 的 `--port 4173` 打架；`assetsInlineLimit` 注释理由不成立 | 显式加 `@types/node`；把 `vitest.config.ts` 纳入；统一端口 |
 | REV-41 | 文档 | 漂移：`docs/ARCHITECTURE.md:197` 仍写「APK 尚未产出」；`src/domain/README.md:70` 仍写 `SCHEMA_VERSION = 1`；`AGENTS.md` 把 `@capacitor/app` 列入技术栈但未使用、§2 称 base 相对路径；`README.md:63` 称 android/ 不入库 | 顺手改掉，避免下一个 AI/人按错文档做事 |
 | REV-44 | `src/domain/grouping.ts:108-115` | 组卡 `totalQuantity` 把**不同单位**的数量直接相加，`unit` 却取 lead → 同位置「牛奶 2 盒 + 1 袋」显示「共 3 盒」。建议按 `unit` 拆组，或展示分单位明细 |
@@ -163,7 +163,7 @@
 - **`isDateStr` 正则没问题**：工具输出把 `\d` 显示成 `\\d`，用 Node 读原文件确认 `src/domain/dates.ts:23` 是 `/^\d{4}-\d{2}-\d{2}$/`，174 个用例里 freshness/stats 全过也印证了这一点。
 - **构建失败不是项目缺陷**：沙箱内 `vite.config` 打包 `spawn EPERM`、`@tailwindcss/oxide-win32-x64-msvc` 的 `.node` 读取失败、`components.d.ts` 写入被拒——都是本机沙箱限制，需要在普通终端复验。
 - **`docs/DESIGN-REVIEW.md` 的 A/B/C 三批已修**（对比度、焦点环、`maximum-scale`、`ConfirmSheet`、长按误触、Toast 撤销、深色模式变量等），本文没有重复列入。
-- **`AGENTS.md §10` 坑位**已覆盖的行为（如 `foldItems → sortByFreshness → groupBy*` 的顺序、`sticky` 内容盒偏移、`dictKey` 定格的**意图**）不重复报；REV-14 报的是「实现与意图不符」。
+- **`docs/PITFALLS.md` 坑位**已覆盖的行为（如 `foldItems → sortByFreshness → groupBy*` 的顺序、`sticky` 内容盒偏移、`dictKey` 定格的**意图**）不重复报；REV-14 报的是「实现与意图不符」。
 - **账目对不上但属设计选择**：`stockValue` 把过期物资也计入「在库总额」并单列 `overAmount`；`topWasted` 只统计有单价的记录并在 UI 提示——这两条注释完整，判定为有意为之，不算缺陷。
 - **第二批（领域层 + 单测）** 的 3 个 P1 已并入：REV-42（品类顺序，实读 `categories.ts:30-39` 确认）、REV-43（7 天抑制失效，另核 `shoppingRules.ts:103-107` 与 `sources.ts:9-12`）、REV-14（`dictKey` 成因）；其余 P2 并入 REV-44~50。该批报告里「`dates.ts` 正则坏了」一条**未采纳**——是工具输出转义造成的假阳性（见上一段）。
 
@@ -306,6 +306,8 @@
 ---
 
 ## 15. 后续批次 · v1.1 功能规划（2026-10-24 与需求方确认）
+
+> 批次的**登记与状态**以 `docs/BATCHES.md`（批次台账）为准：完成批次、新规划批次都必须当天在台账登记一行，本节承载需求明细与落地记录。
 
 > 本章是**已确认的功能需求**（优化 / 修复 / 性能与健壮性条目不在此列——优化与修复随批次 4/5 已闭环，
 > 性能与健壮性、真机走查另行排期，见 §13 / §14 的「有意未做」与 §7）。

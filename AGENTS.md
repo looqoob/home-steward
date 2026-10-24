@@ -3,12 +3,14 @@
 > 本文件是 **AI 助手 / 新接手开发者** 的唯一入口。
 > 如果你对本项目的记忆为零，读完这份文件就应该能正确改代码、加功能、不踩坑。
 >
-> **⚠️ 强制约定（最高优先级）**：任何时候你**新增/删除/重命名模块**、**新增或修改对外接口（导出函数、类型、组件 props / emits）**、**变更构建配置 / 依赖 / 环境变量 / 应用配置**，都**必须**在同一次改动中同步更新：
-> 1. 本文件 `AGENTS.md`（受影响的小节）
-> 2. 对应目录的 `README.md`（如 `src/domain/README.md`）
-> 3. 受影响函数/类型上方的 JSDoc 注释
+> **⚠️ 强制约定（最高优先级）**：
 >
-> 文档过期视为**构建失败**。CI 检查清单见文末「提交前自检」。
+> 1. **文档同步**：新增/删除/重命名模块、新增或修改对外接口（导出函数、类型、组件 props / emits）、
+>    变更构建配置 / 依赖 / 环境变量时，必须在**同一次改动**中同步更新：本文件（受影响小节）、
+>    对应目录的 `README.md`、受影响函数/类型上方的 JSDoc。**文档过期视为构建失败。**
+> 2. **批次登记**：每**完成**一个批次、每**梳理出新需求批次**，都必须当天在 `docs/BATCHES.md`
+>    （批次台账）登记一行；逐项改动写进明细文档的「落地记录」小节。未进台账的批次视为没有发生。
+> 3. **坑位登记**：踩到新坑当天记入 `docs/PITFALLS.md`（全量坑位表，本文件 §10 只有速查）。
 
 ---
 
@@ -30,7 +32,7 @@
 ### 交付形态
 
 - **PWA（当前默认）**：`vite-plugin-pwa` 生成 Service Worker，可添加到主屏幕、离线可用。
-- **原生 APK（Capacitor 8 壳）**：同一套 Web 产物 + Capacitor 原生容器。RecyclerView 之外的部分只有一个 WebView。
+- **原生 APK（Capacitor 8 壳）**：同一套 Web 产物 + Capacitor 原生容器（除 WebView 外只有一个 RecyclerView）。
 - **两套壳共用一套代码**，差异只在 `src/main.ts`（是否注册 SW）与 `src/composables/useReminder.ts`（真通知 vs 降级提示）。
 
 ---
@@ -41,18 +43,16 @@
 | --- | --- | --- |
 | Vue | 3.5.x | `<script setup lang="ts">` 风格 |
 | Vite | 8.x | hash 模式路由；**未配 `base`**（按根路径部署，子路径部署会白屏，改前先评估） |
-| TypeScript | **锁定 5.6.3** | ⚠️ **不要升级到 TS 7**，见 §10 坑位 |
-| vue-router | 5.x | **hash 模式**（`createWebHashHistory`） |
+| TypeScript | **锁定 5.6.3** | ⚠️ **不要升级到 TS 7**（`vue-tsc` 会挂，坑位 #1） |
+| vue-router | 5.x | **hash 模式**（`createWebHashHistory`）；PWA 离线深链 + Capacitor 场景下 history 模式不稳 |
 | Pinia | 4.x | **setup store** 写法（非 options store） |
 | Dexie | 4.x | IndexedDB 封装 |
-| Vant | 4.x | 移动端组件库；按需在 `vite.config.ts` 用 `unplugin-vue-components` + `VantResolver` 自动导入（见 §6.1 / §13） |
-| TailwindCSS | v4 | utility-first 样式；`@tailwindcss/vite` 插件 + `@theme inline` 把设计 token 映射成工具类（见 §6.1） |
-| unplugin-vue-components | 1.x | 仅用于 Vant 按需导入（`VantResolver`），并生成 `src/components.d.ts` |
+| Vant | 4.x | 移动端组件库，按需自动导入（见 §6.1） |
+| TailwindCSS | v4 | utility-first；`@tailwindcss/vite` 插件，无 `tailwind.config.js`（见 §6.1） |
+| unplugin-vue-components | 1.x | 仅用于 Vant 按需导入（`VantResolver`），生成 `src/components.d.ts` |
 | vite-plugin-pwa | 1.x | workbox-build / workbox-window 7.x 需显式安装 |
-| Capacitor | 8.x | core / android / cli + @capacitor/app（暂未被 import，移除需重跑 `cap sync` 同步 gradle）、@capacitor/local-notifications |
+| Capacitor | 8.x | core / android / cli + @capacitor/app（暂未被 import，移除需重跑 `cap sync`）、@capacitor/local-notifications |
 | sharp | 0.35.x | 仅 `scripts/gen-icons.mjs` 用，生成图标 |
-
-**为什么用 hash 路由**：PWA 离线深链 + Capacitor 的 `https://localhost` 场景，history 模式的 fallback 在两种壳里都不稳定。
 
 ---
 
@@ -62,113 +62,111 @@
 home-steward/
 ├── AGENTS.md                 # 本文件：AI/新人入口
 ├── README.md                 # GitHub 首页：产品简介 + 快速开始
-├── index.html                # 入口 HTML，theme-color 有浅/深两套，必须与顶栏背景一致
-├── vite.config.ts            # Vite + PWA + Tailwind + Vant 按需(VantResolver) + alias(@) 配置
-├── capacitor.config.ts       # Capacitor：appId / webDir（禁止配 server.url）
+├── index.html                # 入口 HTML；theme-color 只有一份，由 useTheme 写入
+├── vite.config.ts            # Vite + PWA + Tailwind + Vant 按需 + vantCssLayer + alias(@)
+├── capacitor.config.ts       # appId / webDir（禁止配 server.url）
 ├── tsconfig.json             # paths: @/* → src/*
-├── package.json
 │
 ├── scripts/
 │   ├── gen-icons.mjs         # sharp 生成 PWA / APK 图标 → public/icons/
-│   └── apk.mjs               # 跨平台调 Gradle Wrapper（`npm run apk` / `apk:release`）
+│   └── apk.mjs               # 跨平台调 Gradle Wrapper（npm run apk / apk:release）
 │
 ├── public/
 │   └── icons/                # ★ 图标必须在这里才会进 dist 并被预缓存
 │
 ├── docs/
-│   └── ARCHITECTURE.md       # 分层架构详解 + 数据流图
+│   ├── ARCHITECTURE.md       # 分层架构详解 + 数据流图
+│   ├── BATCHES.md            # ★ 批次台账（完成/新需求批次强制登记处）
+│   ├── PITFALLS.md           # ★ 已知坑位全表（AGENTS §10 只有速查）
+│   ├── ITERATION-REVIEW.md   # v1.0 迭代评审 + 批次 1~5 落地记录 + v1.1 功能规划（§15）
+│   ├── V2-CHANGELOG.md       # v2 新概念与坑（清单入库/待办/批量/条码）
+│   ├── V3-CHANGELOG.md       # v3 新概念与坑（折叠/FEFO/清洗/盘点/统计）
+│   ├── DESIGN-REVIEW.md      # 无障碍与视觉层级评审（A/B/C 三批，已修）
+│   ├── ICON-TEXT-SPEC.md     # 图标 + 文本排版规范（尺寸/描边/对齐）
+│   └── 使用教程.md            # 面向最终用户的操作教程
 │
 └── src/
-    ├── main.ts               # 应用挂载；原生壳跳过 SW 注册
-    ├── App.vue               # 启动引导：存储探针 → 播种 → 加载 stores
+    ├── main.ts               # 挂载；原生壳跳过 SW；Quota 兜底
+    ├── App.vue               # 启动引导：探针→播种→加载 stores→生成清单→提醒→跨标签同步
     │
-    ├── domain/               # 【第 1 层】纯函数，零依赖
-    │   ├── types.ts          # 全部实体类型、枚举、常量（ENV_MAP 等）
-    │   ├── dates.ts          # 本地日期字符串工具 + isDateStr 合法性守卫
+    ├── domain/               # 【第 1 层】纯函数，零依赖（详见 src/domain/README.md）
+    │   ├── types.ts          # 全部实体类型、枚举、常量（ENV_MAP 等，UI 色彩单一真源）
+    │   ├── dates.ts          # 本地日期字符串工具 + isDateStr 守卫（外部数据必过）
     │   ├── ids.ts            # ID 生成、稳定哈希
-    │   ├── categories.ts     # 品类默认值 + 关键词猜品类
-    │   ├── freshness.ts      # 新鲜度状态机（核心概念）
-    │   ├── shelfLife.ts      # 保质期解析与到期日计算
-    │   ├── itemFactory.ts    # 商品对象构造
-    │   ├── locationRules.ts  # 位置删除/计数/排序规则
-    │   ├── shoppingRules.ts  # 购物清单自动生成规则 + 按位置分组
-    │   ├── stats.ts          # 月度统计、位置分布、浪费趋势/Top/周转/品类
-    │   ├── grouping.ts       # v3：同名折叠 + FEFO 排序与消耗
-    │   ├── timeline.ts       # v3：到期日时间轴分桶
-    │   ├── accent.ts         # 主题色：预设色板 + 对比度校正 + 色阶派生（纯函数）
-    │   ├── settings.ts       # 设置归一（旧数据 / 备份导入共用，单一真源）
-    │   └── README.md
+    │   ├── categories.ts     # 品类默认值 + 关键词猜品类（KEYWORDS 顺序敏感）
+    │   ├── freshness.ts      # 新鲜度状态机（核心概念，见 §5.2）
+    │   ├── shelfLife.ts      # 保质期解析与到期日计算、位置对比
+    │   ├── itemFactory.ts    # 商品对象构造（dictKey 定格处，必须传 aliasKey）
+    │   ├── locationRules.ts  # 位置删除校验 + countsByLocation 计数聚合
+    │   ├── shoppingRules.ts  # 清单自动生成（DISMISS_DAYS 唯一定义）+ 按位置分组
+    │   ├── stats.ts          # 月度统计、位置分布（含未分配桶）、趋势/Top/周转/品类
+    │   ├── grouping.ts       # 同名折叠 + FEFO（见 §5.6）
+    │   ├── timeline.ts       # 到期日时间轴分桶
+    │   ├── todo.ts           # 今日待办（数字/列表/通知三处同源）
+    │   ├── inbound.ts        # 清单入库默认值推断（AliasKeyResolver 注入）
+    │   ├── bulk.ts           # 批量操作规划 + buildConsumeLog（全项目唯一日志构造）
+    │   ├── price.ts          # 金额口径唯一定义（normalizePrice/amountOf/round2）
+    │   ├── quantity.ts       # 数量格式化
+    │   ├── settings.ts       # 设置归一（旧数据/导入共用单一真源）
+    │   ├── accent.ts         # 主题色：色板 + 对比度校正 + 色阶派生
+    │   ├── normalize.ts      # 名称归一化（全角/括号/空白/大小写）
+    │   └── __tests__/        # 纯函数测试 + fixtures
     │
-    ├── data/                 # 【第 2 层】持久化
+    ├── data/                 # 【第 2 层】持久化（详见 src/data/README.md）
     │   ├── repository.ts     # 抽象接口（Repository / DataSources）
     │   ├── index.ts          # ★ 选型唯一硬编码点：export const db
-    │   ├── seed.ts           # 首次启动预设位置
-    │   ├── dexie/
-    │   │   ├── db.ts         # Dexie 表定义与索引
-    │   │   └── sources.ts    # DataSources 的 Dexie 实现
-    │   ├── dict/
-    │   │   ├── builtin.ts    # 内置食材字典（稀疏矩阵）
-    │   │   ├── index.ts      # 四级兜底查询解析
-    │   │   └── normalize.ts  # 名称归一化（全角/括号/别名）
-    │   ├── backup/
-    │   │   ├── schema.ts     # 备份文件格式 + 校验（只校验信封）
-    │   │   ├── export.ts     # 导出
-    │   │   ├── import.ts     # 导入（replace / merge），写库前先 sanitize
-    │   │   ├── sanitize.ts   # v3：记录级清洗（脏备份的防线）
-    │   │   └── __tests__/    # sanitize 纯函数测试
-    │   ├── sync.ts           # 跨标签写同步广播（BroadcastChannel，检测+自动重读）
-    │   └── README.md
+    │   ├── seed.ts           # 首次启动预设位置（判据 countAll）
+    │   ├── dexie/            # db.ts 表定义与索引；sources.ts Dexie 实现
+    │   ├── dict/             # builtin.ts 内置字典 / index.ts 四级兜底 / normalize.ts 转出层
+    │   ├── backup/           # schema / export / import（写库前 sanitize）/ sanitize
+    │   └── sync.ts           # 跨标签写同步广播（BroadcastChannel）
     │
-    ├── stores/               # 【第 3 层】Pinia 薄层
-    │   ├── items.ts          # 商品 + 消耗日志
-    │   ├── locations.ts      # 位置
-    │   ├── dict.ts           # 自定义字典
-    │   ├── shopping.ts       # 购物清单
-    │   ├── settings.ts       # 单例设置
-    │   └── README.md
+    ├── stores/               # 【第 3 层】Pinia 薄层（详见 src/stores/README.md）
+    │   └── items / locations / dict / shopping / settings
     │
-    ├── composables/          # 跨模块可复用逻辑
-    │   ├── useReminder.ts    # 临期提醒（原生通知 / Web 降级）
-    │   ├── useToast.ts       # 全局轻提示（模块级单例 state）
-    │   ├── useSafeArea.ts    # 顶部安全区（状态栏/刘海）→ 写 <html> 的 --safe-top，顶栏只认它
-    │   ├── useNow.ts         # 响应式当前时刻/今天（60s 心跳 + 切回前台即刷新），跨零点刷新的真源
-    │   ├── useTheme.ts       # 外观主题（深浅 + 主题色）→ 写 html[data-theme] 与 --primary-* 内联变量
-    │   └── README.md
+    ├── composables/          # 跨模块复用逻辑（详见 src/composables/README.md）
+    │   ├── useReminder.ts    # 临期提醒（原生通知 / Web 降级，设置变更即重排程）
+    │   ├── useToast.ts       # 全局轻提示（模块级单例）
+    │   ├── useSafeArea.ts    # 顶部安全区真源 → 写 <html> 的 --safe-top
+    │   ├── useNow.ts         # 响应式当前时刻/今天（60s 心跳 + 回前台刷新），跨零点真源
+    │   ├── useTheme.ts       # 外观主题 → 写 html[data-theme] 与 --primary-* 内联变量
+    │   └── useStickyFilterOffset.ts
     │
-    ├── layouts/
-    │   └── TabLayout.vue     # 底部 Tab 外壳 + 白顶栏 + meta.header 子页顶栏 + FAB + 快速入库弹框
-    ├── router/index.ts       # 全部路由，懒加载导入
+    ├── layouts/TabLayout.vue # 底部 Tab 外壳 + meta.header 子页顶栏 + FAB + 快速入库
+    ├── router/index.ts       # 全部路由，懒加载；子页标题用 meta.header
     │
-    ├── views/                # 页面级组件（一个路由一个）
-    │   ├── StockView.vue         # 库存（默认页；分组/时间轴、多选、盘点三种模式）
-    │   ├── ListView.vue          # 购物清单（按原因 / 按位置两种分组）
-    │   ├── MeView.vue            # 我的
-    │   ├── StatsView.vue         # v3：统计（趋势 / Top 浪费 / 周转天数 / 品类分布）
-    │   ├── ConsumeLogView.vue    # 消耗明细（逐条消耗记录，从「我的」进入；顶栏由 meta.header 交给外壳渲染）
-    │   ├── ItemEditView.vue      # 商品新建/编辑
+    ├── views/                # 页面级组件（一个路由一个，详见 src/views/README.md）
+    │   ├── StockView.vue         # 库存（默认页；分组/时间轴/平铺、多选、盘点三模式）
+    │   ├── ListView.vue          # 购物清单（按原因 / 按位置）
+    │   ├── MeView.vue            # 我的（月度概览 + 位置分布）
+    │   ├── StatsView.vue         # 统计（趋势 / Top / 周转 / 品类 / 在库价值）
+    │   ├── ConsumeLogView.vue    # 消耗明细（meta.header 外壳顶栏）
+    │   ├── ItemEditView.vue      # 商品新建/编辑（含位置对比、改价、改名刷新 dictKey）
     │   ├── LocationManageView.vue# 位置管理
-    │   ├── DictView.vue          # 保质期字典
-    │   ├── AppearanceView.vue    # 外观与主题（深浅模式 + 主题色 + 自定义取色）
-    │   ├── SettingsView.vue      # 设置（提醒）
-    │   ├── BackupView.vue        # 备份导出导入（含清洗结果上报）
-    │   └── README.md
+    │   ├── DictView.vue          # 保质期字典（保存即自动重算在库商品）
+    │   ├── BarcodeManageView.vue # 条码映射管理
+    │   ├── AppearanceView.vue    # 外观与主题
+    │   ├── SettingsView.vue      # 设置（提醒 + 库存视图偏好）
+    │   └── BackupView.vue        # 备份导出导入（清洗结果上报 + 覆盖快照撤销）
     │
-    ├── components/           # 可复用 UI 组件
-    │   ├── ItemCard.vue
-    │   ├── ItemGroupCard.vue    # v3：同名折叠组卡（库存列表主体）
-    │   ├── GroupConsumeSheet.vue# v3：多份选份弹层（FEFO 默认 + 越序警告）
-    │   ├── StocktakePanel.vue   # v3：盘点模式面板（还在 / 用掉了 / 扔掉了）
-    │   ├── LocationChipBar.vue
-    │   ├── NavBar.vue            # 子页顶栏（含返回）
-    │   ├── SearchField.vue       # 列表页搜索框（原生 input + 放大镜，40px 胶囊）
-    │   ├── QuickAddSheet.vue     # 快速入库底部弹框
-    │   ├── ConfirmSheet.vue      # 二次确认弹层（删除 / 覆盖导入等破坏性操作）
-    │   ├── ConsumeSheet.vue       # 部分消耗数量选择（一次只用掉几个）
-    │   └── README.md
+    ├── components/           # 可复用 UI 组件（详见 src/components/README.md）
+    │   ├── ItemGroupCard.vue     # ★ 库存列表主体：同名折叠组卡（单份退化为普通卡）
+    │   ├── TodayTodo.vue         # 今日待办区块
+    │   ├── StocktakePanel.vue    # 盘点面板（队列必须是快照）
+    │   ├── GroupConsumeSheet.vue # 多份选份弹层（FEFO 默认 + 越序警告）
+    │   ├── ConsumeSheet.vue      # 部分消耗数量选择
+    │   ├── QuickAddSheet.vue     # 快速入库底部弹框（含单价与合计）
+    │   ├── ScanSheet.vue         # 扫码入库（忙锁 + 去重 + 停扫三步）
+    │   ├── ShoppingInboundRow.vue# 清单行内入库卡
+    │   ├── LocationPickerSheet.vue / LocationChipBar.vue
+    │   ├── NavBar.vue / PageShell.vue / PageHeader.vue   # 子页骨架与顶栏
+    │   ├── BottomSheet.vue / ConfirmSheet.vue            # 弹层脚手架与二次确认
+    │   ├── FormField.vue / Pill.vue / PillGroup.vue / QtyStepper.vue / StatCard.vue
+    │   ├── EmptyState.vue / IconText.vue / SearchField.vue / BulkActionBar.vue
+    │   └── components.d.ts       # unplugin 自动生成的 Vant 组件声明
     │
     └── styles/
-        ├── index.css         # ★ 设计系统唯一真源（颜色/字号/圆角/间距）+ Tailwind 入口 + Vant 主题变量
-        └── README.md
+        └── index.css         # ★ 设计系统唯一真源 + Tailwind 入口 + Vant 主题变量
 ```
 
 ---
@@ -196,37 +194,30 @@ home-steward/
 | `stores/` | `domain/`、`data/`、`composables/`、其他 store | ❌ Vue 组件 |
 | `views/`、`components/` | 以上全部 | — |
 
-这条规则的价值：`domain/` 里的保质期算法可以在 **Node 里直接单元测试**，不需要 mock 数据库。破坏它等于放弃可测试性。
+这条规则的价值：`domain/` 里的保质期算法可以在 **Node 里直接单元测试**，不需要 mock 数据库。破坏它等于放弃可测试性。需要 data 能力时（如字典别名）用**依赖注入**（`ShelfLifeResolver` / `AliasKeyResolver` 由 store 层传入），而不是让 domain 反向 import。
 
 ### 换持久化只改一行
 
-`src/data/index.ts` 是**唯一**硬编码选型的地方：
-
-```ts
-export const db: DataSources = createDexieSources();  // ← 换成 createSqliteSources() 即可
-```
-
+`src/data/index.ts` 是**唯一**硬编码选型的地方：`export const db: DataSources = createDexieSources();`。
 业务代码一律 `import { db } from '@/data'`，**永远不要**直接 `import { dexieDb } from '@/data/dexie/db'`。
 
 ---
 
 ## 5. 核心领域概念
 
-改业务逻辑前必须理解这几个概念，否则一定改错。
+改业务逻辑前必须理解这些概念，否则一定改错。完整 API 见 `src/domain/README.md`。
 
 ### 5.1 环境（EnvType）与位置（Location）解耦
 
-**环境决定保质期，位置只是环境的载体。** 多个位置可以同环境（冰箱冷藏 / 冷蔵室抽屉都是 `chilled`）。
+**环境决定保质期，位置只是环境的载体。** 多个位置可同环境（冰箱冷藏 / 冷藏室抽屉都是 `chilled`）。
+`EnvType`：`chilled | frozen | cool | dry | ventilated | dark | none`；`none` = 不计保质期（日用品预留）。
+`src/domain/types.ts` 的 `ENV_MAP` 是环境 → 文案/颜色/圆点的**单一真源**，UI 里禁止硬编码「冷藏」。
 
-`EnvType`：`chilled` | `frozen` | `cool` | `dry` | `ventilated` | `dark` | `none`
-
-`none` = 不计保质期（日用品预留）。`src/domain/types.ts` 的 `ENV_MAP` 是环境 → 文案/颜色/圆点的**单一真源**，UI 里禁止硬编码「冷藏」。
-
-### 5.2 新鲜度四态（FreshnessState）
+### 5.2 新鲜度六态（FreshnessState）
 
 `freshnessOf(item, today, settings)` 返回 `{ state, label, remainDays, progress, sortKey }`：
 
-| state | 判定 | 排序权重 |
+| state | 判定 | sortKey |
 | --- | --- | --- |
 | `fresh` | `d > soonDays` | `d` |
 | `soon` | `urgentDays < d ≤ soonDays` | `d` |
@@ -235,216 +226,158 @@ export const db: DataSources = createDexieSources();  // ← 换成 createSqlite
 | `warn` | 无到期日 且 `notRecommended` | `1e9 - 1` |
 | `none` | 无到期日 | `1e9`（最后） |
 
-- `progress` 视觉进度条，**钳制在 `[0.04, 1]`**（原型要求过期时也留一点可见条）。
-- 列表排序用 `sortByFreshness`，按剩余天数升序 + 同名中文排序兜底。
+- `progress` 钳制在 `[0.04, 1]`（过期也留一点可见条）。
+- 列表排序用 `sortByFreshness`（剩余天数升序 + 中文名兜底）。
+- ⚠️ `today` 必须来自 `useToday()`（响应式），**禁止 `const today = todayStr()` 定格**——PWA 挂后台跨零点会整天停在昨天。
 
 ### 5.3 保质期四级兜底
 
-`src/data/dict/index.ts` 的 `resolveWith()`：
+`src/data/dict/index.ts` 的 `resolveWith()`：① 用户自定义 → ② 内置字典 → ③ 品类默认 → ④ 全局环境默认 → 都没有则 `null`（提示手填）。
 
-```
-① 用户自定义字典 (source: 'custom')
-② 内置食材字典   (source: 'builtin')
-③ 品类默认值     (source: 'category')
-④ 全局环境默认值 (source: 'global')
-⑤ 都没有 → null (source: 'none')，提示用户手填
-```
+两条**优先级高于全部上述**：
 
-另外两条**优先级高于全部上述**：
+- **`manualShelfLife`（手填）**：一旦设定永远优先，**切换位置也不覆盖**。
+- **`NOT_RECOMMENDED`（哨兵 `-1`）**：「这东西不该放这环境」（如香蕉放冷藏）。命中时 `expireAt = null`，UI 显示「不建议存放」+ 保守天数（`fallbackDays`）。
 
-- **`manualShelfLife`（手填）**：用户一旦设定，永远优先，**切换位置也不覆盖**，不会因为换位置就被字典冲掉。
-- **`NOT_RECOMMENDED`（哨兵 `-1`）**：表示「这东西不该放这环境」（如香蕉放冷藏）。命中时 `expireAt = null`，UI 显示「不建议存放」并给出坚持存放的保守天数（`fallbackDays`）。
+字典是**稀疏矩阵**：`{ key, category, envs: Partial<Record<EnvType, number>>, aliases, notRecommendedReason }`，没填的组合交给下一级兜底。
 
-字典是**稀疏矩阵**：`{ key, category, envs: Partial<Record<EnvType, number>>, aliases, notRecommendedReason }`。没有的组合留空，交给下一级兜底。
+### 5.4 名称归一化与别名
 
-### 5.4 名称归一化
-
-`normalizeName()`：全角转半角 → 去括号内容 → 去空白 → 转小写。
-所以「番茄（西红柿）」「西红柿」「TOMATO」都能命中同一条字典（`aliases`）。
+- `normalizeName()`（domain/normalize）：全角转半角 → 去括号内容 → 去空白 → 转小写。「番茄（西红柿）」「西红柿」「TOMATO」归一后相同。
+- ⚠️ 归一**没有同义词表**：「番茄」≠「西红柿」。需要别名匹配时必须注入 `data/dict` 的 `foodKeyOf`（`AliasKeyResolver`），domain 不得反向依赖 data。
 
 ### 5.5 软删除
 
-除 `Settings` 外的所有实体都有 `deletedAt: number | null`。
-**仓库层的 `all()` / `byId()` 已自动过滤 `deletedAt`**，业务层不需要到处写 `.filter(i => !i.deletedAt)`，但 UI 层的 store getter（`active` / `visible`）出于性能仍保留过滤，两者不冲突。
-
-⚠️ 正因为 `all()` 过滤了软删除，「这条记录从没存在过」和「用户把它删光了」在它眼里是一样的。**判断「是否首次启动」必须用 `countAll()`**（含软删除行），否则用户把位置全删光后会重播预设（坑位 #60）。
-
-注意 `ConsumeLog` **没有** `updatedAt` 字段 —— 写通用工具函数时不能用 `updatedAt` 做硬约束（这是踩过的坑）。
+- 除 `Settings` 外所有实体都有 `deletedAt: number | null`；仓库层 `all()` / `byId()` 已自动过滤，UI store getter 仍保留过滤（性能），两者不冲突。
+- ⚠️ 正因 `all()` 滤了软删，「从没存在过」和「删光了」它分不清——**判断「是否首次启动」必须用 `countAll()`**（含软删行），否则位置删光后会重播预设（坑位 #60）。
+- 需要读**含软删行**的场景（忽略抑制、merge 的 tombstone 比较）用 `allIncludingDeleted()`。
+- `ConsumeLog` **没有** `updatedAt` —— 通用工具函数不能用 `updatedAt` 做硬约束。
 
 ### 5.6 同名折叠与 FEFO（v3）
 
-**数据层一条记录 = 一个批次，永不合并。** 两份牛奶 10-08 / 10-15 到期，合并成一行就必然
-丢掉「哪一份先过期」，而这恰恰是避免浪费的唯一依据。所以 v3 只在**展示层**把同名同位置
-折叠成一张组卡（`ItemGroupCard`），消耗时按 **FEFO**（最早到期先出）选份。
-
-| 层 | 做法 |
-| --- | --- |
-| 数据层 | 永不合并（`stores/items.addMany` 只在**入库时**且到期日相差 ≤ 1 天才真合并；⚠️ 清单「全部入库」传 `{ merge: false }`，见坑位 #56） |
-| 展示层 | `domain/grouping.foldItems` 折叠成 `ItemGroup` |
-| 消耗层 | `planGroupConsume` / `fefoSlices` 按 FEFO 分配 |
+**数据层一条记录 = 一个批次，永不合并。** 两份牛奶 10-08 / 10-15 到期，合并必然丢掉「哪份先过期」——那正是避免浪费的唯一依据。只在**展示层**折叠成组卡（`ItemGroupCard`），消耗按 **FEFO**（最早到期先出）选份；入库时到期日相差 ≤ 1 天才真合并（清单「全部入库」必须传 `{ merge: false }`，坑位 #56）。
 
 四条必须记住的口径：
 
-1. **折叠键 = `locationId | 名称键 | unit`**。名称键 = `(dictKey ?? name)` **先过 `aliasKey?.(…)`
-   （`data/dict` 的 `foodKeyOf`，依赖注入）再退 `normalizeName(…)`** —— 不能直接拿 `dictKey` 当键：
-   旧数据的 dictKey 是原始输入名（v3 之前 `createItem` 写的是 `name`），直接比对会让别名折叠对
-   存量数据失效。**带 unit**：「2 盒 + 1 袋」不能折成「3 盒」，跨单位数量相加与 FEFO 分配都无意义。
+1. **折叠键 = `locationId | 名称键 | unit`**。名称键 = `(dictKey ?? name)` **先过 `aliasKey?.(…)`（`foodKeyOf`）再退 `normalizeName(…)`** —— 不能直接拿 dictKey 当键：旧数据的 dictKey 是原始输入名，直接比对会让别名折叠对存量数据失效（坑位 #66）。**带 unit**：「2 盒 + 1 袋」不能折成「3 盒」。
 2. **组卡的状态色 / 排序 / 进度条一律取 `lead`**（组内最早到期那份）。
 3. **待办 / 提醒 / 统计一律按「份」，只有库存列表按组折叠**（段头计数也按份）。
-4. **折叠必须在分段之前**：`foldItems → sortByFreshness → groupByFreshness`。
-   反过来会把同名组切到两段，同一物品重复出现 —— 这是最不能接受的错。
-
-详见 `src/domain/README.md#groupingts--v3同名折叠与-fefo` 与 `docs/V3-CHANGELOG.md`。
+4. **折叠必须在分段之前**：`foldItems → sortByFreshness → groupByFreshness`。反过来会把同名组切到两段（坑位 #34）。
 
 ### 5.7 外部数据必须过 `isDateStr`（v3）
 
-`Item.expireAt` / `storedAt` / `ConsumeLog.at` 都可能来自**用户手改过的备份 JSON**。
-一个 `storedAt: 0` 就会穿透 `diffDays` → `parseDate` → `'(0)'.split` 抛错，
-把「我的」「库存」双主 Tab 打成**永久白屏**，而数据 100% 在本机、没有副本可回滚。
-
-三层防御，缺一不可：
+`expireAt` / `storedAt` / `ConsumeLog.at` 都可能来自**用户手改过的备份 JSON**。一个 `storedAt: 0` 就会穿透 `diffDays` → `parseDate` 抛错，把双主 Tab 打成**永久白屏**，而数据 100% 在本机、没有副本可回滚。三层防御缺一不可：
 
 | 层 | 位置 | 作用 |
 | --- | --- | --- |
-| 入口清洗 | `data/backup/sanitize.ts` | 写库**前**修掉/丢弃脏记录，并计数上报 |
-| 类型守卫 | `domain/dates.isDateStr` | `freshnessOf` 的判定条件、`stats` 的 `dateOf()` |
-| 消费点 | 各聚合函数 | 脏日期那一项当「无日期」跳过，不让整个页面炸 |
+| 入口清洗 | `data/backup/sanitize.ts` | 写库**前**修/丢脏记录并计数上报（日期还要过**往返校验**：`2026-13-01` 这种假日期按非法处理） |
+| 类型守卫 | `domain/dates.isDateStr` | `freshnessOf` 判定条件、`stats` 的 `dateOf()`/`epochOf()` |
+| 消费点 | 各聚合函数 | 脏值当「无日期」跳过，不让整页炸 |
 
-`isDateStr` 住在 `domain/dates` 而不是 `data/backup/sanitize`（data 可以依赖 domain，
-反之不行）—— 与 `normalizeName` 当初从 data 迁上来是同一回事。
+`isDateStr` 住在 domain（data 可依赖 domain，反之不行）——与 `normalizeName` 当初从 data 迁上来同理。
 
 ---
 
 ## 6. UI / 交互约定（视觉必须 1:1 复刻原型）
 
-### 6.1 设计系统
+### 6.1 设计系统与组件库（Tailwind v4 + Vant 4）
 
-- **唯一真源**：`src/styles/index.css` —— `:root` 集中定义设计 token（颜色 `--color-*`、字号、圆角、间距、阴影、环境点色），再用 `@theme inline` 映射成 Tailwind 工具类（`bg-page` / `bg-card` / `text-ink-1` / `bg-primary-600` …）。**禁止在组件里写魔法色值**，一律用工具类或 `var(--color-*)`。
-- **组件库用 Vant 4（按需）**：只保留按钮 `van-button`、开关 `van-switch`、`van-config-provider`（深色模式）三类。**表单类控件一律手写**：输入框用原生 `<input>` + 项目输入样式，搜索用 `components/SearchField.vue`（`van-field` / `van-search` 由 `van-cell` 拼成，自带两层固定行高与内边距，和 40/44px 的设计高度对不齐，已弃用）。高度自定义的卡片（如 `ItemCard.vue`、`LocationChipBar.vue`）保留手写实现。**不再手写整套 SCSS 组件样式**。Vant 由 `unplugin-vue-components` + `VantResolver` 在编译期自动按需导入，已声明组件见 `src/components.d.ts`（新增 Vant 组件后该文件会被自动补全，未覆盖到的需手动补一行类型声明）。
-- **Vant 主题色**：在 `index.css` 里覆盖 `--van-primary-color` 等为品牌绿 `#228055`，使 Vant 组件与项目主题一致；深色模式通过 `@media (prefers-color-scheme: dark)` 覆盖 `:root` token，并由 `App.vue` 的 `van-config-provider :theme` 同步切换。
-- 环境色取：`@/domain/types` 的 `ENV_MAP`（包含 `color` 与 `dotClass`），禁止在 UI 里复制粘贴色值。
+- **唯一真源**：`src/styles/index.css` —— `:root` 定义设计 token，`@theme inline` 映射成工具类（`bg-page` / `bg-card` / `text-ink-1` / `bg-primary-600`…）。**禁止组件里写魔法色值**；环境色一律取 `ENV_MAP`。
+- **Tailwind v4 无配置文件**：新增颜色 token 在 `:root` 加 `--color-xxx` 并挂进 `@theme inline` 即可。深色模式**覆盖 token 变量**（挂在 `html[data-theme='dark']`），不覆盖工具类。
+- **★ 层叠分层（样式静默失效的头号原因）**：Tailwind 工具类在 `@layer utilities`，而 CSS「**分层比较先于选择器权重**」。Vant 自带 unlayered 全局规则（`input,button{color:inherit;font:inherit}` 等）会压过一切工具类。`vite.config.ts` 的 `vantCssLayer()` 插件把 Vant CSS 包进 `@layer vant`，层序 `@layer theme, base, vant, components, utilities;` 同时写在 `index.css` 首行**和**每个 Vant CSS 文件头部（层序按「第一次出现」生效）。**不要删该插件，不要把规则写到 unlayered 位置**（坑位 #14）。
+- **`main.ts` 导入顺序**：`import './styles/index.css'` 必须在 `import App.vue` 之前（决定 dev 下 `<style>` 注入顺序）。
+- **Vant 按需**：模板里写 `van-xxx` 即自动导入并生成 `src/components.d.ts`；**不要显式 import**。当前只用 `van-button` / `van-switch` / `van-config-provider`。**表单控件一律手写**：输入框用原生 `<input>` + `.field-input`（`van-field` 固定标签宽度会挤压输入区），搜索用 `SearchField.vue`。Vant 主题变量（`--van-primary-color` 等）一律引用项目 token（`var(--primary-600)`），别写死 hex。
+- **选中态写法（★ 约定）**：互斥的**三元表达式**（`:class="sel ? 'bg-primary-600 …' : 'bg-card …'"`），**不要**「静态类 + 条件类叠加」——同类工具类谁生效取决于 CSS 先后顺序（坑位 #20 同族）。
+- **手写不换 Vant**：组卡、步进器、底部弹框、搜索框等高度自定义部分保持手写 Tailwind。图标一律内联 SVG + `currentColor`（规范见 `docs/ICON-TEXT-SPEC.md`）。
+- **⚠️ 输入类字号必须 ≥ 16px**：iOS / 部分 WebView 对 <16px 输入框聚焦会**整页放大且失焦不还原**（坑位 #64）。视觉尺寸靠外框高度与内边距收。
 
-### 6.2 三个易错点（必看）
+### 6.2 三个易错点
 
 1. **选中态用 `--primary-600`，不是 500。**
 2. **位置标签是中性灰底 + 彩色圆点**，不是彩色底。
-3. **Pinia setup store 的 `computed` 在 store 实例上已自动解包** → 视图里写 `dict.resolve`，**不能**写 `dict.resolve.value`。同理 `ref` 也直接访问。
+3. **Pinia setup store 的 `computed`/`ref` 在实例上已自动解包** → 视图里写 `dict.resolve`，**不能**写 `dict.resolve.value`。
 
 ### 6.3 顶栏规范
 
-- ★ **顶部安全区（状态栏 / 刘海）只有 `--safe-top` 一个真源**：`src/composables/useSafeArea.ts` 在启动时（`main.ts` 中 `app.mount` 之前）量出真实值，写成 `<html>` 的 inline `--safe-top`；`index.css` 的 `:root` 里那份 `env(safe-area-inset-top, 0px)` 只是 JS 还没跑时的首帧兜底。**组件一律写 `pt-[var(--safe-top)]`，禁止再各写 `env(safe-area-inset-top)`** —— 后者在 Android WebView 里恒为 0（详见 §10 #53）。
-- `TabLayout`（三个主 Tab）：**纯白背景、不显示标题**（底部 Tab 已表明页面）。顶部的纯白占位负责「安全区 + 12px 呼吸空间」（`h-[calc(var(--safe-top)+12px)]`）。
-- **独立路由子页**（商品编辑 / 位置管理 / 字典 / 设置 / 备份）：页面自己渲染 `NavBar.vue`（标题 + 返回），它是页面根容器（`flex flex-col h-full`）的首个 flex item —— 位于滚动容器**外面**，所以不随内容滚动、天然占满整宽。
-- **★ 挂在 TabLayout 下、又需要标题栏的页面**（如 `/consume-log` 消耗明细）：在路由上写 `meta: { header: '标题' }`，由 `TabLayout` 把 `NavBar` 渲染在滚动容器**外面**；**页面里不要再写 `<NavBar>`**，否则出现两条顶栏。这样它才和底部 Tab 一样贴死边缘、不随内容滚动。
-  - 代价：这类页面的滚动容器 `padding` 会被置为 `pt-0 pb-0`（`TabLayout.padClass`），上下留白改由页面内的**普通流占位元素**提供（如 `ConsumeLogView` 的 `h-5`）。
-  - 原因：`sticky` 的偏移量相对**内容盒**计算，容器 `padding` 会把吸顶 / 吸底条朝内推，与容器边缘之间漏出一条能看到滚动卡片的缝。改这类页面前先看 `src/styles/README.md`「吸顶层」规则 5。
-- `NavBar` 自己承担状态栏安全区（`pt-[var(--safe-top)]` + `h-[calc(48px+var(--safe-top))]`），由外壳渲染时 `TabLayout` 就**不再**渲染那块 12px 纯白占位，避免白色多出一截。**安全区逻辑只在 NavBar 里写一次** —— 新增二级页只要用 `NavBar` / `PageShell` / `meta.header` 中任一方式，就自动带安全区，不需要作者记得补 padding。
-- `index.html` 的 `theme-color` 只有**一份**，值由 `useTheme` 在切换时写入（浅 `#FFFFFF` / 深 `#1C211F`，与 `--bg-card` 同步）。**不要再改成「两套 meta + `media="(prefers-color-scheme: dark)"`」** —— 用户手选深色但系统是浅色时状态栏会错。manifest 的 `theme_color` 同理只有一份。
+- **★ 顶部安全区只有 `--safe-top` 一个真源**：`useSafeArea.ts` 在 `app.mount` 之前把实测值写成 `<html>` 的 inline `--safe-top`（`env()` 在 Android WebView 里恒为 0，坑位 #53）。**组件一律 `pt-[var(--safe-top)]`，禁止再写 `env(safe-area-inset-top)`**。安全区逻辑只在 `NavBar` 写一次，二级页用 `NavBar` / `PageShell` / `meta.header` 任一方式即自动带上。
+- `TabLayout`（三个主 Tab）：纯白背景、不显示标题；顶部纯白占位负责「安全区 + 12px」。
+- **独立路由子页**：页面自己渲染 `NavBar.vue`，它是页面根容器首个 flex item——在滚动容器**外面**，不随内容滚动。
+- **★ TabLayout 下又需要标题栏的页面**：路由写 `meta: { header: '标题' }`，由外壳渲染 NavBar；**页面里不要再写 `<NavBar>`**。代价：滚动容器 `pt-0 pb-0`，留白由页面内普通流占位元素提供（`sticky` 偏移相对内容盒，容器 padding 会漏缝，坑位 #16b）。
+- `index.html` 的 `theme-color` / manifest 的 `theme_color` 只有**一份**，由 `useTheme` 切换时写入（浅 `#FFFFFF` / 深 `#1C211F`）。**不要改成两套 meta + media 查询**——用户手选深色但系统浅色时状态栏会错。
 
 ### 6.4 ★ 外观主题（深浅 + 主题色）
 
-用户可选 `light` / `dark` / `system`（存 `settings.themeMode`）+ 主色（`settings.accent`）。完整约定见 `src/domain/README.md`（配色算法）与 `src/composables/README.md`（运行时），这里只记四条**改错就出 bug** 的硬规则：
+`light` / `dark` / `system`（存 `settings.themeMode`）+ 主色（`settings.accent`）。四条**改错就出 bug** 的硬规则：
 
-1. **深色变量挂在 `html[data-theme='dark']` 上，不是 `@media (prefers-color-scheme: dark)`。** 媒体查询无法被应用内状态覆盖，用户手选浅色但系统是深色时会失效。`system` 模式在 JS 里解析成实际值后写进 `data-theme`。
-2. **首屏防闪烁靠 `index.html` 里的内联脚本** + localStorage 镜像 `hs.theme`（Dexie 是异步的，首帧读不到）。改镜像 key / 结构必须同步改 `useTheme.ts` 的 `MIRROR_KEY`。**内联脚本不能用外部文件替代**（外部文件是异步的，防不住闪烁）。
-3. **主题色整条色阶由 JS 算好后写成 `<html>` 的 inline style**（`--primary-50…700`、`--focus-ring`、`--accent`）。inline 优先级高于 `:root`，所以 CSS 里的色板只是「JS 还没跑」时的兜底。不要用 CSS `color-mix()` 代替：那样做不了「对比度不达标继续调」的闭环。
-4. **语义色不跟随主题色**：环境色（`ENV_MAP`）与新鲜度四态（fresh/soon/urgent/over）保持固定 —— 跟着品牌色变会让「冷藏=蓝、临期=橙」的语义失效。
+1. **深色变量挂 `html[data-theme='dark']`，不是 `@media (prefers-color-scheme: dark)`**（媒体查询无法被应用内状态覆盖，坑位 #18）。
+2. **首屏防闪烁靠 `index.html` 内联脚本** + localStorage 镜像 `hs.theme`（改镜像 key 必须同步改 `useTheme.ts` 的 `MIRROR_KEY`；内联脚本不能用外部文件替代）。
+3. **主题色整条色阶由 JS 算好写 `<html>` inline style**（`--primary-50…700` 等）。不要用 CSS `color-mix()` 派生——做不了「对比度不达标继续调」的闭环；主色必须过 `domain/accent.resolveAccent`（白字 ≥4.5:1，坑位 #19）。
+4. **语义色不跟随主题色**：环境色与新鲜度四态固定——跟着品牌色变会让「冷藏=蓝、临期=橙」失效。
 
 ### 6.5 FAB（快速入库）
 
-右下角 FAB **只在库存 Tab 显示**（`v-if="isStock"`，判据 `route.path.startsWith('/stock')`）。其他 Tab 必须隐藏。
+右下角 FAB **只在库存 Tab 显示**（`v-if="isStock"`）。其他 Tab 必须隐藏。
 
 ### 6.6 ★ 弹框的返回键处理（重要模式）
 
-**所有全屏/半屏弹框的开合状态必须用「路由 query 驱动」，禁止用局部 `ref`。**
+**所有全屏/半屏弹框的开合状态必须用「路由 query 驱动」，禁止用局部 `ref`**（安卓返回键被 popstate 消费，局部 ref 会出现「页面跳走了弹框还开着」）：
 
 ```ts
-// TabLayout.vue —— 唯一正确写法
 const quickAddOpen = computed(() => route.query.quickadd === '1');
 function openQuickAdd() { router.push({ path: '/stock', query: { quickadd: '1' } }); }
 function closeQuickAdd() { if (route.query.quickadd) router.back(); }
 ```
 
-为什么：
-
-- 安卓返回键被 popstate 直接消费，如果用局部 ref，会出现「页面跳走了但弹框还开着」。
-- query 驱动后，`router.back()` 只回退这一条历史记录 → **关闭弹框且不跳页**（`path` 恒为 `/stock`）。
-- 弹框**内部**的跨页跳转必须用 `router.replace`（不是 `push`），否则会多一条历史记录，导致返回时弹框复现。
-
-新增任何弹框都照抄这个模式，并在 `src/components/README.md` 登记。
+弹框**内部**的跨页跳转必须用 `router.replace`（否则多一条历史记录，返回时弹框复现）。新增弹框照抄此模式并在 `src/components/README.md` 登记。
 
 ---
 
 ## 7. 环境准备
 
-### 前置要求
-
 | 工具 | 版本 | 备注 |
 | --- | --- | --- |
 | Node.js | ≥ 20（推荐 22） | |
 | npm | ≥ 10 | |
-| JDK | **21** | 仅打 APK 需要；Capacitor 8 不支持 JDK 17 |
-| Android SDK | compileSdk / targetSdk 36，minSdk 24 | 仅打 APK 需要 |
-| 签名（仅 release） | `android/keystore.properties` 或四个环境变量 | 照着 `android/keystore.properties.example` 建；**密钥与口令都不入库**（坑位 #61） |
-
-### 安装
+| JDK | **21** | 仅打 APK；Capacitor 8 不支持 JDK 17 |
+| Android SDK | compileSdk / targetSdk 36，minSdk 24 | 仅打 APK |
+| 签名（仅 release） | `android/keystore.properties` 或四个 `HOME_STEWARD_*` 环境变量 | 照 `keystore.properties.example` 建；**密钥与口令永远不入库**（坑位 #61） |
 
 ```bash
 npm install
 ```
 
-⚠️ `sharp` 是可选依赖，装不上时图标生成会失败，但**构建本身不受影响**。已在 `.npmrc` 无关的情况下若仍失败，重试即可。
+⚠️ `sharp` 装不上只影响图标生成，不影响构建。中文用户名路径下打 APK 的四个坑（镜像/代理/编码/路径检查）见坑位 #49~#52。
 
 ---
 
-## 8. 常用命令
+## 8. 常用命令与验证
 
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器（默认 5173） |
-| `npm run typecheck` | **类型检查**（`vue-tsc --noEmit`），不产出文件 |
-| `npm test` | **单元测试**（`vitest run`），当前覆盖 `src/domain/` 全部纯函数 |
-| `npm run test:watch` | 测试 watch 模式 |
+| `npm run typecheck` | 类型检查（`vue-tsc --noEmit`） |
+| `npm test` / `npm run test:watch` | 单元测试（vitest；当前 16 文件 / 253 例，覆盖 domain 全部纯函数 + sanitize） |
 | `npm run build` | 生产构建 → `dist/`（含 PWA + Service Worker） |
-| `npm run preview` | 本地预览构建产物（4173），**用于验证 PWA/SW 行为** |
+| `npm run preview` | 预览构建产物（4173）——**验证 PWA/SW 行为必须用它**，dev 不注册 SW |
 | `npm run icons` | 重新生成图标到 `public/icons/` |
-| `npm run cap:add` | 初始化 Android 工程（首次） |
-| `npm run cap:sync` | 构建 + 同步到 Android 工程 |
-| `npm run cap:open` | 用 Android Studio 打开 |
-| `npm run apk` | 打 debug APK（`scripts/apk.mjs`，Windows/macOS 通用） |
-| `npm run apk:release` | 打 release APK（需要 `android/keystore.properties`，缺签名会在构建前中止） |
+| `npm run cap:add` / `cap:sync` / `cap:open` | 初始化 / 构建+同步 / 打开 Android 工程 |
+| `npm run apk` / `apk:release` | 打 debug / release APK（`scripts/apk.mjs` 跨平台；release 缺签名会在构建前中止） |
 
-### ⚠️ 提交前的双验（必做）
+### ⚠️ 提交前的三验（必做）
 
 ```bash
 npm run typecheck && npm test && npm run build
 ```
 
-`npm run build` 成功 **不保证** 类型正确（Vite 不做全量类型检查）。三条都要过。
+`build` 成功**不保证**类型正确（Vite 不做全量类型检查），三条都要过。功能性/交互性改动（尤其路由、弹框、PWA）**必须**再跑 `npm run preview` 手点一遍，含**安卓返回键**行为。
 
 ### 测试约定（v3 起）
 
-- 配置文件是**独立的 `vitest.config.ts`**（不是 `vite.config.ts`）：`environment: 'node'`，只注册 `@` 别名，
-  `include: ['src/**/*.test.ts']`。只测**纯函数**——不依赖 Vue / Dexie / 浏览器 API。
-  `data/backup/sanitize.ts` 虽然在 data 层，但同样是纯函数，可以直接测。
-- 夹具统一放 `src/domain/__tests__/fixtures.ts`（`mkItem` / `mkLocation` / `mkShopping` / `TODAY` / `NOW` / `SETTINGS`）。
-  时间基准固定在 `Date.UTC(2026, 9, 5)`，**不要用 `Date.now()`**，否则用例会随日子变化而红。
+- 配置是**独立的 `vitest.config.ts`**（`environment: 'node'`，只注册 `@` 别名）：只测**纯函数**，不依赖 Vue / Dexie / 浏览器 API。
+- 夹具统一放 `src/domain/__tests__/fixtures.ts`（`mkItem` / `mkLocation` / `mkShopping` / `TODAY` / `NOW` / `SETTINGS`），时间基准固定 `Date.UTC(2026, 9, 5)`，**不要用 `Date.now()`**。
 - 新增领域函数 → 同步补 `src/domain/__tests__/*.test.ts`。
-- ⚠️ **夹具里不要用 `s.category ?? 'vegetable'` 兜底**：`category` 允许显式传 `null`，
-  `??` 会把 `null` 吞掉，「无品类」这条路径永远测不到。要用
-  `s.category === undefined ? 'vegetable' : s.category`。
-- ⚠️ 用例挂了先怀疑**自己写的期望值**对不对，别急着改产品代码。已发生过两次把正确行为误判成 bug
-  （`urgentDays: 3` 时剩 2 天本来就该进待办）。真 bug 要用独立用例单独钉死，别顺手改掉断言。
-
-### 最短可靠验证流程
-
-```bash
-npm run typecheck          # 1. 类型
-npm run build              # 2. 构建
-npm run preview            # 3. 浏览器打开 http://localhost:4173 冒烟
-```
-
-功能性 / 交互性改动（尤其是路由、弹框、PWA）**必须**用 `preview` 验证，不能只看 `dev`。原因：dev 不注册 Service Worker，行为与线上不一致。
+- ⚠️ 夹具里不要用 `s.category ?? 'vegetable'` 兜底（`??` 会吞掉显式 `null`，「无品类」路径永远测不到），用 `s.category === undefined ? 'vegetable' : s.category`。
+- ⚠️ 用例挂了先怀疑**自己写的期望值**，别急着改产品代码（已两次把正确行为误判成 bug）；真 bug 用独立用例钉死，别顺手改断言。
 
 ---
 
@@ -452,130 +385,58 @@ npm run preview            # 3. 浏览器打开 http://localhost:4173 冒烟
 
 ### TypeScript
 
-- 严格模式；**不用 `any`**。确实需要时用 `unknown` 收窄，或 `as never` 适配已有签名（见 `locations.ts`），并在注释里说明。
+- 严格模式；**不用 `any`**。确需时用 `unknown` 收窄，或 `as never` 适配已有签名并在注释里说明。
 - 类型只从 `@/domain/types` 引入，禁止在 UI 层重复定义实体形状。
 - 联合字面量类型优于 `enum`（序列化后是字符串，进 IndexedDB 更安全）。
 
-### 文件与符号命名
+### 命名
 
 | 类别 | 规则 | 示例 |
 | --- | --- | --- |
-| Vue 组件文件 | PascalCase | `ItemCard.vue` |
-| domain / data 模块 | camelCase | `shelfLife.ts`、`itemFactory.ts` |
-| 导出函数 | 动词开头 camelCase | `computeExpiry`、`canDeleteLocation` |
-| 导出类型 | PascalCase | `Freshness`、`ResolveResult` |
-| 常量 | UPPER_SNAKE | `ENV_MAP`、`DEFAULT_SETTINGS` |
-| CSS 变量（设计 token） | kebab-case，双横线前缀 | `--color-page`、`--van-primary-color` |
-| CSS 类 | kebab-case | `.b-fresh`、`.table.mini` |
-| store id | camelCase | `'items'`、`'shopping'` |
+| Vue 组件文件 | PascalCase | `ItemGroupCard.vue` |
+| domain / data 模块 | camelCase | `shelfLife.ts` |
+| 导出函数 | 动词开头 camelCase | `computeExpiry` |
+| 导出类型 | PascalCase | `Freshness` |
+| 常量 | UPPER_SNAKE | `ENV_MAP`、`DISMISS_DAYS` |
+| CSS 变量 | kebab-case 双横线 | `--color-page` |
+| store id | camelCase | `'items'` |
 
-### 组件导入：**必须默认导入**
+### 组件导入：必须默认导入
 
-`<script setup>` 只暴露 **default 导出**，具名导入会在构建时报 `[MISSING_EXPORT]`：
+`<script setup>` 只暴露 default 导出，具名导入构建时报 `[MISSING_EXPORT]`（坑位 #2）：
 
 ```ts
-import ItemCard from '@/components/ItemCard.vue';   // ✅
-import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
+import ItemGroupCard from '@/components/ItemGroupCard.vue';      // ✅
+import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建失败
 ```
 
-### 路径别名
+### 路径别名 / Vue 样式 / 注释 / Git
 
-始终用 `@/` → `src/`，禁止用 `../../` 相对路径跨越模块边界。
-
-### Vue / 样式（Tailwind + Vant）
-
-- `<script setup lang="ts">`；**不需要** `<style scoped>`——样式全部用 Tailwind 工具类写在元素行内；仅在「需要父选择器 / 伪元素 / keyframes / 局部媒体查询」等 Tailwind 表达不了的场景才写 `<style scoped>`。
-- 颜色 / 间距 / 圆角一律走 `index.css` 的工具类（`bg-card` / `text-ink-1` / `bg-primary-600` …）或 `var(--color-*)`，**不要写魔法值**。
-- 基础组件优先用 Vant（`van-button` / `van-switch` / `van-config-provider` …）；Vant 由插件按需导入，无需手动 `import`。**表单控件（输入框 / 搜索框）不用 Vant**，见 §13。
-- 每个 `.vue` 文件的 `<script setup>` 顶部用一句话注释说明组件职责。
-
-### 注释
-
-- 公共函数（跨模块调用）**必须**有 JSDoc：`@param` / `@returns` / 抛错或边界条件 / `@example`。
-- 注释用**简体中文**。
-- 注释解释 **why**（为什么这么做），不是 **what**（代码已经在说 what）。
-
-### Git
-
-- 提交信息用 Conventional Commits：`feat:` `fix:` `docs:` `refactor:` `perf:` `test:` `chore:`
-- 一个提交做一件事；不要把「重构 + 改功能 + 改文档」混在一起。
+- 始终用 `@/` → `src/`，禁止 `../../` 跨模块边界。
+- `<script setup lang="ts">`；样式全用 Tailwind 行内工具类，仅伪元素 / keyframes / 父选择器等场景才写 `<style scoped>`。每个 `.vue` 顶部一句话注释说明职责。
+- 公共函数**必须**有 JSDoc（`@param` / `@returns` / 边界 / `@example`）；注释用简体中文，解释 **why** 而非 what。
+- 提交信息用 Conventional Commits（`feat:` / `fix:` / `docs:` / `refactor:` / `perf:` / `test:` / `chore:`）；一个提交做一件事。
 
 ---
 
-## 10. 已知坑位（踩过的，别再踩）
+## 10. 已知坑位（速查）
 
-| # | 坑 | 原因 | 对策 |
-| --- | --- | --- | --- |
-| 1 | `vue-tsc` 报 `ERR_PACKAGE_PATH_NOT_EXPORTED: './lib/tsc'` | TypeScript 7 移除了该导出 | **锁 `typescript@5.6.3`**，不要升级 |
-| 2 | 具名导入 `.vue` → `[MISSING_EXPORT]` | `<script setup>` 无具名导出 | 见 §9 组件导入 |
-| 3 | `dict.resolve.value` 编译报错 | Pinia setup store 已解包 | 去掉 `.value` |
-| 4 | `dist/icons/` 缺失、预缓存条目少 | 图标放在项目根 `icons/` 不会进 dist | 图标必须放 `public/icons/`，`gen-icons.mjs` 已指向该目录 |
-| 5 | 用 `curl` 探测资源返回 200 误判成功 | SPA fallback 会把任何路径返回 index.html | 必须校验 `content-type`（如 `image/png`） |
-| 6 | 原生壳里改了代码 APK 还是旧的 | WebView 加载本地资源，SW 缓存了旧版本 | `main.ts` 必须 `if (!Capacitor.isNativePlatform()) registerSW(...)` |
-| 7 | 安卓上 SCHEDULE_EXACT_ALARM 崩溃 / 通知不弹 | Android 12+ 精确闹钟需特殊权限 | `LocalNotifications.schedule({ schedule: { at } })` **不设 `exact`** |
-| 8 | 通用合并函数对 `ConsumeLog` 类型报错 | `ConsumeLog` 无 `updatedAt` | 合并键用 `updatedAt ?? createdAt` |
-| 9 | 用了某个 Vant 组件却报 `VanXxx is not defined` | `components.d.ts` 未生成 / 未覆盖该组件 | 重启 `dev` 让 `unplugin-vue-components` 重新生成 `src/components.d.ts`；仍缺失则在文件里手动补一行 `VanXxx: typeof import('vant/es')['Xxx']` |
-| 10 | Capacitor 报 JDK 版本不对 | Capacitor 8 需 JDK 21 | 装 JDK 21 并设 `JAVA_HOME` |
-| 11 | 部署工具报 `domainPrefix is required` | 必填项遗漏 | 发布时显式传 `home-steward` |
-| 12 | Bash 里 `cd` 到含反斜杠的中文路径失败 | 反斜杠被吞掉 | 一律用**正斜杠** |
-| 13 | 打开 `/item/new` 显示「该物资不存在或已删除」、标题是「编辑物资」 | 若同时存在静态路由 `/item/new`，它会抢在 `/item/:id` 前匹配，导致 `route.params.id` 为 `undefined`，而 `ItemEditView` 判定 `isNew = id === 'new'` | **不要**注册静态的 `/item/new`；让它由 `/item/:id` 匹配（`params.id === 'new'`）。见 §11 新增路由 |
-| 14 | Vant 迁移后按钮/选中 chip 的文字全是黑色、字号字重失效 | CSS 层叠里**分层比较先于选择器权重**：Vant 自带的 unlayered 全局规则（`input,button,textarea{color:inherit;font:inherit}` 等）压过 `@layer utilities` 里的所有 Tailwind 工具类 | 保持 `vite.config.ts` 的 `vantCssLayer()` 插件与 `index.css` 首行的层序声明，别把规则写到 unlayered 位置。见 §13 样式与组件库集成 |
-| 15 | 整页忽宽忽窄（库存页 480px 溢出屏幕、消耗明细页只有 323px） | `van-config-provider` 渲染出一个真实 div，作为 `#app`（flex 容器）唯一的 flex item，`width:auto` 退化成「内容宽度」 | `index.css` 的 `@layer components` 里有 `.van-config-provider{width:100%}`，勿删；`#app` 的居中与 480px 上限由内部根容器的 `max-w-[480px] mx-auto` 负责 |
-| 16 | **发布后用户反馈「线上还是旧的」，但 curl 抓到的 index.html 已是新资源哈希** | PWA 的 Service Worker 早在上一版就把 index.html 与 assets 预缓存了；`skipWaiting` + `clientsClaim` 只保证**新 SW 接管**，不会让**已渲染的旧页面**重绘，用户眼前仍是旧 UI | ① 先用 curl 比对 `index.html` 的资源哈希，确认服务端确实是新版（这一步排除部署失败）；② 用户侧硬刷新或清站点数据一次；③ 长期由 `main.ts` 兜底：`controllerchange` 时 reload 一次 + 每 30 分钟在页面可见时 `reg.update()`。**不要因为它「看着没变」就反复重新发布** |
-| 17 | 证明了错的域名：看到形如 `home-steward-42425.app.workbuddy.host` 的链接且打不开 | 那不是本项目的发布地址（本项目固定为 `home-steward` 前缀） | 以 `https://home-steward.app.workbuddy.host/` 为准，其余一律忽略 |
-| 16 | 顶栏下方 / 合计条下方露出一条卡片边（滚动时卡片像"穿过"了吸顶、吸底条） | `sticky` 的偏移量相对**内容盒**计算：滚动容器的 `padding-top/bottom` 会把吸顶 / 吸底条朝内推一个 padding，条与容器边缘之间留出一条缝 | 带 sticky 条的页面，容器必须 `pt-0`（必要时 `pb-0`）——见 `TabLayout.padClass`；留白改用页面内的普通流占位元素（`StockView` 顶部的 16px 占位 `<div class="h-4">`、`ConsumeLogView` 的 `h-5`）。详见 §6.3 与 `src/styles/README.md`「吸顶层」规则 5 |
-| 17 | 底部 Tab 的「库存」图标看着像缺一角、画不全 | 内联 SVG 的 `d` 被写坏（圆弧参数 `a2 2 0 0 0` 掉了一个 `2` 变成 `a2 0 0 0`），外加几条超出框体的辅助线，小尺寸下就成了「残图」 | 换图标时**改完要在浏览器里放大看一眼**；缺参数的 path 不报错、只是画得不对。图标一律内联 SVG + `currentColor`，笔画粗细对齐（1.9–2.2） |
-| 18 | 用户手选「浅色」但系统是深色，整页还是黑的 | 深色变量挂在 `@media (prefers-color-scheme: dark)` 上，媒体查询无法被应用内状态覆盖 | 深色变量只挂 `html[data-theme='dark']`；`data-theme` 由 `index.html` 内联脚本（首帧前，读 localStorage 镜像 `hs.theme`）+ `useTheme` 维护。详见 §6.4 与 `src/styles/README.md`「深色模式与主题色」 |
-| 19 | 自定义主题色后按钮白字看不清 / 按钮陷进背景 | 主色直接拿来用，没做对比度校正（用户可能选荧光黄、近白、近黑） | 主色必须过 `domain/accent.ts` 的 `resolveAccent`（白字 ≥4.5、与底色 ≥3，文字优先），色阶由 `accentScale` 派生后写 inline style。不要在 CSS 里 `color-mix()` 派生——做不了「不达标继续调」的闭环 |
-| 20 | 换了主题色， Vant 按钮/开关还是老绿色 | `--van-primary-color` 写死了 hex | 指向 `var(--primary-600)`；同理 Vant 的颜色变量一律引用项目 token，别写死 |
-| 21 | 概览卡显示「今日待吃 3」，点进去待办只有 2 条；或待办里没有它、通知却弹出来 | 数字、列表、通知三处各自实现了一套筛选逻辑，规则一分叉就自相矛盾 | **三处都调 `domain/todo.buildTodayTodo()`**，禁止各筛各的。见 `docs/V2-CHANGELOG.md` §2.1 |
-| 22 | 批量入库 20 件卡顿 | 循环调 `items.add()`，而它内部每次都 `await load()`（全量重读 items + logs） | 批量一律走 `items.addMany()` / `bulk*` 方法：`bulkPut` + 单次 `load` |
-| 23 | 覆盖导入后旧条码映射残留 | 新增表时只改了 `dexie/sources.ts` 的 `wipe()`，忘了同一文件的 `transaction()` 表清单 | 改表结构要同步**五个地方**（见 `src/data/README.md`「改表结构必须做五件事」） |
-| 24 | 条码扫出来永远匹配不上 | `BarcodeEntry.code` 被当成 number 存/传：EAN-13 有前导 0，`Number("0123…")` 会丢 0 | 全链路用 `string`，包括输入框与 `byCode()` 的查询参数 |
-| 25 | 关掉扫码页后摄像灯一直亮、持续耗电 | 只调了 `scanner.stop()`，没有显式停视频轨 | `ScanSheet.stopScanner()` 三步：`stop()` → `clear()` → **`video.srcObject.getTracks().forEach(t => t.stop())`** |
-| 26 | 长按列表想滚动，却逐张误触进入多选 | 长按计时没有监听 `pointermove` | `ItemCard` 在位移 > 10px 时取消计时。见 `src/components/README.md`「长按防误触」 |
-| 27 | 「明天再说」之后物品从库存列表消失了 | 实现时顺手改了 `expireAt` | `snoozeUntil` **只影响待办与通知**，绝不碰 `expireAt`；物品仍在「紧急待吃」分组里 |
-| 28 | v2 新字段在旧数据上炸了 | 旧 IndexedDB 记录与 v1 备份里没有 `snoozeUntil` / `inboundItemId` | 这两个字段声明为**可选**，读取时一律 `?? null`，不写 `item.snoozeUntil > now`（依赖隐式转换很脆） |
-| 29 | 快速入库弹层滚到底，「加入」按钮下方仍露出滚动内容 | 吸底按钮条是 `sticky`，被钳制在包含块（滚动容器**内容盒**）内；容器自己的 `padding-bottom` 让按钮条永远差一个 pb 到不了弹层底边 | 滚动容器**不给**与 sticky 元素同侧的 padding，留白由 sticky 条自己的 pb 承担（见 `QuickAddSheet`） |
-| 30 | 多选态（`?select=1`）分组头悬在距顶 ~55px：上方漏卡片、下方盖住第一张卡的顶部 | 分组头吸顶偏移用的是筛选条实测高度，但多选态筛选条已被 `v-if` 移除，偏移量没跟着变 | 吸顶偏移的**邻居被 v-if 掉时偏移必须同步变**：`groupTop` 在 `selectMode` 下返回 `-1px`（见 `StockView`） |
-| 31 | 清单写「西红柿」、历史里存「番茄」，入库默认值还是落到第一个位置 | 以为 `normalizeName` 能等同义词——它只做全角 / 括号 / 空格 / 大小写的归一，**没有同义词表** | 需要别名匹配就给 `domain/inbound` 传 `AliasKeyResolver`（调用方传 `data/dict` 的 `foodKeyOf`）；domain 不得反向依赖 data，与 `ShelfLifeResolver` 同一套路 |
-| 32 | 选项对象里声明了却**从没被读**的参数（`remindEveryDays` 就是这样躺了两个版本：备份提醒两种情况都走 `firstAfterDays`，用户 7 天被念一次） | 加了参数就当实现了，没有用例约束；也没有人回头读一遍函数体 | ① 新增可配参数时补一条**专门验证它被用到**的用例（如「备份过走 30 天门槛、未备份走 7 天」）；② 改纯函数前先读一遍函数体，确认每个参数都真的参与了计算 |
-| 33 | 一条脏备份记录（`storedAt: 0`）就让「我的」「库存」双主 Tab **永久白屏**，且数据 100% 在本机、无副本可回滚 | `validateBackup` 只校验信封（app 名/版本/数组在不在），记录一条不校验就 `bulkPut`；`storedAt: 0` 穿透到 `monthKey(0)` → `(0).slice is not a function` | **三层防御**：① `data/backup/sanitize.ts` 在写库前清洗（能修的修、缺 id/name 的丢、**计数上报**）；② `domain/dates.isDateStr` 守卫；③ 各消费点脏值跳过。见 §5.7。**新增按日期聚合的函数时照抄 `dateOf()` 守卫** |
-| 34 | 同一物品在库存列表里出现两次 | 先按新鲜度分段、再折叠同名组 → 同名组被切到「临期」和「新鲜」两段 | **顺序固定为 `foldItems → sortByFreshness → groupBy*`**，绝不能反。见 §5.6 |
-| 35 | 折叠后「名字是西红柿、颜色按番茄」 | 组卡逐份算新鲜度再合并/取最优 | 状态色 / 徽标 / 进度条**一律取 `group.lead`**（`freshnessOf(group.lead, …)`） |
-| 36 | `bg-over-bar` 工具类**不报错但静默失效**（柱状图透明） | `--state-*-bar` 没注册进 `index.css` 的 `@theme inline`，Tailwind 不会为它生成工具类 | 用 `var(--state-over-bar)` 引用；要用工具类就先在 `@theme inline` 注册。同理 `--sunken` 不存在，正确名是 `var(--bg-sunken)` |
-| 37 | 趋势图看起来「每月各有高峰」，读不出在变好还是变坏 | 每根柱子各自归一化（`amount / 该月最大值`），等于把一张图拆成几张互不相干的图 | 同一组柱子**共用一个全局分母**（`Math.max(...points.map(p => p.amount))`） |
-| 38 | 盘点时刚判过的物品又冒出来 | 队列实时读 `items.active`，而每判定一次就消耗掉一件，列表越判越短 | `StocktakePanel` 的 `queue` 是**进入时的快照**（`props.rows.map(r => r.item.id)`），不跟 store 走 |
-| 39 | 点「还在」之后统计里多出一堆「消耗 1 个」的假记录 | 盘点三个动作都走 `consume` 写日志 | 「还在」**只推进游标，绝不写日志**。盘点里绝大多数结果都是「还在」 |
-| 40 | 组卡取代 `ItemCard` 后，长按多选静默消失 | 折叠后列表主体换成了新组件，长按入口没跟着搬 | `ItemGroupCard` 完整复制 500ms + 10px 位移容差那套；**替换列表主体组件时先核对旧组件的交互清单** |
-| 41 | 单份物品卡上出现「共 1 份」 | `dueSummary` 对所有组统一写份数 | 单份组：有日期写日期、无日期写**空串**。写「共 1 份」是噪音，还会让「牛奶 1 盒」看起来像被合并过 |
-| 42 | 新设置项在旧数据上读到 `undefined`，页面白屏或分支全走默认 | `Settings` 上新增了字段，但旧 IndexedDB 记录与旧备份里没有它 | 两条路二选一：**可选字段**就 `?? 默认值`（坑位 #28）；**必填字段**（如 `stockViewMode`）就在 `normalizeSettings` 里**白名单校验后回落** `DEFAULT_SETTINGS`，别裸读 `raw.xxx` |
-| 43 | 视图偏好做成两个布尔开关后互相打架 | 「分组」和「时间轴」是同一份列表的两种切法，互斥 | 互斥的视图偏好用**一个枚举**（`StockViewMode = 'group' \| 'timeline' \| 'flat'`），两个布尔会出现「都开 / 都关」两种无意义状态；「都不启用」本身就是枚举的一档 |
-| 44 | 图标和旁边文字看着**没对齐**（图标整体下沉一截） | SVG 是 inline 元素，默认 `vertical-align: baseline`，浏览器把图标**底边**压在文本基线上，父容器 `items-baseline` 只会把图标一起拖走 | `.icon` 里的 `display: block` 不能删；对齐交给 `.it-icon`（`height: calc(1em * var(--it-lh))` + 内部居中）。见 `docs/ICON-TEXT-SPEC.md` §4 |
-| 45 | 同一尺寸的图标在不同页面粗细不一样 | `stroke-width` 逐图标手写，改尺寸时忘记同步 | 描边**恒定 `--icon-stroke: 2.4`（viewBox 单位）**，不随尺寸缩放；SVG 上不再写 `width/height/stroke-width`，改由 `.icon .icon-{档位}` 给。改尺寸只换类，不同步数字 |
-| 46 | 「浪费金额」长期是 **¥0**，看起来像「我没浪费钱」 | 三个入库入口（快速入库 / 扫码 / 清单行内）**都不传 `price`**，新建物品单价恒为 `null`；用户得回头进详情页一件件补，那条路径基本没人走 | 入库表单一律带单价输入，并实时显示「合计 = 数量 × 单价」兜住「把整份总价当单价填」的歧义。**新增入库入口时检查它有没有 price** |
-| 47 | 金额口径在四处各写一份，最后一份直接漏了物品侧 | `bulk` / `ConsumeSheet` / `GroupConsumeSheet` / `sanitize` 各有一份规则，而 `sanitizeItems` 靠展开原样穿透 —— 手改过的备份里 `"price": "12.5"` 进库后 `price × 数量 = NaN`，整月统计烂掉 | **金额规则只有 `domain/price` 一份**：`normalizePrice` 归一、`amountOf(单价, 数量)` 算本次金额、表单走 `priceFromInput`。`null` = 没填价 ≠ `0` = 真的免费 |
-| 48 | 累加金额时直接 `+= l.price ?? 0` | `?? 0` 只挡 `null`/`undefined`，挡不住字符串 —— `"5" + 5` 是**字符串拼接**，结果 `"55"` 再 `round2` 就是 `NaN` | 累加前先 `normalizePrice(l.price) ?? 0`（见 `domain/stats.ts` 三处） |
-| 49 | `cap add android` 后 Gradle 配置阶段直接报 `Your project path contains non-ASCII characters` | 本机用户名是中文（`C:\Users\陆乔冰\...`），AGP 默认拒绝含非 ASCII 的工程路径（Windows 中文用户名是重灾区） | `android/gradle.properties` 加 `android.overridePathCheck=true`（AGP 官方开关，issuetracker 227627607）。这只是绕过检查，**真正修法是把工程 / SDK / Gradle 缓存都挪到纯 ASCII 路径**——但本机全在中文用户名下，靠下面 #51/#52 的编码修法兜底 |
-| 50 | `./gradlew` 卡在 `Downloading gradle-8.x-all.zip` 然后 `SocketTimeoutException` | 本机网络到 `services.gradle.org` 不通 / 极慢 | `android/gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl` 改腾讯镜像 `https://mirrors.cloud.tencent.com/gradle/gradle-8.14.3-bin.zip`（`-bin` 不带 docs，路径更短，避免 Windows 超长路径解压失败） |
-| 51 | 配了 `HTTPS_PROXY` 环境变量，Gradle 还是 `Connect to repo.maven.apache.org:443 … timed out` | **Java/Gradle 不读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量**，只能从 `gradle.properties` 的 `systemProp.*` 拿代理 | 在**全局** `GRADLE_USER_HOME/gradle.properties`（本机 `C:\Users\陆乔冰\.gradle\gradle.properties`）写 `systemProp.https.proxyHost=127.0.0.1` + `systemProp.https.proxyPort=<会话代理端口>` + `nonProxyHosts=localhost\|127.0.0.1`。⚠️ 代理端口是会话级的（`echo $HTTPS_PROXY` 拿），换会话要改；**别写进仓库的 `android/gradle.properties`**，否则换机器就炸 |
-| 52 | 依赖都下完了，kotlinc 却报 `source file or directory not found: C:\Users\u9646u4E54u51B0\…DateMatch.kt`（一堆 .kt 找不到），连 `android.jar` 都标 `non-existent location` | 路径里的中文用户名在 Gradle→kotlinc worker 传参（argfile）时被按非 UTF-8 编码写/读，变成乱码 `陆乔冰`→`\u9646…`，文件自然找不到 | 全局 `gradle.properties` 给 daemon 强制 UTF-8：`org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8`（外加 `kotlin.daemon.jvmargs` 同款）。这样工程 / SDK / Gradle 缓存三条含中文路径都能正确寻址 |
-| 53 | APK 里二级页（设置 / 消耗明细 / 编辑 …）的返回按钮压在手机状态栏下面，**点不到**，改了 `pt-[env(safe-area-inset-top,0px)]` 却毫无效果 | `env(safe-area-inset-top)` 在 **Android WebView 里恒为 0** —— 它只反映刘海 / 挖孔，不反映状态栏。而 targetSdk 36 下 WebView 是 edge-to-edge，页面从屏幕最顶端绘制，状态栏浮在上面。JS 也读不到 `status_bar_height`（没有对应 Web API，`window.innerHeight` 也不含状态栏） | 顶部安全区统一由 `src/composables/useSafeArea.ts` 下发：`main.ts` 在 `app.mount` **之前**调 `initSafeArea()`，用探针 div 读 `env()` 真值、原生壳里取 `max(env, 平台兜底)`（iOS 47 / Android 24），写成 `<html>` 的 inline `--safe-top`。组件一律 `pt-[var(--safe-top)]`，**禁止再写 `env(safe-area-inset-top)`**。见 §6.3 |
-| 54 | 盘点连着判第二件就被跳过，进度「1/20 → 1/19 → 1/18」越盘越少、收尾统计也不对 | `watch(() => props.rows, …)` 用来「筛选变化就重排队列」，但 `judge()` 里的 `consumeGroup()` 会 `load()`，`rows` 每判定一次都是新数组 → watcher 在 `await` 续体之前触发，把 `cursor` 归零并重置计数 | 盘点队列只做**进入时快照**、**不 watch `props.rows`**；筛选变化退出重进（重挂载组件）；`judging` 挡同一张卡连点（否则游标多前进一格）。见 `src/components/README.md`「队列必须是快照」 |
-| 55 | 扫**一次**码入库十几件（一个条码建出十几条记录） | `html5-qrcode` 的解码回调**按帧触发**（fps 10），`onScan` 没有忙锁；`doInbound` 又是先 `addMany` 再 `stopScanner`，等落库完停扫时中间那几帧已经各入库一次 | `busy` 忙锁 + 同码 1.5s 时间窗去重；**先 `stopScanner()` 再写库**；未知码转表单前也要先停扫。见 `src/components/README.md`「ScanSheet 去重约定」 |
-| 56 | 清单里两行同名（自动临期 + 手动）「全部入库」后撤销一行再入库，库存变成 3 份（实际 2 份） | `items.addMany` 会**跨 input 合并**同名同位置同到期日的记录，两行共享同一个 `inboundItemId`；而撤销按「1 行 = 1 物品」回滚，`restore` 的是合并后的整份数量 | `inboundAll` 调 `addMany(..., { merge: false })`：一条 input = 一条批次记录。见 `src/stores/README.md` 边界条件与 §5.6 |
-| 57 | 备份里物品全都被清洗掉，导入却报「已覆盖导入（物品 0 位置 0 日志 0）」——本地数据已被清空 | 覆盖导入是「先 `db.wipe()` 再写入」；`validateBackup` 只校验信封，清洗一条不进不算失败。即使补了「先清洗后覆盖」，**清洗把物品全丢光**时照样清空 | `import.ts` 在覆盖前判定 `items 原始条数 > 0 且清洗后为 0` → 直接中止并返回原因；`BackupView` 在覆盖前把当前数据存成 JSON 快照，成功 toast 带「撤销覆盖」（仅本次会话有效） |
-| 58 | 手改过备份的 `dict` 数组后，一进「保质期字典 / 快速入库 / 扫码 / 清单入库」就白屏，重启依旧 | `dict` 表当初没进 sanitize：`dictKey` 存成数字 → `buildCustomMap` → `normalizeName(123).trim()` 抛 TypeError；`computed` 抛错会让**依赖它的页面**永久白屏 | 新增 `sanitizeDict`：id/`dictKey` 空、`days` 不是「正整数或 `-1`」→ 整条丢弃并计数（不猜天数）；`env` 非法回落 `cool`；`dictKey` 过 `normalizeName` 并去重 |
-| 59 | 导入备份后提醒开关反了、或「备份提醒」永远不弹 | `import.ts` 直接 `db.settings.save(data.settings)`；`id` 不是 `'singleton'` 时整条被忽略还留垃圾行，`"remindEnabled": "false"` 是**真值**，`lastBackupAt: "abc"` 让「上次备份」算出 NaN | 设置归一只有 `domain/settings.ts` 的 `normalizeSettings` 一份：`id` 恒 `singleton`、布尔用 `typeof`、时间戳非有限正数 → `null`、枚举白名单、数值 clamp。导入路径与 store 共用 |
-| 60 | 用户把位置全删光，重启后预设位置又全回来了 | `ensureSeed` 用 `countAll() > 0` 判断「是否首次启动」；若用 `all()`（过滤软删除），删光后计数为 0 → 当首次启动重播种子 | 计数用 `Repository.countAll()`（**含**软删除行）；见 `src/data/README.md` 与 `src/data/seed.ts` JSDoc |
-| 61 | release 的签名口令躺在仓库里，而签名文件根本不存在 | `android/app/build.gradle` 曾明文写 `storePassword 'home1234'` / `keyAlias` / `storeFile file('../../release.keystore')`，而 `release.keystore` 被 `.gitignore` 忽略、磁盘上也没有 → 口令已外泄，干净 clone 上 `assembleRelease` 必失败 | 签名只从 `android/keystore.properties`（git 忽略，模板 `keystore.properties.example`）或四个 `HOME_STEWARD_*` 环境变量读；`gradle.taskGraph.whenReady` 在 release 任务缺签名时**直接抛错中止**，绝不产出未签名包。见 `README.md`「release 签名」 |
-| 62 | Windows 上 `npm run apk` 报 `'./gradlew' 不是内部或外部命令` | `cd android && ./gradlew` 只能在 POSIX shell 里跑，cmd 不认 `./` 前缀 | 统一走 `scripts/apk.mjs`：按平台选 `gradlew.bat` / `./gradlew`，`npm run apk` 与 `npm run apk:release` 都是它 |
-| 63 | APK 里攒了几百条数据，换机时却在云端冒出来 | `AndroidManifest.xml` 的 `allowBackup` 默认是 `true`，Auto Backup / D2D 会把 WebView 数据（含 IndexedDB）带上云 | 显式 `android:allowBackup="false"`，与「数据 100% 本机」的产品底线一致；改权限 / 备份策略后要真机装一次确认 |
-| 64 | iOS / 部分 Android WebView 上点输入框**整页放大且失焦不还原** | WebView 对字号 < 16px 的输入框聚焦时自动缩放页面 | 输入类字号一律 ≥ 16px（`.field-input` / `.field-textarea` / SearchField），视觉尺寸靠外框高度与内边距收，**别把字号调回 14**。见 `src/styles/README.md` |
-| 65 | 改 `shoppingRules.ts` 后 `git diff` 全是二进制、内容搜索失效 | 源码里内嵌过**真实 NUL 字节**（`NO_LOCATION` 哨兵），git 按二进制处理整文件 | 字符串哨兵一律写**转义序列** `' none'`（运行时等价）；发现 diff 显示 Bin 先查 NUL：`node -e "…indexOf(0)"` |
-| 66 | 「番茄」「西红柿」两条记录**永远折不到一张卡**，入库合并也失效 | 旧数据 `dictKey` 存的是原始输入名；`foldKeyOf` 若直接拿 dictKey 当键，别名解析永远轮不到 | `foldKeyOf` / `findRecentByName` 都要先 `(dictKey ?? name)` 过一遍 `aliasKey` 再退 `normalizeName`；新建物品必须传 `foodKeyOf` 给 `createItem`。见 §5.6 |
-| 67 | 两个标签页同时开着，A 的消耗被 B 的编辑**无声覆盖** | Dexie 写是基于内存旧快照的整条 put，同版本多标签无内置广播 | `data/sync.ts` 用 BroadcastChannel 检测其它窗口的写入并自动重读全部 store（检测+同步，**不是**并发写保护）；根治要 `table.update(id, patch)` 化 |
-| 68 | 「忽略的购物建议」下次打开 App 又冒出来 | 抑制依据住在**软删除行**里，而 `generate()` 曾把 `all()`（已滤软删）喂给 `planShopping`，dismissed 集合恒为空 | `generate()` 必须喂 `db.shopping.allIncludingDeleted()`；抑制时长只认 `DISMISS_DAYS`（domain/shoppingRules）这一处定义 |
+**全表在 [`docs/PITFALLS.md`](docs/PITFALLS.md)（68 条，含原因与对策；新增坑位从 #69 起记入该文件）。** 这里只列最高频十条：
+
+| # | 一句话 |
+| --- | --- |
+| 1 | TypeScript 锁 5.6.3，不升 TS 7（`vue-tsc` 会挂） |
+| 2 | `.vue` 只能默认导入 |
+| 3 | store 的 `computed`/`ref` 已解包，别写 `.value` |
+| 6 | 原生壳必须跳过 SW 注册，否则 APK 缓存旧版本 |
+| 13 | 不要注册静态 `/item/new`，让 `/item/:id` 匹配 |
+| 14 | `vantCssLayer()` 插件与层序声明不能删，否则 Vant 全局规则压过工具类 |
+| 18 | 深色变量只挂 `html[data-theme='dark']`，不用媒体查询 |
+| 53 | 顶部安全区只用 `pt-[var(--safe-top)]`，Android WebView 里 `env()` 恒为 0 |
+| 54 | 盘点队列必须是进入时快照，不 watch `props.rows` |
+| 66 | dictKey 不能直接当折叠键，先过 `aliasKey` 再退 `normalizeName` |
+
+其余高价值条目：脏备份三层防御（#33/#57/#58）、金额口径唯一（#46~#48）、扫码去重（#55）、`allowBackup=false`（#63）、输入字号 16px（#64）、NUL 转义（#65）、多标签同步（#67）、忽略抑制（#68）——见全表。
 
 ---
 
@@ -585,89 +446,65 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | --- | --- |
 | 某个食材的保质期 | `src/data/dict/builtin.ts` |
 | 某个环境的默认天数 | `src/domain/categories.ts`（`GLOBAL_DEFAULTS`） |
-| 品类默认天数 / 关键词归类 | `src/domain/categories.ts`（`CATEGORY_DEFAULTS`、`KEYWORDS`） |
+| 品类默认天数 / 关键词归类 | `src/domain/categories.ts`（`CATEGORY_DEFAULTS`、`KEYWORDS` **顺序敏感**） |
 | 新鲜度阈值 / 颜色 | `src/domain/freshness.ts` + `src/styles/index.css` |
-| 到期日算法 | `src/domain/shelfLife.ts` |
-| 购物清单自动生成规则 | `src/domain/shoppingRules.ts` |
-| 清单按位置分组的顺序 | `src/domain/shoppingRules.ts`（`groupShoppingByLocation`） |
-| 同名折叠 / FEFO 消耗 / 入库真合并 | `src/domain/grouping.ts` |
-| 库存列表的分组顺序 | `src/domain/freshness.ts`（`groupByFreshness`）；**折叠必须在此之前**，见 §5.6 |
+| 到期日算法 / 位置对比 | `src/domain/shelfLife.ts` |
+| 购物清单自动生成规则 / 忽略抑制时长 | `src/domain/shoppingRules.ts`（`DISMISS_DAYS` 唯一定义） |
+| 清单按位置分组顺序 | `src/domain/shoppingRules.ts`（`groupShoppingByLocation`） |
+| 同名折叠 / FEFO / 入库真合并 | `src/domain/grouping.ts` |
+| 库存列表分组顺序 | `src/domain/freshness.ts`（`groupByFreshness`；**折叠必须在此之前**，§5.6） |
 | 时间轴分桶 | `src/domain/timeline.ts` |
 | 统计口径 | `src/domain/stats.ts` |
-| 备份导入的脏数据清洗 | `src/data/backup/sanitize.ts`（含 `sanitizeDict`，坑位 #58） |
-| 设置归一（旧数据 / 导入） | `src/domain/settings.ts`（`normalizeSettings`，**唯一**来源，坑位 #59；别在 store 里再写一份） |
-| 金额口径（单价 / 本次金额） | `src/domain/price.ts`（**唯一定义**，别在别处再拼一遍） |
+| 备份导入的脏数据清洗 | `src/data/backup/sanitize.ts` |
+| 设置归一（旧数据 / 导入） | `src/domain/settings.ts`（`normalizeSettings` **唯一**来源） |
+| 金额口径（单价 / 本次金额） | `src/domain/price.ts`（**唯一定义**） |
 | 换个数据库 | `src/data/index.ts`（一行）+ 新增 sources 实现 |
-| 数据库表/索引 | `src/data/dexie/db.ts`（改后**必须**升 `SCHEMA_VERSION` 并在 import 处做版本兼容） |
+| 数据库表/索引 | `src/data/dexie/db.ts`（改后**必须**升 `SCHEMA_VERSION`；五处同步清单见 `src/data/README.md`） |
 | 备份文件格式 | `src/data/backup/schema.ts`（改后**必须**升 `SCHEMA_VERSION`） |
 | 顶部 Tab / FAB / 弹框返回键 | `src/layouts/TabLayout.vue` |
-| 子页顶栏 / 标题 / 吸顶层留白 | `src/layouts/TabLayout.vue`（`meta.header` 页面）+ `src/components/NavBar.vue`；路由写 `meta: { header: '标题' }` |
-| 顶部安全区 / 返回按钮被状态栏压住 | `src/composables/useSafeArea.ts`（写 `--safe-top`）；组件只写 `pt-[var(--safe-top)]`，别用 `env(safe-area-inset-top)` |
-| 购物清单「忽略建议」的抑制时长 / 多标签数据同步 | `src/domain/shoppingRules.ts`（`DISMISS_DAYS` 唯一定义）；`src/data/sync.ts`（BroadcastChannel） |
+| 子页顶栏 / 标题 / 吸顶留白 | 路由写 `meta: { header: '标题' }` + `src/layouts/TabLayout.vue` + `src/components/NavBar.vue` |
+| 顶部安全区 | `src/composables/useSafeArea.ts`（组件只写 `pt-[var(--safe-top)]`） |
+| 跨零点 / 当前时间 | `src/composables/useNow.ts`（按天计算一律 `useToday()`） |
+| 多标签数据同步 | `src/data/sync.ts`（BroadcastChannel） |
 | 列表页搜索框 | `src/components/SearchField.vue` |
-| 新增路由 | `src/router/index.ts`（懒加载 `() => import('@/views/Xxx.vue')`） |
+| 新增路由 | `src/router/index.ts`（懒加载；**不要**加静态 `/item/new`，坑位 #13） |
 | 主题色 / 间距 / 圆角 | `src/styles/index.css` |
 | 提醒时间 / 通知方式 | `src/composables/useReminder.ts` |
-| release 签名 / 打 APK | `scripts/apk.mjs` + `android/keystore.properties.example`（坑位 #61 / #62）；签名文件与口令**永远不入库** |
+| release 签名 / 打 APK | `scripts/apk.mjs` + `android/keystore.properties.example`（坑位 #61/#62） |
 | Android 权限 / 备份策略 | `android/app/src/main/AndroidManifest.xml`（CAMERA 已声明；`allowBackup="false"`，坑位 #63） |
 | appId / 包名 | `capacitor.config.ts` |
 
 ---
 
-## 13. 样式与组件库集成（Tailwind v4 + Vant 4）
-
-本项目的样式方案在 2026-09 由「手写 SCSS」切换为「Tailwind 工具类 + Vant 按需组件」，相关改动见 `package.json` / `vite.config.ts` / `src/styles/index.css` / `src/main.ts` / `src/App.vue`。
-
-- **Tailwind v4（无 `tailwind.config.js`）**：样式入口是 `src/styles/index.css`，首行 `@import "tailwindcss";`。设计 token 写在 `:root`，再用 `@theme inline` 把 `--color-*` 等映射成 `bg-*` / `text-*` / `border-*` 等工具类。新增颜色 token 只需在 `:root` 加 `--color-xxx` 并在 `@theme inline` 里挂上即可，无需改配置。深色模式靠 `@media (prefers-color-scheme: dark)` 覆盖 `:root` 的 token 变量（不是覆盖工具类）。
-- **层叠分层（★ 必须理解，否则样式会静默失效）**：Tailwind 的工具类在 `@layer utilities` 里，而 CSS 规则是「**分层比较先于选择器权重**」——低优先级层里的规则，即使权重更高也会输给高优先级层。Vant 自带样式里有多条全局元素选择器（`input,button,textarea{color:inherit;font:inherit}`、`*:focus{outline:none}`），所以 `vite.config.ts` 的 `vantCssLayer()` 插件把所有 Vant CSS 包进 `@layer vant`，层序由 `@layer theme, base, vant, components, utilities;` 声明（同时写在 `index.css` 首行**和**每个 Vant CSS 文件头部——因为构建产物里 Vant CSS 可能排在 `index.css` 之前，层序按「第一次出现」生效）。改样式时不要把规则写到 unlayered 位置，也不要删除该插件。
-- **`main.ts` 的导入顺序**：`import './styles/index.css'` 必须在 `import App.vue` 之前（dev 下决定 `<style>` 注入顺序）。
-- **Vant 按需导入**：`vite.config.ts` 的 `Components({ resolvers: [VantResolver()] })` 会在编译期把模板里出现的 `van-xxx` 自动导入并生成 `src/components.d.ts`。**不要把 Vant 组件显式 `import` 进 `.vue`**；若 TS 报 `VanXxx is not defined`，先看 `components.d.ts` 是否覆盖，缺了就重启 `dev` 或手动补类型声明。当前只用 `van-button` / `van-switch` / `van-config-provider`；**输入框一律用原生 `<input>` + 项目输入样式**（`van-field` 的固定宽度标签会挤压输入区），**搜索框用 `components/SearchField.vue`**（`van-field` / `van-search` 的固定行高与内边距和 40/44px 的设计高度对不齐，均已弃用）。
-- **选中态写法（★ 约定）**：chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的三元表达式**（如 `:class="sel ? 'bg-primary-600 border-primary-600 text-white font-medium' : 'bg-card border-line text-ink-2'"`），**不要**「静态类 + 条件类叠加」——两个同类工具类谁生效取决于 CSS 里的先后顺序，顺序一变选中态就失效。
-- **Vant 主题**：在 `index.css` 用 `--van-*` 变量对齐设计系统（圆角 12px、按钮 44px/14px 等）。`App.vue` 用 `van-config-provider :theme` 跟随系统深浅色切换 Vant 内置暗色；`van-config-provider` 渲染出的 div 是 `#app`（flex）里唯一的 flex item，宽度会退化成「内容宽度」，`index.css` 里用 `.van-config-provider{width:100%}` 修正，勿删。
-- **保留手写的组件**：`ItemCard.vue`、`LocationChipBar.vue`、`SearchField.vue`、`QuickAddSheet.vue` 的网格/卡片结构、步进器、搜索框、底部弹框等高度自定义部分仍是手写 Tailwind，不替换为 Vant 等价物（Vant 没有完全对等的组件，或对等物高度不可控）。图标（＋/−/删除/搜索等）一律用内联 SVG + `currentColor`，不用全角字符或 emoji。
-- **删除的旧文件**：`src/styles/_tokens.scss`、`base.scss`、`components.scss` 已删除，所有样式迁移到 `index.css` + 行内工具类。
-
----
-
 ## 12. 提交前自检清单
 
-改完代码，逐条打勾：
-
-- [ ] `npm run typecheck` 通过
-- [ ] **`npm test` 通过**（v3 起是提交前双验之一）
-- [ ] `npm run build` 通过
-- [ ] 涉及 UI/路由/弹框的改动：跑过 `npm run preview` 并在浏览器里点过（含**安卓返回键**行为）
-- [ ] 没有引入 `any`（确需时已用 `unknown` 收窄并注释）
-- [ ] 没有违反分层依赖方向（`domain/` 里没有 Dexie / Pinia / Vue / `data/`）
-- [ ] **消费外部数据（备份）的日期字段时过了 `isDateStr`**，见 §5.7
-- [ ] **改动列表主体组件时核对了旧组件的交互清单**（长按多选等不能静默消失），见坑位 #40
-- [ ] 业务代码没有直接 import `data/dexie/db.ts`
-- [ ] 新增/修改的公共函数有 JSDoc（参数、返回值、边界条件、示例）
-- [ ] **新增/删除/重命名了模块 → 已更新对应目录 `README.md`**
-- [ ] **新增/修改了对外接口 → 已更新 `AGENTS.md` 对应小节**
-- [ ] **改了构建配置 / 依赖 / 环境变量 → 已更新 `AGENTS.md` §2 与 §7**
+- [ ] `npm run typecheck`、`npm test`、`npm run build` 三条全过
+- [ ] UI/路由/弹框改动跑过 `npm run preview` 手点（含**安卓返回键**）
+- [ ] 没有 `any`；没有违反分层（`domain/` 无 Dexie / Pinia / Vue / `data/`）；没有直接 import `data/dexie/db.ts`
+- [ ] 消费外部数据的日期字段过了 `isDateStr`（§5.7）；按天计算用了 `useToday()`（§5.2）
+- [ ] 改动列表主体组件时核对了旧组件的交互清单（长按多选等不能静默消失，坑位 #40）
+- [ ] 新增/修改的公共函数有 JSDoc；新坑位已记入 `docs/PITFALLS.md`
+- [ ] 新增/删除/重命名模块 → 更新了对应目录 `README.md`；对外接口/构建配置变更 → 更新了本文件
 - [ ] 遗漏检查：没有引入网络请求、账号、云同步
+- [ ] **完成批次 / 新增规划批次 → 已在 `docs/BATCHES.md` 登记**，明细文档已补落地记录
 - [ ] Git 提交信息符合 Conventional Commits
 
 ---
 
-## 14. 更多文档
+## 13. 更多文档
 
 | 文件 | 内容 |
 | --- | --- |
-| `README.md` | 产品简介、快速开始、GitHub 首页 |
-| `docs/V2-CHANGELOG.md` | **v2 变更说明**：新概念、一致性约束、备份升版同步清单（改 v2 相关代码前先看） |
-| `docs/V3-CHANGELOG.md` | **v3 变更说明**：同名折叠/FEFO 语义、备份清洗三层防御、盘点与统计口径（改 v3 相关代码前先看） |
-| `docs/ICON-TEXT-SPEC.md` | **图标 + 文本排版规范**：尺寸档位、描边、间距、垂直对齐换算、迁移清单（动图标前先看） |
+| `docs/BATCHES.md` | ★ **批次台账**：完成/规划批次的唯一登记处 |
+| `docs/PITFALLS.md` | ★ **坑位全表**（68 条）：坑 / 原因 / 对策 |
+| `docs/ITERATION-REVIEW.md` | v1.0 迭代评审 + **批次 1~5 落地记录（§10~§14）** + **v1.1 功能规划（§15）** |
+| `docs/V2-CHANGELOG.md` / `docs/V3-CHANGELOG.md` | v2 / v3 引入的新概念与坑（改对应代码前先看） |
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |
-| `docs/ITERATION-REVIEW.md` | **v1.0.0 迭代评审**：缺陷与可优化点清单（含 file:line 证据、建议批次、复核记录）+ §10 / §11 已落地批次记录。下一轮迭代从这里取活 |
-| `src/domain/README.md` | 领域层全部纯函数 API 参考 |
-| `src/data/README.md` | 持久化接口、表结构、备份格式 |
-| `src/stores/README.md` | 各 Pinia store 的状态与方法 |
-| `src/composables/README.md` | useReminder / useToast / useTheme / useStickyFilterOffset / useSafeArea（`--safe-top` 顶部安全区）/ useNow（跨零点刷新） |
-| `src/components/README.md` | 组件 props / emits / 用法 |
-| `src/views/README.md` | 页面职责与路由映射 |
-| `src/styles/README.md` | 设计 token 清单与用法 |
+| `docs/DESIGN-REVIEW.md` | 无障碍与视觉层级评审（A/B/C 三批，已修） |
+| `docs/ICON-TEXT-SPEC.md` | 图标 + 文本排版规范（动图标前先看） |
+| `docs/使用教程.md` | 面向最终用户的操作教程 |
+| `src/{domain,data,stores,composables,components,views,styles}/README.md` | 各层 API 与约定 |
+| `README.md` | 产品简介、快速开始、GitHub 首页 |
 
 ---
 

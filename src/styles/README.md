@@ -139,7 +139,7 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 
 ## 组件策略：Tailwind + Vant
 
-- **基础组件用 Vant（按需）**：按钮 `van-button`、开关 `van-switch`、`van-config-provider`（深色模式）直接用 Vant。它们由 `vite.config.ts` 的 `Components({ resolvers: [VantResolver()] })` 在编译期自动按需导入，**无需手动 `import`**（见根 `AGENTS.md` §13）。
+- **基础组件用 Vant（按需）**：按钮 `van-button`、开关 `van-switch`、`van-config-provider`（深色模式）直接用 Vant。它们由 `vite.config.ts` 的 `Components({ resolvers: [VantResolver()] })` 在编译期自动按需导入，**无需手动 `import`**（见根 `AGENTS.md` §6.1 层叠分层）。
 - **表单类控件一律手写**：输入框用原生 `<input>` + `.field-input` 组件类，label 在上；「标签 + 控件 + 说明」的结构统一包一层 `components/FormField.vue`（`label` / `for-id` / `hint` / `spacing`），搜索框用 `components/SearchField.vue`。**不要用 `van-field` / `van-search`**：它们由 `van-cell` 拼出来，自带两层固定行高与上下内边距，跟设计系统的 40/44px 高度对不齐（图标与占位文字不居中、整框偏高），只能靠一串 `--van-search-*` / `--van-cell-*` 变量去凑。
 - **高度自定义部分仍是手写 Tailwind**：`ItemCard.vue`、`LocationChipBar.vue`、`SearchField.vue`、`QuickAddSheet.vue` 的卡片/网格/步进器/底部弹框结构，以及各页面的布局、吸顶筛选、统计数字块等，全部用行内 Tailwind 工具类实现。
 - **页面级重复件收进 `@layer components`**：`.section-label`（12px ink-3 小节标题）、`.tip`（sunken 提示盒，变体 `.tip-danger` / `.tip-urgent` / `.tip-soon`）、`.card`（白底 + 1px 描边 + 12px 圆角 + 阴影，`.card-lg` 为 16px 圆角）、`.field-label` / `.field-input` / `.field-textarea` / `.field-hint`（表单字段的四件套外观）。它们替代了此前在 8–19 个文件里各手抄一份的同一串工具类；**内边距 / 外边距仍由调用点的工具类给**（`p-3`、`mb-3.5` 等），条件态（`border-danger`、`mt-5`）因 utilities 层更高可正常覆盖。
@@ -223,4 +223,4 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - [ ] **可点击元素用原生控件**（`<button>` / Vant 组件）
 - [ ] **深色模式**：新增的背景色走了 `bg-page` / `bg-card` 等变量类，而不是 `bg-white` / `#fff`
 - [ ] **动效**：没有新增长时间动画，或已考虑 `prefers-reduced-motion`
-- [ ] 同步更新了根 `AGENTS.md`（技术栈表、§6.1、§13、改动场景导航）
+- [ ] 同步更新了根 `AGENTS.md`（技术栈表、§6.1、改动场景导航）
