@@ -7,7 +7,6 @@ import TabPageBody from '@/components/TabPageBody.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import StatCard from '@/components/StatCard.vue';
 import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog, ConsumeType } from '@/domain/types';
 import { fromEpoch, monthKey, todayStr, toDateStr } from '@/domain/dates';
@@ -163,35 +162,39 @@ const wastedAmount = computed(() =>
     <template #header>
       <div class="h-5" aria-hidden="true"></div>
 
-      <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
-        <StatCard :value="totalCount" label="笔数" />
-        <StatCard :value="money(totalAmount)" label="合计金额" />
-        <StatCard
-          :value="money(wastedAmount)"
-          label="扔掉金额"
-          :tone="wastedAmount > 0 ? 'danger' : 'neutral'"
-        />
+      <!--
+        v1.1 F15-3 头部压缩：三张概览卡（~70px）压成一行文字摘要；类型分段与日期 pill
+        合并为一行（分段做行首、日期横滑）。本页是「查账」场景，筛选层过度常驻会把
+        记录列表挤到半屏以下——压缩后固定头从 ~300px 降到 ~210px。
+      -->
+      <div v-if="totalCount > 0" class="flex items-baseline gap-1.5 text-[13px] text-ink-2 mb-2.5 px-1" role="status">
+        <span class="font-medium text-ink-1 tabular-nums">{{ totalCount }}</span> 笔 · 合计
+        <span class="font-medium text-ink-1 tabular-nums">{{ money(totalAmount) }}</span>
+        <template v-if="wastedAmount > 0"> · 扔掉 <span class="text-danger tabular-nums">{{ money(wastedAmount) }}</span></template>
       </div>
 
       <SearchField v-model="kw" class="mb-2" placeholder="搜索名称" />
-      <PillGroup role="group" aria-label="按日期筛选">
-        <Pill
-          v-for="r in ranges"
-          :key="r.key"
-          :selected="range === r.key"
-          @click="range = r.key"
-        >{{ r.label }}</Pill>
-      </PillGroup>
-      <div class="flex gap-1.5 bg-sunken p-1 rounded-full mt-2">
-        <button
-          v-for="c in cats"
-          :key="c.key"
-          type="button"
-          class="flex-1 border-0 bg-transparent text-[13px] text-ink-2 py-1.5 rounded-full cursor-pointer"
-          :class="{ 'bg-card text-primary-700 font-medium shadow-card': cat === c.key }"
-          :aria-pressed="cat === c.key"
-          @click="cat = c.key"
-        >{{ c.label }}</button>
+      <div class="flex items-center gap-2">
+        <div class="flex gap-1 bg-sunken p-1 rounded-full flex-none" role="group" aria-label="按类型筛选">
+          <button
+            v-for="c in cats"
+            :key="c.key"
+            type="button"
+            class="border-0 bg-transparent text-[13px] text-ink-2 px-3 py-1 rounded-full cursor-pointer whitespace-nowrap"
+            :class="{ 'bg-card text-primary-700 font-medium shadow-card': cat === c.key }"
+            :aria-pressed="cat === c.key"
+            @click="cat = c.key"
+          >{{ c.label }}</button>
+        </div>
+        <!-- 日期组横滑（PillGroup scroll）：390px 放不下「分段+5 个日期」，换行会错乱 -->
+        <PillGroup role="group" aria-label="按日期筛选" scroll class="flex-1 min-w-0">
+          <Pill
+            v-for="r in ranges"
+            :key="r.key"
+            :selected="range === r.key"
+            @click="range = r.key"
+          >{{ r.label }}</Pill>
+        </PillGroup>
       </div>
     </template>
 
@@ -216,7 +219,7 @@ const wastedAmount = computed(() =>
         <article
           v-for="l in g.list"
           :key="l.id"
-          class="bg-card border border-line border-l-[3px] rounded-md p-3 mb-2.5 shadow-card"
+          class="bg-card border border-line border-l-4 rounded-md p-3 mb-2.5 shadow-card"
           :class="l.type === 'wasted' ? 'border-l-danger' : 'border-l-primary-600'"
         >
           <div class="flex justify-between items-baseline gap-3">

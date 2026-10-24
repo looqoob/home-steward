@@ -19,7 +19,6 @@ import { buildStatsCsv } from '@/domain/statsCsv';
 import { downloadText, copyToClipboard } from '@/data/backup/export';
 import { useNow } from '@/composables/useNow';
 import { useToast } from '@/composables/useToast';
-import StatCard from '@/components/StatCard.vue';
 import TabPageBody from '@/components/TabPageBody.vue';
 
 /**
@@ -35,6 +34,7 @@ const { show } = useToast();
 // computed 只在响应式依赖变化时重算，跨零点若无数据变动，「本月」就停在昨天
 const now = useNow();
 
+// 本月概览数字：不再画卡（v1.1 F15-5，与「我的」页去重），仍作为 CSV 导出的数据源
 const ms = computed(() => monthStats(items.list, items.logs, now.value));
 const trend = computed(() => wasteTrend(items.logs, 6, now.value));
 const top = computed(() => topWasted(items.logs, 5));
@@ -83,17 +83,6 @@ const trendMax = computed(() => Math.max(1, ...trend.value.map((t) => t.amount))
 /** 「数据不足」的统一口径：宁可空着，也不要拿 2 笔数据编一个结论 */
 const INSUFFICIENT = '数据不足';
 
-/**
- * 「扔掉 8 件 / ¥0」是最容易被误读的一组数字 —— 用户会以为自己没浪费钱，
- * 实际上是**这些物品都没填单价**。金额栏本身只有 4 个字符宽，说不下原因，
- * 所以补一行脚注把它讲清楚（比把 ¥0 画成红色更有用）。
- */
-const wastedNoPriceHint = computed(() => {
-  const { wastedCount, wastedAmount } = ms.value;
-  if (wastedCount === 0 || wastedAmount > 0) return '';
-  return `这 ${wastedCount} 件都没填单价，金额按 0 计`;
-});
-
 /** Top 里只要有一条是 0 金额（显示「—」），就要说明「—」是什么意思 */
 const topHasNoPrice = computed(() => top.value.some((t) => t.amount === 0));
 
@@ -125,21 +114,11 @@ async function exportCsv() {
 <template>
   <!-- v1.1 F14：整页滚动的骨架由 TabPageBody 固化（page 模式） -->
   <TabPageBody mode="page" scroll-class="pb-3">
-    <!-- 本月概览：与「我的」页同一套数字来源（monthStats），口径不会打架 -->
-    <div class="section-label">本月概览</div>
-    <div class="grid grid-cols-4 gap-2 mb-5">
-      <StatCard :value="ms.inbound" label="入库" />
-      <StatCard :value="ms.consumed" label="用掉" />
-      <!-- audit-ignore: money-format（StatCard 整数显示，与「扔掉 N 件」同密度） -->
-      <StatCard
-        :value="`¥${ms.wastedAmount.toFixed(0)}`"
-        label="浪费金额"
-        :tone="ms.wastedAmount > 0 ? 'danger' : 'neutral'"
-      />
-    </div>
-    <div v-if="wastedNoPriceHint" class="text-[11px] text-ink-3 -mt-3 mb-5 leading-relaxed">
-      {{ wastedNoPriceHint }}。入库时填了单价才会统计到金额。
-    </div>
+    <!--
+      v1.1 F15-5：去掉「本月概览」三卡——它与「我的」页的月度卡片同源同形同数字，
+      两个页面用同一组数字开头会稀释统计页「更深一层」的定位（趋势/对比/Top）。
+      概览数字只在「我的」页出现；本页从在库价值直接开始。
+    -->
 
     <!--
       在库物资总价值。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageShell from '@/components/PageShell.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
@@ -30,8 +30,15 @@ const locations = useLocationsStore();
 const dict = useDictStore();
 const { show } = useToast();
 
-/** 常用单位快捷选择；下面的输入框仍可自由填写其它单位（与 QuickAddSheet 同一套） */
+/** 常用单位快捷选择；「自定义…」胶囊展开输入框后仍可自由填写（v1.1 F15-7） */
 const UNITS = ['个', '袋', '斤', '瓶', '盒'];
+
+/** 自定义单位输入框的展开态：点「自定义…」胶囊出现；当前单位不在常用集时恒展开 */
+const customUnitOpen = ref(false);
+const customUnitInput = ref<HTMLInputElement | null>(null);
+watch(customUnitOpen, (open) => {
+  if (open) nextTick(() => customUnitInput.value?.focus());
+});
 
 /** 数量保留 2 位小数：0.5 斤这类值加减后不会浮出 0.30000000000000004（与 domain/price 同一份实现） */
 
@@ -228,7 +235,12 @@ async function removeItem() {
             aria-label="数量"
           />
         </div>
-        <!-- 单位：常用 chips + 自定义，与快速入库（QuickAddSheet）保持同一套交互 -->
+        <!--
+          单位：常用 chips + 「自定义…」展开输入框（v1.1 F15-7 收敛三层为一层半）。
+          此前 chips 行下面恒挂一个自由输入框——chips 与输入框都在改同一个字段，
+          用户会疑惑「填哪个算数」，且该区块多占一行。当前单位不在常用集里时
+          直接展开输入框（编辑旧数据不丢字），否则显示「自定义…」胶囊。
+        -->
         <PillGroup class="mt-2">
           <Pill
             v-for="u in UNITS"
@@ -236,8 +248,16 @@ async function removeItem() {
             :selected="draft.unit === u"
             @click="draft.unit = u"
           >{{ u }}</Pill>
+          <Pill
+            v-if="!UNITS.includes(draft.unit)"
+            :selected="true"
+            @click="customUnitOpen = true"
+          >{{ draft.unit || '自定义…' }}</Pill>
+          <Pill v-else :selected="customUnitOpen" @click="customUnitOpen = !customUnitOpen">自定义…</Pill>
         </PillGroup>
         <input
+          v-if="customUnitOpen || !UNITS.includes(draft.unit)"
+          ref="customUnitInput"
           v-model="draft.unit"
           class="field-input mt-2"
           placeholder="其它单位，如 把 / 根"

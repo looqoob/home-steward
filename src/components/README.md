@@ -22,7 +22,7 @@
 | `GroupHead.vue` | **v1.1 F14**：列表分组段头（`variant="sticky"` 吸顶带出血 / `"plain"` 普通流），间距统一由组件定，调用方不要再挂 mt/mb | StockView、ListView、ConsumeLogView |
 | `FreshnessBadge.vue` | **v1.1 F14**：新鲜度六态徽标（状态色映射唯一住址；over 实底白字）。收编前曾 4 处手写、F11-② 漏改盘点面板 | ItemGroupCard、TodayTodo、StocktakePanel |
 | `EnvDotLabel.vue` | **v1.1 F14**：环境色点 + 名称（`tone`：sunken / on-tint（彩底行）/ bare）。「中性灰底+彩点」约定的组件化 | ItemGroupCard、TodayTodo、StocktakePanel |
-| `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体。默认展开（≤2 份）会**跟随份数变化重算**（消耗一份后自动展开，批次 4，REV-21） | StockView |
+| `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体。默认展开（≤2 份）会**跟随份数变化重算**（消耗一份后自动展开，批次 4，REV-21）。**v1.1 F15** 三行化：名称+状态 / 数量·单价·位置 / 进度条+到期日（位置不再被挤到独立行） | StockView |
 | `LocationChipBar.vue` | 位置横滑筛选 chips（含「全部」「管理」） | StockView |
 | `NavBar.vue` | 子页顶栏：标题 + 返回按钮 | 独立子页 + `meta.header` 页面（由 TabLayout 渲染） |
 | `SearchField.vue` | 列表页搜索框：胶囊外框 + 放大镜 + 原生 input（字号 ≥16px 防 iOS 聚焦整页缩放，REV-17） | StockView、ConsumeLogView |
@@ -41,7 +41,7 @@
 | `EmptyState.vue` | 空状态：可选 `#icon` 插画 + 文案 + 可选 `#action` 按钮 | 6 处列表 / 详情 |
 | `IconPicker.vue` | **v1.1 F5**：emoji 图标选择器（横滚胶囊 + 「默认」档；「你的常用」由调用方从 items 统计传入） | QuickAddSheet、ItemEditView |
 | `OnboardingOverlay.vue` | **v1.1 F10**：新用户首启引导（3 步讲「环境决定保质期 / 位置是载体 / 同名折叠 + FEFO」），跳过与完成等价，只出现一次 | App.vue |
-| `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」。**v1.1 起默认收起**（数字在概览卡，处理时再展开）；**v1.1 F10**：过期行的「扔掉」升级为红色主按钮并排第一位 | StockView |
+| `TodayTodo.vue` | **v2**：今日待办折叠区块。**v1.1 起默认收起**；**v1.1 F10** 过期行「扔掉」红底主按钮置首；**v1.1 F15**：>3 条自动切紧凑行（✓/✕ 小按钮 + 「明天」链接），展开区限高 50vh 内滚（待办在固定头里，展开超视口曾无法滚动），标题不带计数（数字在概览 pill，F15-8 去重） | StockView |
 | `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/单价/位置/到期日预览）。**v3**：单价预填「上次买这个的价格」 | ListView |
 | `BulkActionBar.vue` | **v2**：多选态吸底操作条（用掉/扔掉/换位置/删除） | StockView |
 | `LocationPickerSheet.vue` | **v2**：选择存放位置的弹层，带到期日预览 | StockView |

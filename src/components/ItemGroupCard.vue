@@ -227,14 +227,24 @@ const dueSummary = computed(() => {
             >共 {{ props.group.members.length }} 份</span>
             <FreshnessBadge :state="leadFresh.state" :label="leadFresh.label" />
           </span>
+          <!--
+            v1.1 F15-1 三行化：属性行（数量 · 单价 · 位置）+ 末行（进度条 + 到期日）。
+            此前「到期日」挤在属性行里把位置标签 wrap 到第三行，每张卡固定多占 ~20px；
+            到期日与进度条同属「剩余保质期」语义，放一行后卡片恒定三行。
+          -->
           <span class="flex items-center gap-1.5 text-[12px] text-ink-3 flex-wrap mt-0.5">
             <span class="tabular-nums">{{ totalQtyText() }}</span>
             <span v-if="groupPriceText" class="tabular-nums">{{ groupPriceText }}</span>
-            <span class="text-ink-2">{{ dueSummary }}</span>
             <EnvDotLabel v-if="props.location" :color="env?.color ?? '#6a7886'" :name="props.location.name" />
           </span>
-          <span v-if="leadFresh.progress !== null" class="block h-1 rounded bg-sunken overflow-hidden mt-1">
-            <i class="block h-full rounded" :style="{ width: (leadFresh.progress * 100).toFixed(0) + '%', background: barColor(leadFresh.state) }"></i>
+          <span
+            v-if="leadFresh.progress !== null || dueSummary"
+            class="flex items-center gap-2 mt-1"
+          >
+            <span v-if="leadFresh.progress !== null" class="flex-1 block h-1 rounded bg-sunken overflow-hidden">
+              <i class="block h-full rounded" :style="{ width: (leadFresh.progress * 100).toFixed(0) + '%', background: barColor(leadFresh.state) }"></i>
+            </span>
+            <span v-if="dueSummary" class="text-[12px] text-ink-2 flex-none whitespace-nowrap">{{ dueSummary }}</span>
           </span>
         </span>
       </button>

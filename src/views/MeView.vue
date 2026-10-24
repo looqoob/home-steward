@@ -51,22 +51,31 @@ function openSettings() {
 }
 
 const links = computed(() => [
-  { label: '更新日志', to: '/changelog', hint: 'v1.1' },
-  { label: '统计', to: '/stats', hint: '' },
-  { label: '消耗明细', to: '/consume-log', hint: '' },
-  { label: '最近操作', to: '/recent-ops', hint: '可撤销' },
-  { label: '位置管理', to: '/locations', hint: '' },
-  { label: '保质期字典', to: '/dict', hint: '' },
+  { label: '更新日志', to: '/changelog', hint: 'v1.1', group: 'content' },
+  { label: '统计', to: '/stats', hint: '', group: 'content' },
+  { label: '消耗明细', to: '/consume-log', hint: '', group: 'content' },
+  { label: '最近操作', to: '/recent-ops', hint: '可撤销', group: 'content' },
+  { label: '位置管理', to: '/locations', hint: '', group: 'config' },
+  { label: '保质期字典', to: '/dict', hint: '', group: 'config' },
   {
     label: '条码映射',
     to: '/barcodes',
     // 有映射时给个数量，没扫过时就是 0
     hint: barcodes.list.length > 0 ? `${barcodes.list.length} 条` : '',
+    group: 'config',
   },
-  { label: '外观与主题', to: '/appearance', hint: themeHint.value },
+  { label: '外观与主题', to: '/appearance', hint: themeHint.value, group: 'config' },
   // 「设置」入口在页面顶部齿轮（v1.1 F13）：一处入口即可，列表里不再重复
-  { label: '数据备份', to: '/backup', hint: '' },
+  { label: '数据备份', to: '/backup', hint: '', group: 'config' },
 ]);
+
+/**
+ * 入口分组（v1.1 F15-4）：内容消费（看数据）与配置（改设置）分两张组卡。
+ * 此前 9 条各自成卡是「按钮墙」——独立卡片把配置项抬到与数据入口同层级，
+ * 且一屏只能看 5 条；分组卡（卡内 divide 分隔行）省 ~40% 纵向空间且主次立现。
+ */
+const contentLinks = computed(() => links.value.filter((l) => l.group === 'content'));
+const configLinks = computed(() => links.value.filter((l) => l.group === 'config'));
 /**
  * 未备份提醒（`domain/backup.backupAdvice`）。
  *
@@ -154,20 +163,40 @@ const backupTip = computed(() =>
       <span class="w-9 text-right text-ink-2 flex-none tabular-nums">{{ s.count }}</span>
     </div>
 
-    <div class="section-label">设置</div>
-    <button
-      v-for="l in links"
-      :key="l.to"
-      type="button"
-      class="flex items-center justify-between card px-3.5 py-3.5 mb-2 text-[14px] cursor-pointer gap-3 w-full text-left"
-      @click="router.push(l.to)"
-    >
-      <span>{{ l.label }}</span>
-      <span class="text-[12px] text-ink-3 flex-none flex items-center gap-1">
-        <span v-if="l.hint">{{ l.hint }}</span>
-        <span aria-hidden="true">›</span>
-      </span>
-    </button>
+    <!-- v1.1 F15-4：入口合并为两张分组卡（内容 / 配置），卡内 divide 分隔行 -->
+    <div class="section-label">查看</div>
+    <div class="card mb-3.5 py-0.5">
+      <button
+        v-for="l in contentLinks"
+        :key="l.to"
+        type="button"
+        class="flex items-center justify-between px-3.5 py-3 text-[14px] cursor-pointer gap-3 w-full text-left border-b border-line last:border-b-0"
+        @click="router.push(l.to)"
+      >
+        <span>{{ l.label }}</span>
+        <span class="text-[12px] text-ink-3 flex-none flex items-center gap-1">
+          <span v-if="l.hint">{{ l.hint }}</span>
+          <span aria-hidden="true">›</span>
+        </span>
+      </button>
+    </div>
+
+    <div class="section-label">管理</div>
+    <div class="card mb-3.5 py-0.5">
+      <button
+        v-for="l in configLinks"
+        :key="l.to"
+        type="button"
+        class="flex items-center justify-between px-3.5 py-3 text-[14px] cursor-pointer gap-3 w-full text-left border-b border-line last:border-b-0"
+        @click="router.push(l.to)"
+      >
+        <span>{{ l.label }}</span>
+        <span class="text-[12px] text-ink-3 flex-none flex items-center gap-1">
+          <span v-if="l.hint">{{ l.hint }}</span>
+          <span aria-hidden="true">›</span>
+        </span>
+      </button>
+    </div>
 
     <div class="tip mt-3">
       所有数据仅保存在本机（IndexedDB），无服务器、无账号。建议定期在「数据备份」导出 JSON 以防丢失。

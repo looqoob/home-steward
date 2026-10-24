@@ -131,3 +131,26 @@ describe('shoppingListText · 复制为文本（v1.1 F10）', () => {
     expect(shoppingListText([])).toBe('');
   });
 });
+
+describe('planShopping · 临期替换别名去重（v1.1 F15-12）', () => {
+  it('★ 「番茄」「西红柿」两条批次同时 urgent：只推最早到期的那条', () => {
+    const items = [
+      mkItem({ id: 'tomato-b', name: '西红柿', dictKey: 'tomato', expireIn: 2, qty: 2, unit: '个', loc: 'L1' }),
+      mkItem({ id: 'tomato-a', name: '番茄', dictKey: 'tomato', expireIn: 1, qty: 3, unit: '个', loc: 'L1' }),
+    ];
+    const out = planShopping(items, [], [], NOW);
+    const near = out.filter((s) => s.reason === 'near_expiry');
+    expect(near).toHaveLength(1);
+    expect(near[0].sourceItemId).toBe('tomato-a');
+  });
+
+  it('同归一但无到期日的记录排在有日期的后面', () => {
+    const items = [
+      mkItem({ id: 'nd', name: '番茄', dictKey: 'tomato', expireIn: null, qty: 1, unit: '个', loc: 'L1' }),
+      mkItem({ id: 'd', name: '西红柿', dictKey: 'tomato', expireIn: 3, qty: 1, unit: '个', loc: 'L1' }),
+    ];
+    const near = planShopping(items, [], [], NOW).filter((s) => s.reason === 'near_expiry');
+    expect(near).toHaveLength(1);
+    expect(near[0].sourceItemId).toBe('d');
+  });
+});

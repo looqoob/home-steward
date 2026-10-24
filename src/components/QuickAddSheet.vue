@@ -359,12 +359,19 @@ function openScan() {
         </template>
 
     <template #footer>
-      <van-button block type="primary" :disabled="!canAdd || saving" class="mb-2" @click="confirm(true)">
-        加入并继续
-      </van-button>
-      <van-button block :disabled="!canAdd || saving" @click="confirm(false)">
-        加入
-      </van-button>
+      <!--
+        v1.1 F15-11：主副按钮同行。「加入并继续 / 加入」两个全宽按钮上下摞着，
+        文案只差两字、90% 场景只点一个——「仅此一件」降为边框副按钮放右侧，
+        语义差异（要不要再填下一件）一目了然。
+      -->
+      <div class="flex gap-2">
+        <van-button class="flex-1" type="primary" :disabled="!canAdd || saving" @click="confirm(true)">
+          加入并继续
+        </van-button>
+        <van-button class="flex-none px-4" :disabled="!canAdd || saving" @click="confirm(false)">
+          仅此一件
+        </van-button>
+      </div>
     </template>
   </BottomSheet>
 </template>

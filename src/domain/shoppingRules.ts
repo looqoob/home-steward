@@ -102,9 +102,21 @@ export function planShopping(
 
   // ② 临期替换：只对 urgent（临期）建议替换，over（已过期）不推送 1:1 采购——
   // 东西还在冰箱里没扔就建议「再买 N 个」会误导重复采购。
-  for (const it of live) {
-    const f = freshnessOf(it, today, settings);
-    if (f.state === 'urgent') {
+  // v1.1 F15-12：按**折叠键**去重——「番茄」「西红柿」是两条独立批次记录（折叠只在展示层），
+  // 同时 urgent 会各推一条同义建议；只保留最早到期那份（FEFO 的建议才最该买）。
+  // 键与 foldKeyOf 同源：(dictKey ?? name) 过 normalizeName——别名聚合靠 dictKey
+  // （入库时已写成字典规范词根），domain 拿不到 aliasKey，旧数据 dictKey 为 null 时退字面归一
+  // （与折叠的兜底口径一致，坑位 #66 的边界在此同样适用）。
+  {
+    const urgentByName = new Map<string, Item>();
+    for (const it of live) {
+      if (freshnessOf(it, today, settings).state !== 'urgent') continue;
+      const k = normalizeName(it.dictKey ?? it.name);
+      const cur = urgentByName.get(k);
+      // 无到期日排最后（与 sortByFreshness 同口径：有日期在前）
+      if (!cur || (it.expireAt && (!cur.expireAt || it.expireAt < cur.expireAt))) urgentByName.set(k, it);
+    }
+    for (const it of urgentByName.values()) {
       push({ name: it.name, reason: 'near_expiry', why: '临期替换', sourceItemId: it.id, locationId: it.locationId, unit: it.unit, quantity: it.quantity });
     }
   }
@@ -146,7 +158,8 @@ export function planShopping(
 }
 
 export const REASON_LABEL: Record<ShopReason, string> = {
-  out_of_stock: '库存 0',
+  // v1.1 F15-6：组名用名词短语——「库存 0」作为清单分组头时与计数连读成「库存 0 1」，语义断裂
+  out_of_stock: '没库存了',
   near_expiry: '临期替换',
   frequent_waste: '易浪费',
   manual: '手动添加',
