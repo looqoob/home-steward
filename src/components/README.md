@@ -7,11 +7,21 @@
 > ```
 >
 > 组件**不做业务计算**：涉及日期、保质期、新鲜度的，一律调 `domain/`。组件只负责渲染和发事件。
+>
+> **★ 优先使用组件（v1.1 F14 强制约定）**：下表已有的视觉模式，**新代码一律用组件，禁止手写副本**
+> ——同一视觉出现第 2 次就必须抽组件（AGENTS §9）；`npm run audit:ui` 会抓绕过组件的手写
+> （确需特例时写 `audit-ignore: <规则id>（理由）` 注释，写不出理由就是该抽组件的信号）。
+> 场景 → 组件速查：左图右文→IconText｜新鲜度徽标→FreshnessBadge｜环境色点+名称→EnvDotLabel｜
+> 分组段头→GroupHead｜Tab 页骨架→TabPageBody｜筛选胶囊→Pill｜概览数字→StatCard｜空态→EmptyState。
 
 ## 组件一览
 
 | 组件 | 用途 | 使用页面 |
 | --- | --- | --- |
+| `TabPageBody.vue` | **v1.1 F14**：Tab 页骨架（F8/F9「固定头 + 内滚」的唯一实现）。`mode="list"`（默认，`#header` 插槽 + 内滚列表）/ `mode="page"`（整页滚）；滚动事件经 `@scroll` 转发（配合 useWindowedList）；底部让位经 `scroll-class` 传 token | StockView、ListView、MeView、StatsView、ConsumeLogView |
+| `GroupHead.vue` | **v1.1 F14**：列表分组段头（`variant="sticky"` 吸顶带出血 / `"plain"` 普通流），间距统一由组件定，调用方不要再挂 mt/mb | StockView、ListView、ConsumeLogView |
+| `FreshnessBadge.vue` | **v1.1 F14**：新鲜度六态徽标（状态色映射唯一住址；over 实底白字）。收编前曾 4 处手写、F11-② 漏改盘点面板 | ItemGroupCard、TodayTodo、StocktakePanel |
+| `EnvDotLabel.vue` | **v1.1 F14**：环境色点 + 名称（`tone`：sunken / on-tint（彩底行）/ bare）。「中性灰底+彩点」约定的组件化 | ItemGroupCard、TodayTodo、StocktakePanel |
 | `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体。默认展开（≤2 份）会**跟随份数变化重算**（消耗一份后自动展开，批次 4，REV-21） | StockView |
 | `LocationChipBar.vue` | 位置横滑筛选 chips（含「全部」「管理」） | StockView |
 | `NavBar.vue` | 子页顶栏：标题 + 返回按钮 | 独立子页 + `meta.header` 页面（由 TabLayout 渲染） |

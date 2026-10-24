@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountOf, normalizePrice, priceFromInput, round2, unitPriceText } from '../price';
+import { amountOf, fmtMoney, normalizePrice, priceFromInput, round2, unitPriceText } from '../price';
 
 describe('round2', () => {
   it('抹掉浮点误差', () => {
@@ -109,5 +109,21 @@ describe('unitPriceText（列表/组卡的单价展示）', () => {
 
   it('单价 0（真的免费）要显示出来，不能被当成没填', () => {
     expect(unitPriceText(0, '个')).toBe('¥0/个');
+  });
+});
+
+describe('fmtMoney（金额展示文案，v1.1 F14）', () => {
+  it('★ 恒定两位小数 + ¥ 前缀', () => {
+    expect(fmtMoney(12.3)).toBe('¥12.30');
+    expect(fmtMoney(0.005)).toBe('¥0.01');
+  });
+  it('没填价是 -，0 是真的免费（语义必须区分）', () => {
+    expect(fmtMoney(null)).toBe('-');
+    expect(fmtMoney(undefined)).toBe('-');
+    expect(fmtMoney(0)).toBe('¥0.00');
+  });
+  it('脏值（负数 / NaN / 字符串）按没填价处理', () => {
+    expect(fmtMoney(-5)).toBe('-');
+    expect(fmtMoney(NaN)).toBe('-');
   });
 });

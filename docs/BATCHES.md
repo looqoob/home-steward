@@ -36,6 +36,7 @@
 | — | 2026-10-24 | F8/F9 滚动体系 preview 浏览器实测（390×780，注入 12 物品 + 12 日志）：五个 Tab 页头部固定 / 列表内滚 / 整页不滚全部通过；消耗明细合计条抓到 12px padding 缝漏卡（PITFALLS #16 底部镜像），`bottom-[-12px]` 下探封缝修复；F1~F5 界面冒烟通过（F3 通知直达属原生能力，留真机） | ✅ 完成 | 本行即登记 |
 | 批次 F12 | 2026-10-24 完成 | v1.1 追加：三主 Tab 头部标题区一致性修正——ListView / MeView 根容器残留的 `pt-4` 与 PageHeader 的 topGap（16px）叠加，标题行比库存页低 16px（preview 实测 top 44 vs 28）；去掉两处 pt-4 并统一头部容器底距 pb-2.5，三页标题行对齐 top=28/height=36/bottom=64；两页面加注释防回归 | ✅ 完成 | 本行即登记 |
 | 批次 F13 | 2026-10-24 完成 | v1.1 追加：设置入口迁移——库存页顶部齿轮移至「我的」页顶部右侧（低频配置不占高频库存页头部），「我的」设置列表去掉「设置」行（一处入口即可）；preview 验证：库存头部仅余盘点/选择、我的页齿轮在标题行且跳转 /settings、返回键回 /me | ✅ 完成 | 本行即登记 |
+| 批次 F14 | 2026-10-24 | 架构收编批次（架构师审查结论全量采纳）：① 新组件 FreshnessBadge（修 StocktakePanel F11-② 漏改）/EnvDotLabel/GroupHead/TabPageBody，收编全部手写副本 ② IconText 存量收编 + 组件表补行 ③ useConsumeFlow / useWindowedList composable 抽取，ConsumeLogView 接入窗口化 ④ domain/price 补 fmtMoney ⑤ scripts/audit-ui.mjs 反模式机器审计 ⑥ AGENTS 强制条款 + §11 场景导航 + §12 自检（三层防线，根治「封装了不用」的漂移） | ✅ 完成（2026-10-24；typecheck / 274 例 / audit:ui 0 违规 / build 四验 + preview 实测：五页标题行对齐、两处窗口化滚动追加与返回键正常） | ITERATION-REVIEW §15 F14 落地记录 |
 > v1.1 功能批次 **F1~F5 已全部落地**（2026-10-24，typecheck / 268 例单测 / build 三验全绿）。
 
 ## 登记示例

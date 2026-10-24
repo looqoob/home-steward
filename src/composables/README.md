@@ -188,9 +188,46 @@ StatsView / QuickAddSheet 的预览）一律走 `useToday()`，别再定格 `tod
 
 ---
 
+## useConsumeFlow.ts — 单件消耗动线（v1.1 F14）
+
+「数量 ≤1 直接执行（一步 + 撤销）、>1 弹 ConsumeSheet 问数量、执行后 toast 可撤销」的完整流程。
+
+```ts
+// ⚠️ 必须解构（返回值注释）：解构后 ref 位于 setup 顶层，模板才能自动解包
+const { target, ask, confirm } = useConsumeFlow();
+```
+
+| 成员 | 说明 |
+| --- | --- |
+| `target` | `Ref<{ item, type } \| null>`，ConsumeSheet 的开关与数据源 |
+| `ask(item, type)` | 入口（列表按钮调用） |
+| `confirm(qty)` | 绑到 ConsumeSheet 的 `@confirm` |
+
+模板里配一份 `<ConsumeSheet>`（绑定如上）；**组消耗**（多份 FEFO 选份）走 `items.consumeGroup`，不在此列。此前 StockView / TodayTodo 各一份副本，数量策略再调整就得改两处（坑位 #69 同族）。
+
+---
+
+## useWindowedList.ts — 长列表窗口化渲染（v1.1 F14）
+
+首屏只渲染 N 条，滚动触底追加；**不做回收式虚拟滚动**（组卡/日志行高度可变 + 分组头 sticky 依赖各自包含块，回收式会大面积重写 F8/F9 滚动体系）。
+
+```ts
+// 同样必须解构：visibleCount / hasMore 是 ref，onScroll 是普通函数
+const { visibleCount, hasMore, onScroll } = useWindowedList({
+  total: () => rows.value.length,   // 当前总条数（getter）
+  resetOn: [keyword, filterLoc],    // 筛选变化重置窗口（新结果集排序不同）
+});
+// 模板：<TabPageBody @scroll="onScroll">…列表 slice(0, visibleCount)… 尾部 v-if="hasMore" 提示
+```
+
+默认 40 条起步 / 追加 30 条 / 距底 600px 触发。使用方：StockView（组）、ConsumeLogView（条）。
+
+---
+
 ## 新增 composable 的约定
 
 - 文件名 `useXxx.ts`，导出同名工厂函数 `useXxx()`。
 - 需要跨页面共享的状态放**模块级**（像 `useToast` 的 `message`）；需要每个组件独立的放**工厂内部**。这两种语义要在 JSDoc 里写清楚。
 - 不要 `import` 任何 `.vue` 组件 —— composable 只处理逻辑。
+- **返回 ref 的 composable，JSDoc 必须写明「调用方需解构到 setup 顶层」**：嵌在普通对象里的 ref 模板不会自动解包（`obj.ref.value` 拿到的是 Ref 本体），这是 F14 实测踩过的坑。
 - 同步更新本 README 与根 `AGENTS.md`。

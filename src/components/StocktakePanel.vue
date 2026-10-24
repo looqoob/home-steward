@@ -12,6 +12,7 @@ import { useToday } from '@/composables/useNow';
 import type { ConsumeType } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
 import EmptyState from '@/components/EmptyState.vue';
+import FreshnessBadge from '@/components/FreshnessBadge.vue';
 
 const props = defineProps<{
   /** 当前筛选结果（`StockView.rows`，已过滤 + 已排序）；盘点只判这些，避免判到看不见的项 */
@@ -188,23 +189,17 @@ function finish() {
             <div class="text-[16px] font-medium text-ink-1 truncate">{{ current.name }}</div>
             <div class="flex items-center gap-1.5 text-[12px] text-ink-3 mt-1 flex-wrap">
               <span>{{ fmtQty(current.quantity) }} {{ current.unit }}</span>
-              <span v-if="currentLoc" class="inline-flex items-center gap-1 text-ink-2 bg-sunken px-1.5 py-0.5 rounded">
-                <i class="w-1.5 h-1.5 rounded-full block" :style="{ background: ENV_MAP[currentLoc.env].color }"></i>{{ currentLoc.name }}
-              </span>
+              <EnvDotLabel v-if="currentLoc" :color="ENV_MAP[currentLoc.env].color" :name="currentLoc.name" />
             </div>
             <!-- 盘点时必须显示到期日：要扔的是不是快过期的那些，全靠这一行判断 -->
             <div class="mt-1.5">
-              <span
+              <!-- v1.1 F14：改用 FreshnessBadge——此前这里手写四态映射，
+                   F11-② 的过期实底改版漏掉了它（漂移实证），收编后随组件自动生效 -->
+              <FreshnessBadge
                 v-if="currentFresh"
-                class="text-[12px] px-2 py-0.5 rounded-full"
-                :class="{
-                  'bg-over-bg text-over-fg': currentFresh.state === 'over',
-                  'bg-urgent-bg text-urgent-fg': currentFresh.state === 'urgent',
-                  'bg-soon-bg text-soon-fg': currentFresh.state === 'soon',
-                  'bg-fresh-bg text-fresh-fg': currentFresh.state === 'fresh',
-                  'bg-sunken text-ink-2': currentFresh.state === 'warn' || currentFresh.state === 'none',
-                }"
-              >{{ current.expireAt ? formatMD(current.expireAt) + ' 到期 · ' : '' }}{{ currentFresh.label }}</span>
+                :state="currentFresh.state"
+                :label="(current.expireAt ? formatMD(current.expireAt) + ' 到期 · ' : '') + currentFresh.label"
+              />
             </div>
           </div>
         </div>

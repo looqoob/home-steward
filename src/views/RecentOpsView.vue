@@ -16,7 +16,7 @@ import EmptyState from '@/components/EmptyState.vue';
 import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog } from '@/domain/types';
 import { fromEpoch } from '@/domain/dates';
-import { normalizePrice } from '@/domain/price';
+import { fmtMoney, normalizePrice } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { useToday } from '@/composables/useNow';
 import { useToast } from '@/composables/useToast';
@@ -63,8 +63,9 @@ function timeText(at: number): string {
 }
 
 function amountText(log: ConsumeLog): string {
+  // fmtMoney（v1.1 F14）：两位小数与消耗明细 / 统计同一口径；没填价返回空串由调用方过滤
   const p = normalizePrice(log.price);
-  return p === null ? '' : `¥${fmtQty(p)}`;
+  return p === null ? '' : fmtMoney(p);
 }
 </script>
 
@@ -92,8 +93,8 @@ function amountText(log: ConsumeLog): string {
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 min-w-0">
           <span class="text-[14px] font-medium text-ink-1 truncate">{{ l.name }}</span>
+          <!-- audit-ignore: freshness-badge（用掉/扔掉是类型徽标，非新鲜度六态；primary-50 不在 FreshnessBadge 色系） -->
           <span
-            class="text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap flex-none"
             :class="l.type === 'wasted' ? 'bg-over-bg text-over-fg' : 'bg-primary-50 text-primary-700'"
           >{{ l.type === 'wasted' ? '扔掉' : '用掉' }}</span>
         </div>

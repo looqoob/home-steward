@@ -412,6 +412,30 @@
 
 **验证**：typecheck 0 错误；271 例全过；build 成功。preview（390×780）实测：概览 pill 行 44px 且筛选互斥（点「已过期」→ 仅 1 卡 + 段头「已过期 1」，取消恢复）；fresh 徽标 #eff2f0/#5f6763、进度条 #6b736e 精确命中；过期徽标浅 #8e2f27 实底白字 / 深色 `data-theme=dark` 下 #b0564d；`--fab-space`/`--actionbar-space` 变量解析正确。
 
+### 批次 F14 · 架构收编（2026-10-24 定案与落地）
+
+**需求来源**：2026-10-24 架构师视角审查（UI 组件收编率不足导致的漂移问题：IconText 3 处用、徽标 4 处手写、段头 2 处照抄后漂移、Tab 骨架 4 处手写并产出 F12 bug）。
+
+**新组件 / composable**：
+
+| 名称 | 内容 | 收编位置 |
+| --- | --- | --- |
+| `FreshnessBadge.vue` | 六态徽标（状态色映射唯一住址，over 实底） | ItemGroupCard×2、TodayTodo、StocktakePanel（**顺带修 F11-② 漏改**） |
+| `EnvDotLabel.vue` | 环境色点 + 名称（tone: sunken / on-tint / bare） | ItemGroupCard、TodayTodo、StocktakePanel |
+| `GroupHead.vue` | 分组段头（sticky 吸顶出血 / plain 两档），间距统一 | StockView、ListView、ConsumeLogView（StatsView 卡内小标题**判定不适用**，防为凑数抽象） |
+| `TabPageBody.vue` | Tab 页骨架（list / page 两模式，`@scroll` 转发），手写 `h-full flex flex-col` 被审计禁止 | StockView、ListView、MeView、StatsView、ConsumeLogView |
+| `useConsumeFlow.ts` | 单件消耗动线（≤1 直执行 / 弹层 / toast 撤销）；返回值必须**解构**（嵌套 ref 模板不解包，实测坑） | StockView、TodayTodo |
+| `useWindowedList.ts` | 窗口化渲染（40 起 / 30 追加 / 600px 触发）；ConsumeLogView 首次接入 | StockView（改用）、ConsumeLogView |
+| `domain/price.fmtMoney` | 金额展示（`¥12.30` / null→`-`）；`合计 ¥…toFixed(2)` 三处收编 | ConsumeLogView、StatsView、ConsumeSheet、QuickAddSheet、ScanSheet、ShoppingInboundRow、RecentOpsView |
+
+**三层防线**（针对「强调过封装仍漂移」的根因：约定不在改动发生处被看到 + 无第二次出现即抽的规则 + 无机器兜底）：
+
+1. **约定层**：AGENTS 强制约定第 4 条（UI 先查组件表；同一视觉第 2 次必须抽）+ §6.1 组件优先条款。
+2. **导航层**：AGENTS §11 新增「我要写一段 UI…先用组件」场景表（11 行映射）。
+3. **机器层**：`scripts/audit-ui.mjs`（`npm run audit:ui`）——6 条规则 grep 已知反模式（徽标 / 色点 / 段头 / Tab 骨架 / 金额 / 左图右文），支持 `audit-ignore: <id>（理由）` 逐行豁免（前三行内生效；豁免必须带理由）；首轮抓出 16 处，修复 5 处真违规、豁免 11 处合理特例后归零。§12 自检清单三验改四验。
+
+**验证**：typecheck 0 错误；vitest **274 例**全过（+3 fmtMoney）；`audit:ui` 0 违规；build 成功。preview 实测：五 Tab 页标题行对齐（top=28）、库存窗口化 40→70、消耗明细注入 60 条后 40→63、返回键 /me 正常。已知边界：IconText 的存量收编仅 MeView 备份提示行（其余 inline 场景为 WARN 级规则渐进收编）；stores 写后全量重读的优化仍按原结论等真机大数据量再评估。
+
 ### 建议落地顺序
 
 F1（复用现有流水，成本最低）→ F3（原生壳体验短板）→ F2 → F5 → F4（唯一动 schema 的，放最后单独升版）。

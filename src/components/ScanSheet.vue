@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useBarcodesStore } from '@/stores/barcodes';
-import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { fmtMoney, normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { useDictStore } from '@/stores/dict';
@@ -66,7 +66,7 @@ const newPrice = ref<number | null>(null);
  */
 const newPriceTotal = computed(() => {
   const p = normalizePrice(newPrice.value);
-  return p === null ? '' : `合计 ¥${round2(p * newQty.value).toFixed(2)}`;
+  return p === null ? '' : `合计 ${fmtMoney(round2(p * newQty.value))}`;
 });
 
 const UNITS = ['个', '袋', '斤', '瓶', '盒'];

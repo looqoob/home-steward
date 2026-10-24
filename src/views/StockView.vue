@@ -9,6 +9,8 @@ import LocationChipBar from '@/components/LocationChipBar.vue';
 import IconText from '@/components/IconText.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import GroupHead from '@/components/GroupHead.vue';
+import TabPageBody from '@/components/TabPageBody.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import EmptyState from '@/components/EmptyState.vue';
 
@@ -35,6 +37,8 @@ import type { ConsumeType, Item } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
 import { useToast } from '@/composables/useToast';
 import { useToday } from '@/composables/useNow';
+import { useWindowedList } from '@/composables/useWindowedList';
+import { useConsumeFlow } from '@/composables/useConsumeFlow';
 
 const router = useRouter();
 const route = useRoute();
@@ -199,32 +203,27 @@ function groupOfState(g: FreshGroup) {
   return (s: string) => s === 'warn' || s === 'none';
 }
 
-/* ==================== 窗口化渲染（v1.1 F10-6） ==================== */
+/* ==================== 窗口化渲染（v1.1 F10-6，F14 抽为 useWindowedList） ==================== */
 
 /**
  * 长列表只渲染「首屏 + 滚过的地方」，不一次渲染全部组卡。
  *
  * 几百件物资时掉帧的主因是 DOM 数量（每张组卡含徽标 / 进度条 / 展开区），
  * 而不是 `foldItems` 的排序本身（几百量级的 O(n log n) 是毫秒级）。
- *
- * 采用**增量窗口**而不是回收式虚拟滚动：组卡高度可变（展开 / 两行名 / 备注标签）、
- * 分组头 sticky 依赖各自的 `<section>` 包含块（回收式要在单容器里做偏移计算，
- * F8/F9 刚收口的滚动体系会被大面积重写）。窗口化追加零偏移计算、零滚动跳动，
- * 代价是滚过的卡片不回收——在「几百件」的目标规模下 DOM 上界完全可接受。
+ * 采用**增量窗口**而不是回收式虚拟滚动的理由见 `composables/useWindowedList` 头注释。
  *
  * - 段头数量有限（≤10），全部照常渲染，只有组卡参与窗口化；
  * - 盘点面板（StocktakePanel）不参与：盘点本来就要逐张判定，截断反而碍事；
  * - 多选「全选」仍作用于**全部**筛选结果（`rows`），与渲染窗口无关。
  */
-const WINDOW_INITIAL = 40;
-const WINDOW_BATCH = 30;
-/** 触底提前量：距底部 600px（约两屏）就开始追加，用户几乎感知不到加载 */
-const WINDOW_TRIGGER = 600;
-
-const visibleCount = ref(WINDOW_INITIAL);
-
-/** 当前筛选下的组卡总数（窗口化的分母，也用于重置判断） */
 const totalGroups = computed(() => sections.value.reduce((s, sec) => s + sec.rows.length, 0));
+
+// 解构出顶层 ref（visibleCount / hasMore），模板才能自动解包（同 useConsumeFlow 的注释）
+const { visibleCount, hasMore, onScroll: onListScroll } = useWindowedList({
+  total: () => totalGroups.value,
+  // 筛选 / 搜索 / 视图变化后回到初始窗口；数据增删（totalGroups 变化）不重置
+  resetOn: [keyword, filterLoc, statusFilter, viewMode],
+});
 
 /** 按段分配可见配额：从第一段开始消耗 `visibleCount`，取完为止；被截空的段整段不渲染 */
 const visibleSections = computed(() => {
@@ -243,33 +242,6 @@ const visibleSections = computed(() => {
   return out;
 });
 
-/**
- * 筛选 / 搜索 / 视图变化后回到初始窗口：新结果集的排序完全不同，
- * 保留大的 `visibleCount` 会让首屏一次性渲染几百张卡，失去窗口化意义。
- * 数据增删（`totalGroups` 变化）**不**重置：滚动位置附近的窗口继续有效。
- */
-watch([keyword, filterLoc, statusFilter, viewMode], () => {
-  visibleCount.value = WINDOW_INITIAL;
-});
-
-const listEl = ref<HTMLElement | null>(null);
-let scrollRafPending = false;
-
-/** rAF 节流的触底追加：scroll 事件每帧最多处理一次 */
-function onListScroll() {
-  if (scrollRafPending) return;
-  scrollRafPending = true;
-  requestAnimationFrame(() => {
-    scrollRafPending = false;
-    const el = listEl.value;
-    if (!el) return;
-    if (visibleCount.value >= totalGroups.value) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - WINDOW_TRIGGER) {
-      visibleCount.value += WINDOW_BATCH;
-    }
-  });
-}
-
 function openItem(id: string) {
   router.push(`/item/${id}`);
 }
@@ -280,38 +252,12 @@ function openQuickAdd() {
 
 /* ==================== 消耗 ==================== */
 
-/** 单条记录的消耗（折叠组展开后的行内按钮走这里） */
-async function consume(item: Item, type: ConsumeType, qty?: number) {
-  const logId = await items.consume(item.id, type, qty);
-  if (!logId) return;
-  const verb = type === 'consumed' ? '用掉' : '扔掉';
-  const used = fmtQty(qty ?? item.quantity);
-  show(`已记录${verb}：${item.name} ${used}${item.unit}`, 2200, {
-    text: '撤销',
-    run: () => items.undoConsume(logId),
-  });
-}
-
 /**
- * 卡片上的 ✓ / ✕：
- * - 只剩 1（或更少）时直接消耗，保持「一步 + 撤销」的手感；
- * - 数量 > 1 时先问数量（20 个鸡蛋一次只用 2 个这种）。
+ * 单件消耗动线（折叠组展开后的行内按钮走这里）。
+ * 数量策略 / toast 撤销统一走 useConsumeFlow（v1.1 F14，与 TodayTodo 同源）。
+ * 解构出顶层 ref，模板才能自动解包（见 useConsumeFlow 返回值注释）。
  */
-const consumeTarget = ref<{ item: Item; type: ConsumeType } | null>(null);
-
-function askConsume(item: Item, type: ConsumeType) {
-  if (item.quantity <= 1) {
-    void consume(item, type, item.quantity);
-    return;
-  }
-  consumeTarget.value = { item, type };
-}
-
-function confirmConsume(qty: number) {
-  const target = consumeTarget.value;
-  consumeTarget.value = null;
-  if (target) void consume(target.item, target.type, qty);
-}
+const { target: consumeTarget, ask: askConsume, confirm: confirmConsume } = useConsumeFlow();
 
 /* ---------- 折叠组的消耗（V3-06）：弹层里选份，确认后按 FEFO 扣 ---------- */
 
@@ -327,7 +273,7 @@ function askGroupConsume(group: ItemGroup, type: ConsumeType) {
   if (group.members.length === 1) {
     const only = group.lead;
     if (only.quantity <= 1) {
-      void consume(only, type, only.quantity);
+      askConsume(only, type);
     } else {
       groupTarget.value = { group, type };
     }
@@ -492,7 +438,7 @@ async function bulkSetPrice() {
   const op = await items.bulkSetPrice([...selected.value], batchPrice.value);
   priceSheet.value = false;
   // 用 `?? 0` 后再 `> 0` 判定，把"没填价(null)"和"真的免费(0)"都归到"已清价"文案
-  const verb = batchPrice.value && batchPrice.value > 0 ? `已改价为 ¥${batchPrice.value}` : '已清价';
+  const verb = batchPrice.value && batchPrice.value > 0 ? `已改价为 ¥${batchPrice.value}` : "已清价"; // audit-ignore: money-format（回显用户刚输入的原值，非格式化金额）
   await afterBulk(op, verb);
 }
 
@@ -517,26 +463,27 @@ function exitStocktake() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <TabPageBody
+    :scroll-class="selectMode ? 'pb-[var(--actionbar-space)]' : 'pb-[var(--fab-space)]'"
+    @scroll="onListScroll"
+  >
     <!--
       顶部区域自上而下四层，层间距统一 14px（mb-3.5），每层只放本层的内容：
 
         ① 标题行      页面名 + 本页操作
-        ② 统计 / 筛选  三张卡，既是概览也是状态筛选
+        ② 概览筛选    一行胶囊（F11-④），既是概览也是状态筛选
         ③ 今日待办    最高频动线，紧跟在数字下面
         ④ 搜索 + 位置  检索与筛选
 
       原先「标题行里塞统计文字」是跨层混排：同一行里 20px 标题 / 13px 按钮 / 12px 统计
       三种字号挤在一起，再叠上 SVG 基线问题（见 .icon 的注释），观感自然乱。
       PageHeader 自带顶部 16px 占位（TabLayout 给本页取消了滚动容器上内边距）。
+
+      ★ 固定头部 + 内滚列表（v1.1 F8，骨架由 TabPageBody 固化，F14）：
+      头部（标题 / 概览 / 待办 / 搜索 / 筛选）恒不滚动；分组列表独占剩余空间内部滚动。
+      头部高度变化（待办展开 / 多选 / 盘点收缩）时列表自动让位——零吸顶偏移计算。
     -->
-    <!--
-      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 的吸顶方案）：
-      头部（标题 / 概览卡 / 待办 / 搜索 / 筛选）flex-none 永不滚动；
-      分组列表独占剩余空间（flex-1 内部滚动）。头部高度变化（待办展开 /
-      多选 / 盘点收缩）时列表自动让位——不需要任何实测高度的吸顶偏移。
-    -->
-    <div class="flex-none -mx-4 px-4 pb-2.5">
+    <template #header>
     <PageHeader :title="stocktakeMode ? '盘点' : '库存'">
       <!--
         右侧操作区：三种模式填不同内容，但**容器对齐方式与控件高度一致**
@@ -653,15 +600,8 @@ function exitStocktake() {
         <LocationChipBar v-model="filterLoc" @manage="router.push('/locations')" />
       </div>
     </template>
-    </div>
+    </template>
 
-    <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器。底部让位随模式变化：多选态给吸底操作条留位，其余给 FAB 留位（高度取自 token，见 index.css「底部悬浮元素让位」） -->
-    <div
-      ref="listEl"
-      class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4"
-      :class="selectMode ? 'pb-[var(--actionbar-space)]' : 'pb-[var(--fab-space)]'"
-      @scroll.passive="onListScroll"
-    >
     <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
     <StocktakePanel
       v-if="stocktakeMode"
@@ -696,14 +636,9 @@ function exitStocktake() {
         <!--
           `flat`（不分组）时 `label` 为空串，段头整体不渲染 ——
           仍走同一条 v-for 路径，不为此单开一套模板。
+          段头视觉（吸顶 / 间距 / 计数）统一在 GroupHead 组件里（v1.1 F14）。
         -->
-        <div
-          v-if="sec.label"
-          class="group-head sticky top-[-1px] z-[19] bg-page -mx-4 px-4 py-1.5 mt-2.5 mb-2.5 flex items-center gap-2 text-[13px] font-medium text-ink-1"
-        >
-          <span>{{ sec.label }}</span>
-          <span class="text-[12px] text-ink-3 font-normal">{{ sec.count }}</span>
-        </div>
+        <GroupHead v-if="sec.label" :label="sec.label" :count="sec.count" />
 
         <!--
           折叠在分段之前已完成，所以这里每行都是**一个组**，不会有一组被切到两段的情况。
@@ -728,13 +663,17 @@ function exitStocktake() {
         窗口化提示：还有未渲染的组时告诉用户「下面还有多少」，继续滚动自动加载。
         防止「看起来到底了、其实只是窗口截断」的误判。
       -->
-      <div v-if="totalGroups > visibleCount" class="text-center text-[12px] text-ink-3 py-3">
+      <div v-if="hasMore" class="text-center text-[12px] text-ink-3 py-3">
         已显示 {{ visibleCount }} / {{ totalGroups }} 组，继续滚动加载更多
       </div>
     </template>
-    </div>
+  </TabPageBody>
 
-    <ConsumeSheet
+  <!--
+    弹层与吸底条：模板 fragment 直下（TabPageBody 之外）——它们是 absolute / fixed 定位，
+    放进滚动容器会被 overflow 裁剪或跟着滚动。「.relative 定位锚」来自 TabLayout 的 max-w 容器。
+  -->
+  <ConsumeSheet
       :model-value="consumeTarget !== null"
       :item="consumeTarget?.item ?? null"
       :type="consumeTarget?.type ?? 'consumed'"
@@ -821,5 +760,4 @@ function exitStocktake() {
         </div>
       </template>
     </BottomSheet>
-  </div>
 </template>

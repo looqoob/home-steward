@@ -9,7 +9,7 @@ import { lookupFood, foodKeyOf } from '@/data/dict';
 import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
-import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { fmtMoney, normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { findRecentByName } from '@/domain/inbound';
 import { isEmojiIcon } from '@/domain/itemFactory';
 import { useToast } from '@/composables/useToast';
@@ -68,7 +68,7 @@ const canAdd = computed(() => !!selected.value && !!locId.value);
  */
 const priceTotal = computed(() => {
   const p = normalizePrice(price.value);
-  return p === null ? '' : `合计 ¥${round2(p * qty.value).toFixed(2)}`;
+  return p === null ? '' : `合计 ${fmtMoney(round2(p * qty.value))}`;
 });
 
 /** 最近入库过的名称（在库 + 消耗日志），供一键复用，最多 8 个 */

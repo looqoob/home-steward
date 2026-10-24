@@ -112,3 +112,24 @@ export function unitPriceText(unitPrice: number | null | undefined, unit: string
   if (p === null) return '';
   return `¥${round2(p)}/${unit || '个'}`;
 }
+
+/**
+ * 金额的**展示**文案：`¥12.30`（恒定两位小数）。
+ *
+ * v1.1 F14 抽出的原因：`'¥' + n.toFixed(2)` 在消耗明细 / 统计 / 消耗弹层
+ * 各拼过一遍，「没填价显示什么」三处各答各的（`-` / 空串 / `¥0.00`）。
+ * 与 `unitPriceText` 的分工：那是单价（带 `/单位`），这是**一笔钱的总额**。
+ *
+ * ⚠️ 没填价返回 `'-'`（统计场景需要占位，空串会让列对不齐）；
+ * `0` 是真的免费，显示 `¥0.00` —— 两个语义必须区分。
+ *
+ * @example
+ * fmtMoney(12.3)   // '¥12.30'
+ * fmtMoney(null)   // '-'
+ * fmtMoney(0)      // '¥0.00'
+ */
+export function fmtMoney(amount: number | null | undefined): string {
+  const p = normalizePrice(amount);
+  if (p === null) return '-';
+  return `¥${p.toFixed(2)}`;
+}

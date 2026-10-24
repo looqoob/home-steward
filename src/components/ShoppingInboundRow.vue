@@ -8,7 +8,7 @@ import { foodKeyOf } from '@/data/dict';
 import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { useToday } from '@/composables/useNow';
-import { normalizePrice, priceFromInput, round2 } from '@/domain/price';
+import { fmtMoney, normalizePrice, priceFromInput, round2 } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { ENV_MAP, type ShoppingItem } from '@/domain/types';
 import QtyStepper from '@/components/QtyStepper.vue';
@@ -87,7 +87,7 @@ const preview = computed(() => {
 const totalHint = computed(() => {
   const p = normalizePrice(price.value);
   if (p === null) return '未填价';
-  return `合计 ¥${round2(p * qty.value).toFixed(2)}`;
+  return `合计 ${fmtMoney(round2(p * qty.value))}`;
 });
 
 function submit() {

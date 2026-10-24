@@ -5,6 +5,7 @@ import { useItemsStore } from '@/stores/items';
 import { useSnapshotsStore } from '@/stores/snapshots';
 import { previousMonthKey, diffMonth, isCurrentMonthLog } from '@/domain/snapshot';
 import { foodKeyOf } from '@/data/dict';
+import { fmtMoney } from '@/domain/price';
 import {
   categoryDistribution,
   monthStats,
@@ -19,6 +20,7 @@ import { downloadText, copyToClipboard } from '@/data/backup/export';
 import { useNow } from '@/composables/useNow';
 import { useToast } from '@/composables/useToast';
 import StatCard from '@/components/StatCard.vue';
+import TabPageBody from '@/components/TabPageBody.vue';
 
 /**
  * 统计页（V3-04）。
@@ -50,7 +52,7 @@ const value = computed(() => stockValue(items.list, todayStr(now.value)));
 const valueHint = computed(() => {
   const v = value.value;
   const parts: string[] = [];
-  if (v.overAmount > 0) parts.push(`含已过期 ¥${v.overAmount.toFixed(0)}`);
+  if (v.overAmount > 0) parts.push(`含已过期 ¥${v.overAmount.toFixed(0)}`); // audit-ignore: money-format（脚注整数紧凑显示，两位小数反而拖长）
   if (v.unpriced > 0) parts.push(`${v.unpriced} 件没填单价，未计入`);
   return parts.join(' · ');
 });
@@ -121,13 +123,14 @@ async function exportCsv() {
 </script>
 
 <template>
-  <div class="h-full overflow-y-auto no-scrollbar overscroll-contain pb-3">
+  <!-- v1.1 F14：整页滚动的骨架由 TabPageBody 固化（page 模式） -->
+  <TabPageBody mode="page" scroll-class="pb-3">
     <!-- 本月概览：与「我的」页同一套数字来源（monthStats），口径不会打架 -->
     <div class="section-label">本月概览</div>
     <div class="grid grid-cols-4 gap-2 mb-5">
       <StatCard :value="ms.inbound" label="入库" />
       <StatCard :value="ms.consumed" label="用掉" />
-      <StatCard :value="ms.wastedCount" label="扔掉" />
+      <!-- audit-ignore: money-format（StatCard 整数显示，与「扔掉 N 件」同密度） -->
       <StatCard
         :value="`¥${ms.wastedAmount.toFixed(0)}`"
         label="浪费金额"
@@ -146,7 +149,7 @@ async function exportCsv() {
     <div class="section-label">在库物资</div>
     <div class="card p-3.5 mb-5">
       <div class="flex items-baseline gap-1.5">
-        <span class="text-[22px] font-semibold leading-[1.2] tabular-nums">¥{{ value.total.toFixed(2) }}</span>
+        <span class="text-[22px] font-semibold leading-[1.2] tabular-nums">{{ fmtMoney(value.total) }}</span>
         <span class="text-[12px] text-ink-3">共 {{ value.priced }} 件有价</span>
       </div>
       <div v-if="valueHint" class="text-[11px] text-ink-3 mt-1 leading-relaxed">{{ valueHint }}</div>
@@ -165,6 +168,7 @@ async function exportCsv() {
         <div class="text-[13px] font-medium text-ink-1 mb-2.5">本月新购</div>
         <template v-if="monthDiff.added.length">
           <div v-for="(r, idx) in monthDiff.added" :key="'a' + idx" class="flex items-center gap-2 mb-1.5 text-[12px]">
+            <!-- audit-ignore: env-dot（图表图例：无名称文字的点，EnvDotLabel 是点+名结构不适用） -->
             <span class="w-1.5 h-1.5 rounded-full bg-primary-500 flex-none"></span>
             <span class="flex-1 min-w-0 truncate text-ink-1">{{ r.name }}</span>
             <span class="text-ink-3 tabular-nums flex-none">+{{ r.qty }} {{ r.unit }}</span>
@@ -175,6 +179,7 @@ async function exportCsv() {
         <div class="text-[13px] font-medium text-ink-1 mt-3 mb-2.5">本月减少</div>
         <template v-if="monthDiff.removed.length">
           <div v-for="(r, idx) in monthDiff.removed" :key="'r' + idx" class="flex items-center gap-2 mb-1.5 text-[12px]">
+            <!-- audit-ignore: env-dot（图表图例：无名称文字的点，EnvDotLabel 是点+名结构不适用） -->
             <!-- 状态色未注册进 @theme，只能 var() 引用（坑位 #36） -->
             <span class="w-1.5 h-1.5 rounded-full flex-none" style="background: var(--state-over-bar);"></span>
             <span class="flex-1 min-w-0 truncate text-ink-1">{{ r.name }}</span>
@@ -208,7 +213,7 @@ async function exportCsv() {
                 // 写成工具类不会报错，只是**静默失效**，柱子会变成透明。
                 background: t.amount > 0 ? 'var(--state-over-bar)' : 'var(--bg-sunken)',
               }"
-              :title="`${t.month}：${t.count} 件 / ¥${t.amount.toFixed(2)}`"
+              :title="`${t.month}：${t.count} 件 / ${fmtMoney(t.amount)}`"
             ></div>
           </div>
         </div>
@@ -238,7 +243,7 @@ async function exportCsv() {
           <span class="flex-1 min-w-0 text-[13px] text-ink-1 truncate">{{ t.name }}</span>
           <span class="text-[12px] text-ink-3 flex-none tabular-nums">{{ t.count }} 件</span>
           <span class="text-[12px] text-danger flex-none tabular-nums w-14 text-right">
-            {{ t.amount > 0 ? '¥' + t.amount.toFixed(0) : '—' }}
+            {{ t.amount > 0 ? `¥${t.amount.toFixed(0)}` : "—" }}<!-- audit-ignore: money-format（图表标注整数） -->
           </span>
           <span class="text-ink-3 flex-none" aria-hidden="true">›</span>
         </button>
@@ -283,5 +288,5 @@ async function exportCsv() {
     <div class="text-[11px] text-ink-3 mt-2 leading-relaxed">
       导出本月概览 / 浪费趋势 / Top 浪费 / 品类分布 / 在库价值。下载不可用时自动改为复制到剪贴板。
     </div>
-  </div>
+  </TabPageBody>
 </template>

@@ -6,7 +6,7 @@ import QtyStepper from '@/components/QtyStepper.vue';
 // 金额口径走 domain/price 的 amountOf：以前这里手抄了一版 `round2(price * qty)`，
 // 与 bulk.buildConsumeLog 是两份实现，迟早漂移；而且它只挡 null/undefined，
 // 挡不住旧备份带进来的脏值（字符串 / 负数 → NaN）。
-import { amountOf } from '@/domain/price';
+import { amountOf, fmtMoney } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 
 const props = defineProps<{
@@ -79,7 +79,7 @@ watch(
   >
       <p class="text-[13px] text-ink-2 leading-relaxed mb-4">
         {{ item.name }} · 在库 {{ fmtQty(item.quantity) }}{{ item.unit }}
-        <template v-if="amount !== null"> · 本次约 ¥{{ amount.toFixed(2) }}</template>
+        <template v-if="amount !== null"> · 本次约 {{ fmtMoney(amount) }}</template>
       </p>
 
       <QtyStepper

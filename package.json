@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "audit:ui": "node scripts/audit-ui.mjs",
     "preview": "vite preview",
     "icons": "node scripts/gen-icons.mjs",
     "cap:add": "npx cap add android",

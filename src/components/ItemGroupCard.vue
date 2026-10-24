@@ -4,6 +4,7 @@ import type { ConsumeType, Item, Location } from '@/domain/types';
 import { ENV_MAP } from '@/domain/types';
 import { barColor, freshnessOf } from '@/domain/freshness';
 import type { ItemGroup } from '@/domain/grouping';
+import FreshnessBadge from '@/components/FreshnessBadge.vue';
 import { normalizePrice, unitPriceText } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { formatMD } from '@/domain/dates';
@@ -104,17 +105,6 @@ const today = useToday();
 const leadFresh = computed(() => freshnessOf(props.group.lead, today.value, settings.settings));
 const env = computed(() => (props.location ? ENV_MAP[props.location.env] : null));
 
-const badgeColor: Record<string, string> = {
-  fresh: 'bg-fresh-bg text-fresh-fg',
-  soon: 'bg-soon-bg text-soon-fg',
-  urgent: 'bg-urgent-bg text-urgent-fg',
-  // 过期徽标用实底白字（v1.1 F11-②）：与其他浅底徽标拉开明度差，
-  // 红绿色盲用户不靠色相也能锁定「哪份坏了」
-  over: 'bg-over-solid text-over-solid-fg',
-  warn: 'bg-sunken text-ink-2',
-  none: 'bg-sunken text-ink-2',
-};
-
 /**
  * 默认展开策略：≤ 2 份展开，> 2 份折叠。
  *
@@ -157,6 +147,7 @@ const groupPriceText = computed(() => {
   const lo = Math.min(...ps);
   const hi = Math.max(...ps);
   const unit = props.group.unit || '个';
+  // audit-ignore: money-format（单价区间「¥1.5–2/个」不是总额，fmtMoney 的两位小数反而不对）
   return lo === hi ? `¥${fmtQty(lo)}/${unit}` : `¥${fmtQty(lo)}–${fmtQty(hi)}/${unit}`;
 });
 
@@ -234,15 +225,13 @@ const dueSummary = computed(() => {
               v-if="props.group.members.length > 1"
               class="text-[12px] px-2 py-0.5 rounded-full bg-sunken text-ink-2 flex-none whitespace-nowrap"
             >共 {{ props.group.members.length }} 份</span>
-            <span class="text-[12px] px-2 py-0.5 rounded-full whitespace-nowrap flex-none" :class="badgeColor[leadFresh.state]">{{ leadFresh.label }}</span>
+            <FreshnessBadge :state="leadFresh.state" :label="leadFresh.label" />
           </span>
           <span class="flex items-center gap-1.5 text-[12px] text-ink-3 flex-wrap mt-0.5">
             <span class="tabular-nums">{{ totalQtyText() }}</span>
             <span v-if="groupPriceText" class="tabular-nums">{{ groupPriceText }}</span>
             <span class="text-ink-2">{{ dueSummary }}</span>
-            <span v-if="props.location" class="inline-flex items-center gap-1 text-[12px] text-ink-2 bg-sunken px-1.5 py-0.5 rounded">
-              <i class="w-1.5 h-1.5 rounded-full block" :style="{ background: env?.color }"></i>{{ props.location.name }}
-            </span>
+            <EnvDotLabel v-if="props.location" :color="env?.color ?? '#6a7886'" :name="props.location.name" />
           </span>
           <span v-if="leadFresh.progress !== null" class="block h-1 rounded bg-sunken overflow-hidden mt-1">
             <i class="block h-full rounded" :style="{ width: (leadFresh.progress * 100).toFixed(0) + '%', background: barColor(leadFresh.state) }"></i>
@@ -299,7 +288,7 @@ const dueSummary = computed(() => {
           <span class="text-[13px] text-ink-1">{{ fmtQty(row.item.quantity) }} {{ row.item.unit }}</span>
           <span v-if="row.priceText" class="text-[12px] text-ink-3 tabular-nums">{{ row.priceText }}</span>
           <span class="text-[12px] text-ink-3">{{ row.item.expireAt ? formatMD(row.item.expireAt) + ' 到期' : '无到期日' }}</span>
-          <span class="text-[12px] px-1.5 py-0.5 rounded-full" :class="badgeColor[row.f.state]">{{ row.f.label }}</span>
+          <FreshnessBadge :state="row.f.state" :label="row.f.label" size="sm" />
           <!-- 第 1 份 = FEFO 的下一份，明确标出来，用户不用自己算 -->
           <span v-if="row.index === 1" class="text-[11px] px-1.5 py-0.5 rounded bg-primary-50 text-primary-700">下一份</span>
         </span>

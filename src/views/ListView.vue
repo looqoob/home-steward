@@ -7,6 +7,8 @@ import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import ShoppingInboundRow from '@/components/ShoppingInboundRow.vue';
+import GroupHead from '@/components/GroupHead.vue';
+import TabPageBody from '@/components/TabPageBody.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import FormField from '@/components/FormField.vue';
@@ -202,13 +204,13 @@ async function doClearDone() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <TabPageBody scroll-class="pb-3">
     <!--
       ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 的吸顶）：头部 flex-none 永不滚动，
       清单与表单 flex-1 内部滚动。「手动添加」属低频操作，随内容滚动不占固定高度。
-      ⚠️ 根容器不要加 pt-4：顶部 16px 留白由 PageHeader 的 topGap 唯一承担（v1.1 F12）。
+      骨架由 TabPageBody 固化（v1.1 F14）：顶部留白由 PageHeader topGap 唯一承担。
     -->
-    <div class="flex-none -mx-4 px-4 pb-2.5">
+    <template #header>
       <PageHeader title="清单">
         <template #actions>
           <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
@@ -249,9 +251,8 @@ async function doClearDone() {
           @click="groupBy = g[0]"
         >{{ g[1] }}</Pill>
       </PillGroup>
-    </div>
+    </template>
 
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4 pb-3">
     <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
     <FormField label="手动添加" for-id="manual-name">
       <div class="flex gap-2">
@@ -280,10 +281,7 @@ async function doClearDone() {
     </EmptyState>
 
     <template v-for="g in groups" :key="g.key">
-      <div class="flex items-center gap-2 text-[13px] font-medium text-ink-1 mt-3 mb-2">
-        <span>{{ g.label }}</span>
-        <span class="text-[12px] text-ink-3 font-normal">{{ g.items.length }}</span>
-      </div>
+      <GroupHead variant="plain" :label="g.label" :count="g.items.length" />
       <div
         v-for="s in g.items"
         :key="s.id"
@@ -378,8 +376,6 @@ async function doClearDone() {
       </div>
     </div>
 
-    </div>
-
     <ConfirmSheet
       :model-value="confirmRemove !== null"
       title="移除清单项"
@@ -401,5 +397,5 @@ async function doClearDone() {
       @update:model-value="confirmClearDone = false"
       @confirm="doClearDone"
     />
-  </div>
+  </TabPageBody>
 </template>

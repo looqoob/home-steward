@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import SearchField from '@/components/SearchField.vue';
+import GroupHead from '@/components/GroupHead.vue';
+import TabPageBody from '@/components/TabPageBody.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import EmptyState from '@/components/EmptyState.vue';
@@ -9,7 +11,10 @@ import StatCard from '@/components/StatCard.vue';
 import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog, ConsumeType } from '@/domain/types';
 import { fromEpoch, monthKey, todayStr, toDateStr } from '@/domain/dates';
-import { normalizePrice } from '@/domain/price';
+// 金额展示统一走 domain/price 的 fmtMoney（v1.1 F14）：此前这里的局部 money()
+// 与统计页 / 消耗弹层各拼一遍「¥ + toFixed(2)」，没填价的显示三处各答各的
+import { fmtMoney as money, normalizePrice } from '@/domain/price';
+import { useWindowedList } from '@/composables/useWindowedList';
 
 const router = useRouter();
 const route = useRoute();
@@ -82,17 +87,6 @@ function inRange(at: number, r: RangeKey, now: number): boolean {
   return true;
 }
 
-/**
- * 金额 / 单价格式化：未填价格统一以「-」表示。
- *
- * 走 `normalizePrice` 而不是只判 `== null`：明细页是**唯一**直接把库里的金额喂给
- * `.toFixed()` 的地方，值若是脏的（旧备份里的字符串、负数）会直接抛 TypeError 白屏。
- */
-function money(n: number | null | undefined): string {
-  const p = normalizePrice(n);
-  return p === null ? '-' : '¥' + p.toFixed(2);
-}
-
 const filtered = computed<ConsumeLog[]>(() => {
   const now = Date.now();
   const k = kw.value.trim();
@@ -117,6 +111,27 @@ const groups = computed(() => {
 });
 
 /**
+ * 窗口化渲染（v1.1 F14）：消耗日志只增不减（日积月累上万条），与库存页同一套
+ * `useWindowedList`——首屏只渲染 40 条，滚动触底追加。筛选变化重置窗口。
+ * 段头计数保持**全量**（与合计条口径一致），被截断的天只是行没渲染。
+ */
+// 解构出顶层 ref，模板才能自动解包（同 useConsumeFlow / useWindowedList 的注释）
+const { visibleCount, hasMore, onScroll: onListScroll } = useWindowedList({
+  total: () => filtered.value.length,
+  resetOn: [kw, range, cat],
+});
+const visibleGroups = computed(() => {
+  let remain = visibleCount.value;
+  return groups.value
+    .map((g) => {
+      const take = Math.max(0, Math.min(g.list.length, remain));
+      remain -= take;
+      return take < g.list.length ? { ...g, list: g.list.slice(0, take) } : g;
+    })
+    .filter((g) => g.list.length > 0);
+});
+
+/**
  * 合计金额 / 浪费金额。
  *
  * 走 `normalizePrice` 而不是 `l.price || 0`：后者把「真的免费（0）」和「没填价（null）」
@@ -136,18 +151,16 @@ const wastedAmount = computed(() =>
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <TabPageBody scroll-class="pb-3" @scroll="onListScroll">
     <!--
       顶栏不在这里渲染：本页挂在 TabLayout 下，标题栏由外壳根据 `meta.header` 渲染在滚动容器外面，
       才能贴死顶部、不随内容滚动，并像底部 Tab 一样占满整宽（页面内渲染会被容器的 px-4 缩进）。
-    -->
 
-    <!--
-      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
+      ★ 固定头部 + 内滚列表（v1.1 F8，骨架由 TabPageBody 固化，F14）：头部 flex-none 永不滚动，
       记录列表 flex-1 内部滚动；按天分组头直接吸在列表容器顶（top:-1px，零测量），
       吸底合计条同样吸在列表容器底。详见 src/styles/README.md「吸顶层约定」。
     -->
-    <div class="flex-none -mx-4 px-4 pb-2">
+    <template #header>
       <div class="h-5" aria-hidden="true"></div>
 
       <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
@@ -180,9 +193,8 @@ const wastedAmount = computed(() =>
           @click="cat = c.key"
         >{{ c.label }}</button>
       </div>
-    </div>
+    </template>
 
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4 pb-3">
     <EmptyState v-if="groups.length === 0" text="没有符合筛选条件的消耗记录">
       <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -197,12 +209,10 @@ const wastedAmount = computed(() =>
       </template>
     </EmptyState>
 
-    <template v-for="g in groups" :key="g.day">
+    <template v-for="g in visibleGroups" :key="g.day">
       <section class="group">
-        <div class="sticky top-[-1px] z-[19] bg-page -mx-4 px-4 py-1.5 mt-3 mb-2 flex items-center gap-2 text-[13px] font-medium text-ink-1">
-          <span>{{ groupTitle(g.day) }}</span>
-          <span class="text-[12px] text-ink-3 font-normal">{{ g.list.length }}</span>
-        </div>
+        <!-- v1.1 F14：改用 GroupHead，吸顶段头的间距回归组件统一值（此前 mt-3 mb-2 已漂移） -->
+        <GroupHead :label="groupTitle(g.day)" :count="g.list.length" />
         <article
           v-for="l in g.list"
           :key="l.id"
@@ -229,6 +239,11 @@ const wastedAmount = computed(() =>
       </section>
     </template>
 
+    <!-- 窗口化提示（与库存页同一交互语言） -->
+    <div v-if="hasMore" class="text-center text-[12px] text-ink-3 py-3">
+      已显示 {{ visibleCount }} / {{ totalCount }} 条，继续滚动加载更多
+    </div>
+
     <!-- bottom-[-12px]：合计条吸附位要下探到滚动容器 pb-3 的外缘，否则 12px 的
          padding 缝里会露出穿行的卡片（吸底版「吸顶 top-[-1px] 封缝」问题，见 PITFALLS #16）。
          条内自带 pb-[calc(12px+safe-area)]，文字与屏幕底部仍有安全间距。 -->
@@ -236,6 +251,5 @@ const wastedAmount = computed(() =>
       <span class="text-[13px] text-ink-2 tabular-nums">合计（{{ totalCount }} 笔）</span>
       <span class="text-[18px] font-bold text-ink-1 tabular-nums">{{ money(totalAmount) }}</span>
     </div>
-    </div>
-  </div>
+  </TabPageBody>
 </template>

@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import PageHeader from '@/components/PageHeader.vue';
+import TabPageBody from '@/components/TabPageBody.vue';
+import IconText from '@/components/IconText.vue';
 import StatCard from '@/components/StatCard.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
@@ -77,11 +79,10 @@ const backupTip = computed(() =>
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
-    <!-- v1.1 F9：标题行固定，其余内容内部滚动（与其他 Tab 页同一模式）。
-         ⚠️ 不要加 pt-4：顶部 16px 留白由 PageHeader 的 topGap 唯一承担，
-         叠加会把标题行顶到比库存/清单页低 16px（v1.1 F12 实测抓到）。 -->
-    <PageHeader title="我的">
+  <TabPageBody scroll-class="pb-3">
+    <!-- v1.1 F9：标题行固定，其余内容内部滚动（与其他 Tab 页同一模式，骨架由 TabPageBody 固化，F14）。 -->
+    <template #header>
+      <PageHeader title="我的">
       <template #actions>
         <!-- 设置齿轮（v1.1 F13 自库存页迁来）：独立图标（无文字伴随）按规范用 md(20) -->
         <button
@@ -97,7 +98,7 @@ const backupTip = computed(() =>
         </button>
       </template>
     </PageHeader>
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain pb-3">
+    </template>
 
     <button
       v-if="backupTip.level !== 'none'"
@@ -107,12 +108,17 @@ const backupTip = computed(() =>
       @click="router.push('/backup')"
     >
       <span class="flex items-center gap-2 min-w-0">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon icon-sm flex-none" :class="backupTip.level === 'warn' ? 'text-danger' : 'text-ink-3'">
-          <path d="M12 9v4" />
-          <path d="M12 17h.01" />
-          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
-        </svg>
-        <span class="text-[13px] text-ink-1 truncate">{{ backupTip.text }}</span>
+        <!-- 左图右文统一走 IconText（v1.1 F14：icon 档位与 gap 由组件约定，不再手写间距） -->
+        <IconText>
+          <template #icon>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="icon icon-sm flex-none" :class="backupTip.level === 'warn' ? 'text-danger' : 'text-ink-3'">
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+              <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+            </svg>
+          </template>
+          <span class="text-[13px] text-ink-1 truncate">{{ backupTip.text }}</span>
+        </IconText>
       </span>
       <span class="text-[13px] text-primary-700 flex-none">立即导出</span>
     </button>
@@ -127,6 +133,7 @@ const backupTip = computed(() =>
         aria-label="查看消耗明细"
         @click="router.push('/consume-log')"
       />
+      <!-- audit-ignore: money-format（StatCard 整数显示，与「本月入库 N 件」同密度） -->
       <StatCard
         :value="`¥${ms.wastedAmount.toFixed(0)}`"
         label="扔掉金额"
@@ -165,6 +172,5 @@ const backupTip = computed(() =>
     <div class="tip mt-3">
       所有数据仅保存在本机（IndexedDB），无服务器、无账号。建议定期在「数据备份」导出 JSON 以防丢失。
     </div>
-    </div>
-  </div>
+  </TabPageBody>
 </template>

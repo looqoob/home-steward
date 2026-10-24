@@ -7,8 +7,11 @@ import { buildTodayTodo, type TodoEntry } from '@/domain/todo';
 import { useToday } from '@/composables/useNow';
 import { ENV_MAP } from '@/domain/types';
 import ConsumeSheet from '@/components/ConsumeSheet.vue';
-import type { ConsumeType, Item } from '@/domain/types';
+import FreshnessBadge from '@/components/FreshnessBadge.vue';
+import EnvDotLabel from '@/components/EnvDotLabel.vue';
+import type { Item } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
+import { useConsumeFlow } from '@/composables/useConsumeFlow';
 
 /**
  * 是否在无待办时显示「今天没有待处理的物资」。
@@ -58,29 +61,8 @@ function qtyText(item: Item): string {
   return `${s}${item.unit}`;
 }
 
-/** 一步消耗：数量 ≤ 1 直接执行；> 1 先问数量（20 个鸡蛋一次只用 2 个） */
-const consumeTarget = ref<{ item: Item; type: ConsumeType } | null>(null);
-
-function askConsume(item: Item, type: ConsumeType) {
-  if (item.quantity <= 1) {
-    void consume(item, type, item.quantity);
-    return;
-  }
-  consumeTarget.value = { item, type };
-}
-
-async function consume(item: Item, type: ConsumeType, qty?: number) {
-  const logId = await items.consume(item.id, type, qty);
-  if (!logId) return;
-  const verb = type === 'consumed' ? '用掉' : '扔掉';
-  show(`已记录${verb}：${item.name}`, 2200, { text: '撤销', run: () => items.undoConsume(logId) });
-}
-
-function confirmConsume(qty: number) {
-  const t = consumeTarget.value;
-  consumeTarget.value = null;
-  if (t) void consume(t.item, t.type, qty);
-}
+/** 单件消耗动线（数量策略 / toast 撤销）统一走 useConsumeFlow（v1.1 F14）；解构出顶层 ref 供模板解包 */
+const { target: consumeTarget, ask: askConsume, confirm: confirmConsume } = useConsumeFlow();
 
 /**
  * 「明天再说」：延后 1 天不处理。
@@ -121,21 +103,15 @@ async function snooze(item: Item) {
             <div class="text-[14px] font-medium text-ink-1 truncate">{{ e.item.name }}</div>
             <div class="flex items-center gap-1.5 text-[12px] text-ink-2 mt-0.5 flex-wrap">
               <span class="tabular-nums">{{ qtyText(e.item) }}</span>
-              <span
+              <EnvDotLabel
                 v-if="locName(e.item)"
-                class="inline-flex items-center gap-1 bg-card bg-opacity-70 px-1.5 py-0.5 rounded"
-              >
-                <i
-                  class="w-1.5 h-1.5 rounded-full block"
-                  :style="{ background: ENV_MAP[locations.byId(e.item.locationId)?.env ?? 'none'].color }"
-                ></i>{{ locName(e.item) }}
-              </span>
+                tone="on-tint"
+                :color="ENV_MAP[locations.byId(e.item.locationId)?.env ?? 'none'].color"
+                :name="locName(e.item)"
+              />
             </div>
           </div>
-          <span
-            class="text-[12px] px-2 py-0.5 rounded-full flex-none"
-            :class="e.state === 'over' ? 'bg-over-solid text-over-solid-fg' : 'bg-urgent-bg text-urgent-fg'"
-          >{{ e.label }}</span>
+          <FreshnessBadge :state="e.state" :label="e.label" />
         </div>
 
         <!--

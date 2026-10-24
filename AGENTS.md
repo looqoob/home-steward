@@ -11,6 +11,9 @@
 > 2. **批次登记**：每**完成**一个批次、每**梳理出新需求批次**，都必须当天在 `docs/BATCHES.md`
 >    （批次台账）登记一行；逐项改动写进明细文档的「落地记录」小节。未进台账的批次视为没有发生。
 > 3. **坑位登记**：踩到新坑当天记入 `docs/PITFALLS.md`（全量坑位表，本文件 §10 只有速查）。
+> 4. **UI 模式优先用组件（v1.1 F14）**：写任何 UI 前先查 `src/components/README.md` 组件表与 §11 场景导航——
+>    已有组件的场景**禁止手写副本**（新鲜度徽标 / 环境色点 / 分组段头 / Tab 页骨架 / 左图右文等）；
+>    同一视觉出现第 **2** 次必须抽成组件或 domain 函数；`npm run audit:ui` 负责机器兜底。
 
 ---
 
@@ -83,7 +86,6 @@ home-steward/
 │   ├── V3-CHANGELOG.md       # v3 新概念与坑（折叠/FEFO/清洗/盘点/统计）
 │   ├── DESIGN-REVIEW.md      # 无障碍与视觉层级评审（A/B/C 三批，已修）
 │   ├── ICON-TEXT-SPEC.md     # 图标 + 文本排版规范（尺寸/描边/对齐）
-│   └── 使用教程.md            # 面向最终用户的操作教程
 │
 └── src/
     ├── main.ts               # 挂载；原生壳跳过 SW；Quota 兜底
@@ -291,6 +293,7 @@ home-steward/
 - **Vant 按需**：模板里写 `van-xxx` 即自动导入并生成 `src/components.d.ts`；**不要显式 import**。当前只用 `van-button` / `van-switch` / `van-config-provider`。**表单控件一律手写**：输入框用原生 `<input>` + `.field-input`（`van-field` 固定标签宽度会挤压输入区），搜索用 `SearchField.vue`。Vant 主题变量（`--van-primary-color` 等）一律引用项目 token（`var(--primary-600)`），别写死 hex。
 - **选中态写法（★ 约定）**：互斥的**三元表达式**（`:class="sel ? 'bg-primary-600 …' : 'bg-card …'"`），**不要**「静态类 + 条件类叠加」——同类工具类谁生效取决于 CSS 先后顺序（坑位 #20 同族）。
 - **手写不换 Vant**：组卡、步进器、底部弹框、搜索框等高度自定义部分保持手写 Tailwind。图标一律内联 SVG + `currentColor`（规范见 `docs/ICON-TEXT-SPEC.md`）。
+- **组件优先于手写（★ v1.1 F14）**：左图右文用 `IconText`、新鲜度徽标用 `FreshnessBadge`、环境色点用 `EnvDotLabel`、分组段头用 `GroupHead`、Tab 页骨架用 `TabPageBody`——组件表见 `src/components/README.md`；`npm run audit:ui` 抓手写副本（特例须 `audit-ignore` 注释写明理由）。
 - **⚠️ 输入类字号必须 ≥ 16px**：iOS / 部分 WebView 对 <16px 输入框聚焦会**整页放大且失焦不还原**（坑位 #64）。视觉尺寸靠外框高度与内边距收。
 
 ### 6.2 三个易错点
@@ -360,6 +363,7 @@ npm install
 | `npm run dev` | 开发服务器（默认 5173） |
 | `npm run typecheck` | 类型检查（`vue-tsc --noEmit`） |
 | `npm test` / `npm run test:watch` | 单元测试（vitest；当前 16 文件 / 253 例，覆盖 domain 全部纯函数 + sanitize） |
+| `npm run audit:ui` | UI 反模式审计（v1.1 F14）：抓手写副本绕过组件的代码，**提交前与三验并列跑** |
 | `npm run build` | 生产构建 → `dist/`（含 PWA + Service Worker） |
 | `npm run preview` | 预览构建产物（4173）——**验证 PWA/SW 行为必须用它**，dev 不注册 SW |
 | `npm run icons` | 重新生成图标到 `public/icons/` |
@@ -478,11 +482,28 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | Android 权限 / 备份策略 | `android/app/src/main/AndroidManifest.xml`（CAMERA 已声明；`allowBackup="false"`，坑位 #63） |
 | appId / 包名 | `capacitor.config.ts` |
 
+### 我要写一段 UI…先用组件（v1.1 F14）
+
+| 场景 | 用这个 |
+| --- | --- |
+| 左边图标右边文本 | `components/IconText.vue`（或 `.it` CSS 类）——**禁止手写 svg+文字间距** |
+| 新鲜度六态徽标 | `components/FreshnessBadge.vue`（状态色映射唯一住址） |
+| 环境色点 + 位置名 | `components/EnvDotLabel.vue` |
+| 列表分组段头（标题+计数） | `components/GroupHead.vue` |
+| Tab 页骨架（固定头 + 内滚） | `components/TabPageBody.vue`——**禁止手写 `h-full flex flex-col`** |
+| 筛选胶囊 / 分段切换 | `components/Pill.vue` + `PillGroup.vue` |
+| 概览数字卡 | `components/StatCard.vue` |
+| 底部让位（FAB / 吸底条） | `pb-[var(--fab-space)]` / `pb-[var(--actionbar-space)]`（index.css token） |
+| 金额显示 | `domain/price.fmtMoney`（单价区间等特例见 audit-ignore 注释） |
+| 长列表窗口化 | `composables/useWindowedList.ts` |
+| 单件消耗动线（≤1 直执行 / 弹层 / 撤销） | `composables/useConsumeFlow.ts` |
+
 ---
 
 ## 12. 提交前自检清单
 
-- [ ] `npm run typecheck`、`npm test`、`npm run build` 三条全过
+- [ ] `npm run typecheck`、`npm test`、`npm run build`、`npm run audit:ui` 四条全过
+- [ ] 新写的 UI 模式先查过组件表（§11「我要写一段 UI」）：没有绕过 IconText / FreshnessBadge / EnvDotLabel / GroupHead / TabPageBody 手写；确需特例已写 `audit-ignore`（带理由）
 - [ ] UI/路由/弹框改动跑过 `npm run preview` 手点（含**安卓返回键**）
 - [ ] 没有 `any`；没有违反分层（`domain/` 无 Dexie / Pinia / Vue / `data/`）；没有直接 import `data/dexie/db.ts`
 - [ ] 消费外部数据的日期字段过了 `isDateStr`（§5.7）；按天计算用了 `useToday()`（§5.2）
@@ -506,7 +527,6 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |
 | `docs/DESIGN-REVIEW.md` | 无障碍与视觉层级评审（A/B/C 三批，已修） |
 | `docs/ICON-TEXT-SPEC.md` | 图标 + 文本排版规范（动图标前先看） |
-| `docs/使用教程.md` | 面向最终用户的操作教程 |
 | `src/{domain,data,stores,composables,components,views,styles}/README.md` | 各层 API 与约定 |
 | `README.md` | 产品简介、快速开始、GitHub 首页 |
 
