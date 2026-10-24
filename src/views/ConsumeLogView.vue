@@ -135,18 +135,18 @@ const wastedAmount = computed(() =>
 
 </script>
 
-<template>
+<template>
   <div class="h-full flex flex-col">
     <!--
       顶栏不在这里渲染：本页挂在 TabLayout 下，标题栏由外壳根据 `meta.header` 渲染在滚动容器外面，
       才能贴死顶部、不随内容滚动，并像底部 Tab 一样占满整宽（页面内渲染会被容器的 px-4 缩进）。
     -->
 
-    <!--
-      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
-      记录列表 flex-1 内部滚动；按天分组头直接吸在列表容器顶（top:-1px，零测量），
-      吸底合计条同样吸在列表容器底。详见 src/styles/README.md「吸顶层约定」。
-    -->
+    <!--
+      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
+      记录列表 flex-1 内部滚动；按天分组头直接吸在列表容器顶（top:-1px，零测量），
+      吸底合计条同样吸在列表容器底。详见 src/styles/README.md「吸顶层约定」。
+    -->
     <div class="flex-none -mx-4 px-4 pb-2">
       <div class="h-5" aria-hidden="true"></div>
 
@@ -182,7 +182,7 @@ const wastedAmount = computed(() =>
       </div>
     </div>
 
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4 pb-3">
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4 pb-3">
     <EmptyState v-if="groups.length === 0" text="没有符合筛选条件的消耗记录">
       <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -229,10 +229,13 @@ const wastedAmount = computed(() =>
       </section>
     </template>
 
-    <div v-if="groups.length > 0" class="sticky bottom-0 z-[20] bg-card border-t border-line rounded-t-md px-3.5 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-2 flex justify-between items-center shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" role="status" aria-live="polite">
+    <!-- bottom-[-12px]：合计条吸附位要下探到滚动容器 pb-3 的外缘，否则 12px 的
+         padding 缝里会露出穿行的卡片（吸底版「吸顶 top-[-1px] 封缝」问题，见 PITFALLS #16）。
+         条内自带 pb-[calc(12px+safe-area)]，文字与屏幕底部仍有安全间距。 -->
+    <div v-if="groups.length > 0" class="sticky bottom-[-12px] z-[20] bg-card border-t border-line rounded-t-md px-3.5 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-2 flex justify-between items-center shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" role="status" aria-live="polite">
       <span class="text-[13px] text-ink-2">合计（{{ totalCount }} 笔）</span>
-      <span class="text-[18px] font-bold text-ink-1">{{ money(totalAmount) }}</span>
-    </div>
-    </div>
-  </div>
+      <span class="text-[18px] font-bold text-ink-1">{{ money(totalAmount) }}</span>
+    </div>
+    </div>
+  </div>
 </template>
