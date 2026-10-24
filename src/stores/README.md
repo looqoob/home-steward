@@ -236,6 +236,18 @@ const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
 
 ---
 
+## snapshots — 月末库存快照（v1.1 F4）
+
+| 方法 | 签名 | 说明 |
+| --- | --- | --- |
+| `load` | `() => Promise<void>` | 整表读入（一月一行，量极小） |
+| `ensureMonthly` | `(items, now?) => Promise<StockSnapshot | null>` | **次月首启**补写上月末快照（幂等）；空库不造空快照；跨多月只补最近一个月 |
+| `byMonth` | `computed<(m: string) => StockSnapshot | null>` | 取某月快照 |
+
+App 启动在 stores 就绪后调用 `ensureMonthly(items.list)`；生成逻辑是纯函数（`domain/snapshot.ts`）。
+
+---
+
 ## shopping — 购物清单
 
 `useShoppingStore()`

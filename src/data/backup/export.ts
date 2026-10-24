@@ -4,7 +4,7 @@ import { SCHEMA_VERSION } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
 
 export async function buildBackup(): Promise<BackupFile> {
-  const [items, locations, logs, shopping, dict, settings, barcodes] = await Promise.all([
+  const [items, locations, logs, shopping, dict, settings, barcodes, snapshots] = await Promise.all([
     db.items.all(),
     db.locations.all(),
     db.logs.all(),
@@ -12,6 +12,7 @@ export async function buildBackup(): Promise<BackupFile> {
     db.dict.all(),
     db.settings.get(),
     db.barcodes.all(),
+    db.snapshots.all(),
   ]);
   return {
     app: 'home-steward',
@@ -24,6 +25,7 @@ export async function buildBackup(): Promise<BackupFile> {
     shopping,
     dict,
     barcodes,
+    snapshots,
     settings,
   };
 }

@@ -15,6 +15,7 @@ declare module 'vue' {
     EmptyState: typeof import('./components/EmptyState.vue')['default']
     FormField: typeof import('./components/FormField.vue')['default']
     GroupConsumeSheet: typeof import('./components/GroupConsumeSheet.vue')['default']
+    IconPicker: typeof import('./components/IconPicker.vue')['default']
     IconText: typeof import('./components/IconText.vue')['default']
     ItemGroupCard: typeof import('./components/ItemGroupCard.vue')['default']
     LocationChipBar: typeof import('./components/LocationChipBar.vue')['default']

@@ -9,7 +9,7 @@ import {
   sanitizeShopping,
   type SanitizeResult,
 } from './sanitize';
-import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, ShoppingItem } from '@/domain/types';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, ShoppingItem, StockSnapshot } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
 import { normalizeSettings } from '@/domain/settings';
 
@@ -18,7 +18,7 @@ export type ImportMode = 'replace' | 'merge';
 export interface ImportResult {
   ok: boolean;
   message: string;
-  counts?: { items: number; locations: number; logs: number; shopping: number; dict: number; barcodes: number };
+  counts?: { items: number; locations: number; logs: number; shopping: number; dict: number; barcodes: number; snapshots: number };
   /**
    * 清洗统计：因字段非法被**丢弃**或被**修正**的记录数。
    *
@@ -60,6 +60,11 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
   const incomingDict = dictR.rows;
   // v1 备份没有 barcodes 字段，必须 `?? []` 兜底
   const incomingBarcodes = (data.barcodes ?? []).filter((b) => b && !b.deletedAt);
+  // v3 起才有快照。行级只做轻校验（id/month/items 数组）：快照是本 App 生成的派生数据，
+  // 手改备份通常也不会碰它；真坏了丢弃该月即可，下月初会按当前库存重建
+  const incomingSnapshots = (data.snapshots ?? []).filter(
+    (sp): sp is StockSnapshot => !!sp && typeof sp.id === 'string' && typeof sp.month === 'string' && Array.isArray(sp.items),
+  );
 
   const dropped = itemsR.dropped + locsR.dropped + logsR.dropped + shopR.dropped + dictR.dropped;
   const fixed = itemsR.fixed + locsR.fixed + logsR.fixed + shopR.fixed + dictR.fixed;
@@ -84,6 +89,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
         await db.shopping.bulkPut(incomingShopping);
         await db.dict.bulkPut(incomingDict);
         await db.barcodes.bulkPut(incomingBarcodes);
+        await db.snapshots.bulkPut(incomingSnapshots);
         // ⚠️ 导入路径**不经过 store**，设置必须在这里过同一套归一化：
         // `id` 非 'singleton' 的记录永远读不到（垃圾行 + 整份设置静默不生效）。
         if (data.settings) await db.settings.save(normalizeSettings(data.settings));
@@ -94,13 +100,14 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
       // ⚠️ 现状必须读「含软删除」的全量行（tombstone）：本地删除（deletedAt 非空）也要参与
       // 新旧比较。只拿活行的话，本地删掉的记录在旧备份里仍然存在且 updatedAt 可能更新，
       // 会被原样写回 —— 用户删掉的东西随导入复活（REV-33）。
-      const [curLocations, curItems, curLogs, curShopping, curDict, curBarcodes] = await Promise.all([
+      const [curLocations, curItems, curLogs, curShopping, curDict, curBarcodes, curSnapshots] = await Promise.all([
         db.locations.allIncludingDeleted(),
         db.items.allIncludingDeleted(),
         db.logs.allIncludingDeleted(),
         db.shopping.allIncludingDeleted(),
         db.dict.allIncludingDeleted(),
         db.barcodes.allIncludingDeleted(),
+        db.snapshots.allIncludingDeleted(),
       ]);
 
       const mergedLocations = mergeById<Location>(curLocations, incomingLocations);
@@ -110,6 +117,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
       await db.shopping.bulkPut(mergeById<ShoppingItem>(curShopping, incomingShopping));
       await db.dict.bulkPut(mergeById<DictEntry>(curDict, incomingDict));
       await db.barcodes.bulkPut(mergeById<BarcodeEntry>(curBarcodes, incomingBarcodes));
+      await db.snapshots.bulkPut(mergeById<StockSnapshot>(curSnapshots, incomingSnapshots));
 
       // 位置排序重排必须在**同一事务**内收尾（REV-33）：放在事务外的话，
       // 重排失败会得到「数据已导入但返回 ok:false」，本机状态与提示不一致；
@@ -128,6 +136,7 @@ export async function importBackup(data: BackupFile, mode: ImportMode): Promise<
         shopping: incomingShopping.length,
         dict: incomingDict.length,
         barcodes: incomingBarcodes.length,
+        snapshots: incomingSnapshots.length,
       },
       sanitized: { dropped, fixed },
     };

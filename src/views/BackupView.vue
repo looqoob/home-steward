@@ -131,6 +131,7 @@ async function runImport(f: File) {
       await reloadStores();
       const c = res.counts;
       let msg = c ? `${res.message}（物品${c.items} 位置${c.locations} 日志${c.logs}）` : res.message;
+      if (c?.snapshots) msg = `${msg} 快照${c.snapshots}`;
       // 清洗了脏数据必须说出来：静默丢记录会让用户以为导入很完美，
       // 等发现少了几件时已经无从查证（数据只在本机，没有第二份可以对比）。
       const s = res.sanitized;

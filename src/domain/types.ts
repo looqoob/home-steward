@@ -201,6 +201,30 @@ export interface BarcodeEntry {
   deletedAt: number | null;
 }
 
+/**
+ * 月末库存快照（v1.1 F4）：每月初首次启动时，把上月末的在库状态定格一份，
+ * 供「本月 vs 上月」对比（新购了什么 / 消失了什么、消失的对不对得上消耗日志）。
+ */
+export interface SnapshotItem {
+  id: string;
+  name: string;
+  dictKey: string | null;
+  quantity: number;
+  unit: string;
+  price: number | null;
+  locationId: string;
+}
+
+export interface StockSnapshot {
+  /** 'YYYY-MM'，与 month 同值；主键兼月份键 */
+  id: string;
+  month: string;
+  items: SnapshotItem[];
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+}
+
 export type ShopReason = 'out_of_stock' | 'near_expiry' | 'frequent_waste' | 'manual';
 export interface ShoppingItem {
   id: string;
@@ -287,5 +311,5 @@ export const DEFAULT_SETTINGS: Omit<Settings, 'createdAt' | 'updatedAt'> = {
   stockViewMode: 'group',
 };
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const BUILTIN_DICT_VERSION = 1;

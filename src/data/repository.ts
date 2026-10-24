@@ -1,4 +1,4 @@
-import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem, StockSnapshot } from '@/domain/types';
 
 /**
  * 持久化抽象层。业务代码只依赖这些接口，
@@ -73,6 +73,9 @@ export interface BarcodeRepository extends Repository<BarcodeEntry> {
   byCode(code: string): Promise<BarcodeEntry | undefined>;
 }
 
+/** 月末库存快照（v1.1 F4）。行数极少（一月一行），不需要扩展方法 */
+export interface SnapshotRepository extends Repository<StockSnapshot> {}
+
 export interface DataSources {
   items: ItemRepository;
   locations: LocationRepository;
@@ -81,6 +84,7 @@ export interface DataSources {
   dict: DictRepository;
   settings: SettingsRepository;
   barcodes: BarcodeRepository;
+  snapshots: SnapshotRepository;
   transaction<T>(fn: () => Promise<T>): Promise<T>;
   /** 清空所有业务数据（导入「覆盖」时使用） */
   wipe(): Promise<void>;

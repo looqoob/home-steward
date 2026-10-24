@@ -2,6 +2,9 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useItemsStore } from '@/stores/items';
+import { useSnapshotsStore } from '@/stores/snapshots';
+import { previousMonthKey, diffMonth, isCurrentMonthLog } from '@/domain/snapshot';
+import { foodKeyOf } from '@/data/dict';
 import {
   categoryDistribution,
   monthStats,
@@ -50,6 +53,21 @@ const valueHint = computed(() => {
   if (v.overAmount > 0) parts.push(`含已过期 ¥${v.overAmount.toFixed(0)}`);
   if (v.unpriced > 0) parts.push(`${v.unpriced} 件没填单价，未计入`);
   return parts.join(' · ');
+});
+
+/* ==================== 本月 vs 上月末（v1.1 F4） ==================== */
+
+const snapshots = useSnapshotsStore();
+
+/** 上月的月末快照；跨多月未打开 / 首月使用时为 null */
+const prevSnap = computed(() => snapshots.byMonth(previousMonthKey(now.value)));
+
+/** 差集：新购 / 减少。键口径与库存折叠同一把（含别名 / 位置 / 单位） */
+const monthDiff = computed(() => {
+  const snap = prevSnap.value;
+  if (!snap) return null;
+  const logs = items.logs.filter((l) => isCurrentMonthLog(l, now.value));
+  return diffMonth(snap, items.active, logs, foodKeyOf);
 });
 
 /**
@@ -140,6 +158,37 @@ async function exportCsv() {
       理由很实际：这是 6 根柱子，chart.js 压缩后也有 200KB+，而整个应用现在才 ~880KB（预缓存），
       为了画 6 根条把首屏体积翻倍不划算。柱高用内联 style 而非 SVG，是为了能直接用状态色 token。
     -->
+    <!-- v1.1 F4：上月末快照 vs 当前在库 —— 「这个月到底新买了什么 / 消失了什么」 -->
+    <div class="section-label">本月 vs 上月末</div>
+    <div class="card p-3.5 mb-5">
+      <template v-if="monthDiff">
+        <div class="text-[13px] font-medium text-ink-1 mb-2.5">本月新购</div>
+        <template v-if="monthDiff.added.length">
+          <div v-for="(r, idx) in monthDiff.added" :key="'a' + idx" class="flex items-center gap-2 mb-1.5 text-[12px]">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary-500 flex-none"></span>
+            <span class="flex-1 min-w-0 truncate text-ink-1">{{ r.name }}</span>
+            <span class="text-ink-3 tabular-nums flex-none">+{{ r.qty }} {{ r.unit }}</span>
+          </div>
+        </template>
+        <div v-else class="text-[12px] text-ink-3 mb-3">本月没有新购物资</div>
+
+        <div class="text-[13px] font-medium text-ink-1 mt-3 mb-2.5">本月减少</div>
+        <template v-if="monthDiff.removed.length">
+          <div v-for="(r, idx) in monthDiff.removed" :key="'r' + idx" class="flex items-center gap-2 mb-1.5 text-[12px]">
+            <!-- 状态色未注册进 @theme，只能 var() 引用（坑位 #36） -->
+            <span class="w-1.5 h-1.5 rounded-full flex-none" style="background: var(--state-over-bar);"></span>
+            <span class="flex-1 min-w-0 truncate text-ink-1">{{ r.name }}</span>
+            <span class="text-ink-3 flex-none">{{ r.note }}</span>
+            <span class="text-ink-3 tabular-nums flex-none">-{{ r.qty }} {{ r.unit }}</span>
+          </div>
+        </template>
+        <div v-else class="text-[12px] text-ink-3">本月没有减少的物资</div>
+      </template>
+      <div v-else class="text-[12px] text-ink-3 leading-relaxed">
+        上月末的库存快照还没生成：快照在每月首次打开时自动补写上月的月末状态，用满一个自然月后这里就有对比了。
+      </div>
+    </div>
+
     <div class="section-label">近 6 个月浪费</div>
     <div class="card p-3.5 mb-5">
       <template v-if="trend.length">

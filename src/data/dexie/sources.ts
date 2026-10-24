@@ -1,5 +1,5 @@
-import type { BarcodeRepository, DataSources, DictRepository, ItemRepository, LocationRepository, LogRepository, ShoppingRepository, SettingsRepository } from '../repository';
-import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
+import type { BarcodeRepository, DataSources, DictRepository, ItemRepository, LocationRepository, LogRepository, ShoppingRepository, SettingsRepository, SnapshotRepository } from '../repository';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem, StockSnapshot } from '@/domain/types';
 import { DEFAULT_SETTINGS } from '@/domain/types';
 import type { Table } from 'dexie';
 import { dexieDb } from './db';
@@ -113,6 +113,8 @@ const barcodes: BarcodeRepository = {
   },
 };
 
+const snapshots: SnapshotRepository = base<StockSnapshot>(dexieDb.snapshots);
+
 export function createDexieSources(): DataSources {
   return {
     items,
@@ -122,15 +124,16 @@ export function createDexieSources(): DataSources {
     dict,
     settings,
     barcodes,
+    snapshots,
     async transaction<T>(fn: () => Promise<T>): Promise<T> {
       return dexieDb.transaction(
         'rw',
-        [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.settings, dexieDb.barcodes],
+        [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.settings, dexieDb.barcodes, dexieDb.snapshots],
         fn,
       );
     },
     async wipe() {
-      await dexieDb.transaction('rw', [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.barcodes], async () => {
+      await dexieDb.transaction('rw', [dexieDb.items, dexieDb.locations, dexieDb.logs, dexieDb.shopping, dexieDb.dict, dexieDb.barcodes, dexieDb.snapshots], async () => {
         await dexieDb.items.clear();
         await dexieDb.locations.clear();
         await dexieDb.logs.clear();
@@ -138,6 +141,8 @@ export function createDexieSources(): DataSources {
         await dexieDb.dict.clear();
         // ⚠️ 别漏：漏了会导致「覆盖导入」后旧条码映射残留
         await dexieDb.barcodes.clear();
+        // 快照同样要清：覆盖导入以备份为准，本机旧快照与备份数据的月份对不上
+        await dexieDb.snapshots.clear();
       });
       broadcastChange();
     },

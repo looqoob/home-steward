@@ -56,7 +56,15 @@ export interface ItemGroup {
  * 过一遍 `aliasKey` 后：新数据（dictKey 已是规范 key，自解析不变）、旧数据（原始名被
  * 归并到规范 key）都能折叠到同一个键上。
  */
-export function foldKeyOf(item: Item, aliasKey?: AliasKeyResolver): string {
+/** 折叠键需要的最小字段：`Item` 与快照里的 `SnapshotItem` 都结构满足（v1.1 F4 起快照对比复用同一把键） */
+export interface FoldKeyInput {
+  dictKey: string | null;
+  name: string;
+  locationId: string;
+  unit: string;
+}
+
+export function foldKeyOf(item: FoldKeyInput, aliasKey?: AliasKeyResolver): string {
   const raw = item.dictKey ?? item.name;
   const nameKey = aliasKey?.(raw) ?? normalizeName(raw);
   return `${item.locationId}|${nameKey}|${item.unit}`;

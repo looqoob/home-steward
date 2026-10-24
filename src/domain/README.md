@@ -68,7 +68,7 @@ export const ENV_LIST: EnvMeta[];                       // 有序列表，用于
 export const CATEGORY_LABEL: Record<CategoryKey, string>;
 export const DEFAULT_SETTINGS: Omit<Settings, 'createdAt' | 'updatedAt'>;
 
-export const SCHEMA_VERSION = 2;                        // 备份文件格式版本（v2 加了 barcodes 表）
+export const SCHEMA_VERSION = 3;                        // 备份文件格式版本（v2 barcodes；v3 snapshots）
 export const BUILTIN_DICT_VERSION = 1;
 ```
 
@@ -307,6 +307,23 @@ groupByFreshness(rows);
 | `computeExpiry` | `(input, env, resolver, fallback) => ExpiryResult` | 主函数，见下 |
 | `CompareRow` | 接口 | 多位置对比表的一行 |
 | `compareLocations` | `(input, locations, resolver, fallback) => CompareRow[]` | 列出每个候选位置下的到期日。`envLabel` 是**文案**（「冷藏」，来自 `ENV_MAP`），不是枚举值 |
+
+## statsCsv.ts（v1.1 F2）
+
+| 导出 | 签名 | 说明 |
+| --- | --- | --- |
+| `buildStatsCsv` | `(input: StatsCsvInput) => string` | 统计导出 CSV：BOM 头（Excel 中文不乱码）+ CRLF + RFC 4180 字段转义；空区块不输出表头 |
+
+## snapshot.ts（v1.1 F4）
+
+| 导出 | 签名 | 说明 |
+| --- | --- | --- |
+| `previousMonthKey` | `(now?) => 'YYYY-MM'` | 上一个月的月份键（跨年正确） |
+| `snapshotFromItems` | `(month, items, now?) => StockSnapshot` | 把在库物品定格为某月快照（只拷贝对比所需字段） |
+| `diffMonth` | `(prev, current, monthLogs, aliasKey?) => SnapshotDiff` | 上月快照 vs 当前在库的差集：`added`（新购）/ `removed`（减少，按日志对账去向：用掉/扔掉/无记录）。**折叠键与库存同一把**（`foldKeyOf`） |
+| `isCurrentMonthLog` | `(l, now) => boolean` | 本月且时间戳合法的日志谓词（脏 `at` 跳过） |
+
+> 快照时机：次月首启补写上月末状态（App 没开就不可能有增减）；跨多月未打开的旧月份无法补齐，对比视图按「无快照」处理。
 
 ### `computeExpiry(input, env, resolve, fallback)`
 
@@ -570,7 +587,7 @@ const value = stockValue(items.list, todayStr());  // { total, overAmount, price
 | 导出 | 签名 | 说明 |
 | --- | --- | --- |
 | `ItemGroup` | 接口 | `{ key, name, icon, unit, locationId, members, lead, totalQuantity, allDated }` |
-| `foldKeyOf` | `(item, aliasKey?) => string` | 折叠键 = `` `${locationId}|${名称键}|${unit}` `` |
+| `foldKeyOf` | `(item: FoldKeyInput, aliasKey?) => string` | 折叠键 = `` `${locationId}|${名称键}|${unit}` ``。入参是结构化最小类型，`Item` 与快照的 `SnapshotItem` 都满足（F4 快照对比复用同一把键） |
 | `fefoCompare` / `sortFefo` | `(a, b) => number` / `(items) => Item[]` | 到期日升序，无到期日排最后；同天按 `createdAt` 升序 |
 | `foldItems` | `(items, aliasKey?) => ItemGroup[]` | 主入口：过滤已用完/已删 → 分桶 → 组内 FEFO → 组间按 `lead` 排序 |
 | `FefoSlice` / `fefoSlices` | `(members, qty) => FefoSlice[]` | 把 `qty` 按 FEFO 拆到各份上，可跨份顺延 |

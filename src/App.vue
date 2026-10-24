@@ -13,6 +13,7 @@ import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { useShoppingStore } from '@/stores/shopping';
 import { useBarcodesStore } from '@/stores/barcodes';
+import { useSnapshotsStore } from '@/stores/snapshots';
 import { useToast } from '@/composables/useToast';
 import { useReminder } from '@/composables/useReminder';
 import { useTheme } from '@/composables/useTheme';
@@ -23,6 +24,7 @@ const locations = useLocationsStore();
 const items = useItemsStore();
 const shopping = useShoppingStore();
 const barcodes = useBarcodesStore();
+const snapshots = useSnapshotsStore();
 const reminder = useReminder();
 const { message, action, runAction, show } = useToast();
 const theme = useTheme();
@@ -116,8 +118,13 @@ onMounted(async () => {
       shopping.load(),
       // 条码映射：扫码时要立刻能查到历史映射，不能等到进管理页才加载
       barcodes.load(),
+      // 月末快照：统计页的「本月 vs 上月」要立刻可用
+      snapshots.load(),
     ]);
     ready.value = true;
+    // 次月首启补写上月末快照（v1.1 F4）：放在 stores 就绪之后、清单生成之前，
+    // 快照要的是「本月还没被建议/提醒动过的在库状态」
+    await snapshots.ensureMonthly(items.list);
     await shopping.generate();
     await reminder.refresh();
 
@@ -136,7 +143,7 @@ onMounted(async () => {
       if (!ready.value) return;
       if (syncTimer) clearTimeout(syncTimer);
       syncTimer = setTimeout(async () => {
-        await Promise.all([settings.load(), dict.load(), locations.load(), items.load(), shopping.load(), barcodes.load()]);
+        await Promise.all([settings.load(), dict.load(), locations.load(), items.load(), shopping.load(), barcodes.load(), snapshots.load()]);
         show('已同步其它窗口的改动', 1800);
       }, 300);
     });

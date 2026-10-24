@@ -101,7 +101,7 @@ interface DataSources {
 1. `this.version(N).stores({...})` **递增版本号**（改索引也算）。
 2. 升 `src/domain/types.ts` 的 `SCHEMA_VERSION`（备份格式随之演进）。
 3. 在 `backup/import.ts` 里处理旧版本的兼容读取（新字段用 `?? []` 兜底）。
-4. **`dexie/sources.ts` 的 `wipe()` 表清单加上新表** —— 漏了会导致「覆盖导入」后旧数据残留。
+4. **`dexie/sources.ts` 的 `wipe()` 与 `transaction()` 表清单都加上新表** —— 漏了会导致「覆盖导入」后旧数据残留。
 5. **`dexie/sources.ts` 的 `transaction()` 表清单加上新表** —— 漏了会导致事务里读不到新表。
 
 > 第 4、5 条是 v2 踩过的坑：新增 `barcodes` 时最容易只改 `wipe()` 忘了 `transaction()`。

@@ -1,4 +1,4 @@
-import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem } from '@/domain/types';
+import type { BarcodeEntry, ConsumeLog, DictEntry, Item, Location, Settings, ShoppingItem, StockSnapshot } from '@/domain/types';
 import { SCHEMA_VERSION } from '@/domain/types';
 
 export interface BackupFile {
@@ -17,6 +17,8 @@ export interface BackupFile {
    * 若声明为必填，v1 备份导入会在类型层面就说不通。
    */
   barcodes?: BarcodeEntry[];
+  /** v3（v1.1 F4）新增。可选：v1/v2 备份没有这个键，导入时 `?? []` 兜底 */
+  snapshots?: StockSnapshot[];
   settings: Settings;
 }
 
@@ -31,6 +33,7 @@ export function emptyBackup(): BackupFile {
     shopping: [],
     dict: [],
     barcodes: [],
+    snapshots: [],
     settings: {} as Settings,
   };
 }
