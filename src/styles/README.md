@@ -144,6 +144,7 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - **高度自定义部分仍是手写 Tailwind**：`ItemCard.vue`、`LocationChipBar.vue`、`SearchField.vue`、`QuickAddSheet.vue` 的卡片/网格/步进器/底部弹框结构，以及各页面的布局、吸顶筛选、统计数字块等，全部用行内 Tailwind 工具类实现。
 - **页面级重复件收进 `@layer components`**：`.section-label`（12px ink-3 小节标题）、`.tip`（sunken 提示盒，变体 `.tip-danger` / `.tip-urgent` / `.tip-soon`）、`.card`（白底 + 1px 描边 + 12px 圆角 + 阴影，`.card-lg` 为 16px 圆角）、`.field-label` / `.field-input` / `.field-textarea` / `.field-hint`（表单字段的四件套外观）。它们替代了此前在 8–19 个文件里各手抄一份的同一串工具类；**内边距 / 外边距仍由调用点的工具类给**（`p-3`、`mb-3.5` 等），条件态（`border-danger`、`mt-5`）因 utilities 层更高可正常覆盖。
 - **输入框为什么是 CSS 类而不是 `<AppInput>` 组件**：单价、手填保质期这类字段需要 `:value` + `@input` 走自定义解析（`priceFromInput`、空串转 `null`），做成组件就得为 `v-model` 再造一套 parse/format 协议，反而更绕。外观收敛到 `.field-input`，结构与标签交给 `<FormField>`。
+- **⚠️ 输入类字号必须 ≥16px（REV-17）**：`.field-input` / `.field-textarea` / SearchField 的 input 都是 16px —— iOS / 部分 Android WebView 对小于 16px 的输入框聚焦时会触发整页缩放且失焦不还原。「看起来小」由外框高度与内边距承担，别把字号调回 14。
 - **保留的全局类**：`.no-scrollbar`（隐藏滚动条）、`.sr-only`（视觉隐藏但保留可访问性，用于隐藏的 file input）。需要 `padding` / `pseudo` / `keyframes` 的极少数场景才写 `<style scoped>`。
 
 ---

@@ -28,7 +28,7 @@ export { isDateStr } from '@/domain/dates';
 
 import type { ConsumeLog, DictEntry, EnvType, Item, Location, ShelfLifeValue, ShoppingItem } from '@/domain/types';
 import { NOT_RECOMMENDED } from '@/domain/types';
-import { isDateStr } from '@/domain/dates';
+import { isDateStr, parseDate, toDateStr } from '@/domain/dates';
 // 金额口径复用 domain/price：`null`=没填价、必须有限非负的规则只有那一份定义。
 // 早期这里只校验了日志侧的 price，物品侧原样穿透 —— 就是漏了这一行 import。
 import { normalizePrice } from '@/domain/price';
@@ -39,6 +39,18 @@ const KNOWN_ENV = new Set<string>(['chilled', 'frozen', 'cool', 'dry', 'ventilat
 
 // 日期格式判断住在 `domain/dates`（纯函数、不碰数据源），
 // 与 `normalizeName` 当初从 data 迁到 domain 是同一回事：data 可以依赖 domain，反之不行。
+
+/**
+ * 日期**往返校验**：格式合法且 `toDateStr(parseDate(v)) === v`。
+ *
+ * 只查格式挡不住 `'2026-13-01'` / `'2026-02-31'`——`parseDate` 会把它们归一成
+ * 2027-01-01 / 03-03 静默进库，卡片显示「到期日 13-01」这种鬼日期（REV-48）。
+ * 往返一致才说明是真实存在的日历日。
+ */
+function validDate(v: unknown): v is string {
+  if (!isDateStr(v)) return false;
+  return toDateStr(parseDate(v)) === v;
+}
 
 function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
@@ -92,8 +104,12 @@ export interface SanitizeResult<T> {
 /**
  * 物品清洗。
  *
- * ⚠️ 丢 `status`：合并两种消耗状态会直接算错「在库」与浪费统计；宁可这条不进统计。
- * ⚠️ `deletedAt` 也要归一：仓库层用 `!r.deletedAt` 过滤，字符串 `"0"` 是真值 → 记录永久隐身。
+ * - 缺 `id` / 空 `name` 的整条丢弃（UI 无法呈现）；`status` 非法回落 `in_stock` 并计数。
+ * - 日期走 `validDate` 往返校验（格式对但日历上不存在的日子也按非法处理）。
+ * - 数量：有限**非负**数原样保留 —— `0` 是用户「明确清空」的语义，改成 1 会凭空造库存（REV-49）；
+ *   负数 / NaN / 字符串等非法值归 1 并计 `fixed`。
+ * - `name` 落库前 `trim()`：判空用的是 trim 后的值，入库却带首尾空白会让名称匹配永久失灵。
+ * - `deletedAt` 归一：仓库层用 `!r.deletedAt` 过滤，字符串 `"0"` 是真值 → 记录永久隐身。
  * @param fallbackDate 记录缺 `storedAt` 时补的日期（一般是导入当天的 'YYYY-MM-DD'）
  * @param now 缺 `createdAt` / `updatedAt` 时补的时间戳（测试传入固定值）
  */
@@ -114,19 +130,21 @@ export function sanitizeItems(input: unknown[], fallbackDate: string, now: numbe
       dropped++;
       continue;
     }
+    const trimmedName = name.trim();
+    if (trimmedName !== name) fixed++;
 
     const before = o.storedAt;
     // 用 `const` 一次算完：`let` + 分支里重新赋值会让 TS 在对象字面量处丢失类型收窄
-    const storedAt: string = isDateStr(before) ? before : (fixed++, fallbackDate);
+    const storedAt: string = validDate(before) ? before : (fixed++, fallbackDate);
     const rawExpire = o.expireAt;
     const expireAt: string | null =
-      rawExpire === null ? null : isDateStr(rawExpire) ? rawExpire : (fixed++, null);
+      rawExpire === null ? null : validDate(rawExpire) ? rawExpire : (fixed++, null);
     const rawProduced = o.producedAt ?? null;
     const producedAt: string | null =
-      rawProduced === null ? null : isDateStr(rawProduced) ? rawProduced : (fixed++, null);
+      rawProduced === null ? null : validDate(rawProduced) ? rawProduced : (fixed++, null);
 
     const rawQty = o.quantity;
-    const goodQty = typeof rawQty === 'number' && Number.isFinite(rawQty) && rawQty > 0;
+    const goodQty = typeof rawQty === 'number' && Number.isFinite(rawQty) && rawQty >= 0;
     if (rawQty !== undefined && !goodQty) fixed++;
     const status: Item['status'] = o.status === 'finished' ? 'finished' : 'in_stock';
     if (o.status !== undefined && o.status !== status) fixed++;
@@ -141,7 +159,7 @@ export function sanitizeItems(input: unknown[], fallbackDate: string, now: numbe
     rows.push({
       ...(o as unknown as Item),
       id,
-      name,
+      name: trimmedName,
       storedAt,
       expireAt,
       producedAt,
@@ -160,7 +178,7 @@ export function sanitizeItems(input: unknown[], fallbackDate: string, now: numbe
   return { rows, dropped, fixed };
 }
 
-/** 消耗日志清洗：只保日期与数值字段合法（明细页与统计都直接用它们） */
+/** 消耗日志清洗：只保日期与数值字段合法（明细页与统计都直接用它们）。数量规则与物品侧一致（0 保留）。 */
 export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog> {
   const rows: ConsumeLog[] = [];
   let dropped = 0;
@@ -177,6 +195,8 @@ export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog> {
       dropped++;
       continue;
     }
+    const trimmedName = name.trim();
+    if (trimmedName !== name) fixed++;
     let at = num(o.at, NaN);
     if (!Number.isFinite(at) || at <= 0) {
       at = Date.now();
@@ -184,10 +204,10 @@ export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog> {
     }
     const rawExpire = o.expireAt ?? null;
     const expireAt: string | null =
-      rawExpire === null ? null : isDateStr(rawExpire) ? rawExpire : (fixed++, null);
+      rawExpire === null ? null : validDate(rawExpire) ? rawExpire : (fixed++, null);
     const rawQty = o.quantity;
-    const goodQty = typeof rawQty === 'number' && Number.isFinite(rawQty) && rawQty > 0;
-    if (!goodQty) fixed++;
+    const goodQty = typeof rawQty === 'number' && Number.isFinite(rawQty) && rawQty >= 0;
+    if (rawQty !== undefined && !goodQty) fixed++;
     const type: ConsumeLog['type'] = o.type === 'wasted' ? 'wasted' : 'consumed';
     if (o.type !== undefined && o.type !== type) fixed++;
 
@@ -203,7 +223,7 @@ export function sanitizeLogs(input: unknown[]): SanitizeResult<ConsumeLog> {
     rows.push({
       ...(o as unknown as ConsumeLog),
       id,
-      name,
+      name: trimmedName,
       at,
       createdAt,
       quantity: goodQty ? rawQty : 1,
@@ -279,10 +299,12 @@ export function sanitizeShopping(input: unknown[], now: number = Date.now()): Sa
     const locationId: string | null = typeof rawLoc === 'string' && rawLoc ? rawLoc : null;
     if (rawLoc !== undefined && rawLoc !== locationId) fixed++;
     const createdAt = epoch(o.createdAt, now, () => fixed++);
+    const trimmedName = o.name.trim();
+    if (trimmedName !== o.name) fixed++;
     rows.push({
       ...(o as unknown as ShoppingItem),
       id: o.id,
-      name: o.name,
+      name: trimmedName,
       reason,
       locationId,
       createdAt,

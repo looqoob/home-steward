@@ -2,8 +2,8 @@
 
 > **导入方式（重要）**：`<script setup>` 只暴露 default 导出，**必须默认导入**：
 > ```ts
-> import ItemCard from '@/components/ItemCard.vue';      // ✅
-> import { ItemCard } from '@/components/ItemCard.vue';  // ❌ 构建报 [MISSING_EXPORT]
+> import ItemGroupCard from '@/components/ItemGroupCard.vue';      // ✅
+> import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建报 [MISSING_EXPORT]
 > ```
 >
 > 组件**不做业务计算**：涉及日期、保质期、新鲜度的，一律调 `domain/`。组件只负责渲染和发事件。
@@ -12,11 +12,10 @@
 
 | 组件 | 用途 | 使用页面 |
 | --- | --- | --- |
-| `ItemCard.vue` | 商品卡片：图标、名称、新鲜度徽章、数量、位置标签、进度条 | StockView、ItemEditView |
-| `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体 | StockView |
+| `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体。默认展开（≤2 份）会**跟随份数变化重算**（消耗一份后自动展开，批次 4，REV-21） | StockView |
 | `LocationChipBar.vue` | 位置横滑筛选 chips（含「全部」「管理」） | StockView |
 | `NavBar.vue` | 子页顶栏：标题 + 返回按钮 | 独立子页 + `meta.header` 页面（由 TabLayout 渲染） |
-| `SearchField.vue` | 列表页搜索框：胶囊外框 + 放大镜 + 原生 input | StockView、ConsumeLogView |
+| `SearchField.vue` | 列表页搜索框：胶囊外框 + 放大镜 + 原生 input（字号 ≥16px 防 iOS 聚焦整页缩放，REV-17） | StockView、ConsumeLogView |
 | `QuickAddSheet.vue` | 快速入库底部弹框 | TabLayout |
 | `ConfirmSheet.vue` | 二次确认弹层：标题 + 说明 + 取消/确认，危险操作用实心红 | ItemEditView、LocationManageView、BackupView |
 | `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（默认 1，含「全部」） | StockView、ItemEditView、TodayTodo |
@@ -49,7 +48,7 @@
 
 ## ItemGroupCard.vue — **v3**：同名折叠组卡
 
-v3 起库存列表的**主体卡片**（`ItemCard` 退居详情页 / 待办里的单份场景）。
+v3 起库存列表的**主体卡片**（单份时退化为普通卡片样式，不显示「共 N 份」与展开开关）。
 数据来自 `domain/grouping` 的 `ItemGroup`：一组 = 同名 + 同位置 + 多个批次。
 
 ### Props
@@ -75,7 +74,7 @@ v3 起库存列表的**主体卡片**（`ItemCard` 退居详情页 / 待办里�
 
 1. **状态色 / 徽标 / 进度条一律取 `leadFresh`（`freshnessOf(group.lead, …)`）**，
    不逐份算完再平均或取最优 —— 否则会出现「名字是西红柿、颜色按番茄」。
-2. **长按 500ms + 10px 位移容差**（与 `ItemCard` 同一套手感）。组卡取代 `ItemCard`
+2. **长按 500ms + 10px 位移容差**（沿用 v2 单卡时代的手感参数）。组卡是列表主体
    之后这个入口**必须跟着搬过来**，否则 v2 的「长按多选」会静默消失。
 3. **`dueSummary` 单份组不写「共 1 份」**。绝大多数物品没有同名邻居，写「共 1 份」是纯
    噪音，还会让「牛奶 1 盒」看起来像是被合并过：
@@ -92,7 +91,7 @@ v3 起库存列表的**主体卡片**（`ItemCard` 退居详情页 / 待办里�
 
 | 情况 | 文案 |
 | --- | --- |
-| 全部没填价 | **空串**（什么都不写，与 `ItemCard` 同口径） |
+| 全部没填价 | **空串**（什么都不写，与单份行 / ItemCard 时代同口径） |
 | 各份单价一致 | `¥1.5/个` |
 | 各份单价不同 | `¥1.5–2/个` |
 
@@ -190,87 +189,6 @@ const expanded = ref(props.group.members.length <= 2);
 ```
 
 不用组件时，直接挂 `.it` / `.it-icon` / `.it-text` 三个类，规则完全相同。
-
----
-
-## ItemCard.vue
-
-一行商品信息，`domain/freshness` 的视觉载体。
-
-### Props
-
-| 名 | 类型 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `item` | `Item` | ✅ | — | 商品数据 |
-| `location` | `Location` | ❌ | `undefined` | 传入则显示位置标签（灰底 + 环境色圆点） |
-| `selectable` | `boolean` | ❌ | `false` | **v2**：多选模式。左侧出现复选框、右侧快捷按钮隐藏、整卡改为切换选中 |
-| `selected` | `boolean` | ❌ | `false` | **v2**：是否已选中（描边 + 浅色环） |
-
-### Emits
-
-| 事件 | 载荷 | 触发时机 |
-| --- | --- | --- |
-| `click` | `(item: Item)` | 点击卡片主操作区（进详情页）。`selectable` 时改为切换选中 |
-| `consume` | `(item: Item, type: ConsumeType)` | 点击右侧「用掉 / 扔掉」快捷按钮（多选态下不渲染） |
-| `select` | `(item: Item)` | **v2**：`selectable` 时点击卡片切换选中 |
-| `longpress` | `(item: Item)` | **v2**：`selectable` 时长按 500ms 进入多选并选中该项 |
-
-### v3：单卡显示单价
-
-数量后面跟一句 `¥1.5/斤`，文案由 `domain/price.unitPriceText` 统一生成。
-
-⚠️ **没填价时什么都不显示**（返回空串）。卡片已经很密，「未填价」三个字会抢走到期日
-的注意力，而它的信息量是零。需要区分「没填价 vs 真的免费」的是统计页，那里靠脚注说明。
-
-### ★ 长按防误触（v2）
-
-进入多选的第二条路径是长按，但**必须同时监听 `pointermove`**：
-```
-pointerdown → 启动 500ms 计时
-pointermove → 位移 > 10px 则取消计时（用户想滚动，不是想选中）
-pointerup / pointercancel / pointerleave → 取消计时
-```
-
-漏掉 `pointermove` 的话，在列表上按住并滑动（想滚动）会逐张误触选中。
-
-### ★ 结构约束（改之前先看）
-
-```
-<article class="card">
-  <button class="card-hit">…缩略图 + 文字 + 进度条…</button>   ← 主操作
-  <div class="card-actions">
-    <button class="act consume">✓</button>                    ← 用掉了
-    <button class="act waste">✕</button>                      ← 扔掉了
-  </div>
-</article>
-```
-
-- **整卡不能是 `<button>`**：内部还有两个按钮，嵌套交互元素非法。主操作区用 `<button class="card-hit">`，外层是 `<article>`。
-- **`card-hit` 内部一律用 `<span>`**（button 只应包含 phrasing content）。因此 `.card .main` / `.bar` 在 CSS 里显式声明了 `display: block`。
-- 两个 `.act` 视觉 36px、`gap: 10px`，`tap-target(44px)` 的热区才不会互相重叠 —— **别把间距改小**，否则容易误触「扔掉」。
-
-### 行为细节
-
-- 内部自己调 `freshnessOf(item, today, settings)`，**调用方不需要预先算好**。
-- 数量显示：整数直接显示，小数保留 2 位再去掉尾零（`1.5 斤` / `2 个`）。
-- `icon` 为空时回退显示名称首字符。
-- `notRecommended` 为 true 时额外显示「不建议存放」标签。
-- **进度条只在 `f.progress !== null` 时渲染**（即：有到期日才显示）。`warn` / `none` 状态不渲染进度条。
-
-### 示例
-
-```vue
-<ItemCard
-  v-for="i in rows"
-  :key="i.id"
-  :item="i"
-  :location="locMap[i.locationId]"
-  @click="router.push(`/item/${$event.id}`)"
-  @consume="(item, type) => items.consume(item.id, type)"
-/>
-```
-
----
 
 ## LocationChipBar.vue
 

@@ -40,7 +40,7 @@
 | 技术 | 版本 | 说明 |
 | --- | --- | --- |
 | Vue | 3.5.x | `<script setup lang="ts">` 风格 |
-| Vite | 8.x | hash 模式路由，base 相对路径 |
+| Vite | 8.x | hash 模式路由；**未配 `base`**（按根路径部署，子路径部署会白屏，改前先评估） |
 | TypeScript | **锁定 5.6.3** | ⚠️ **不要升级到 TS 7**，见 §10 坑位 |
 | vue-router | 5.x | **hash 模式**（`createWebHashHistory`） |
 | Pinia | 4.x | **setup store** 写法（非 options store） |
@@ -49,7 +49,7 @@
 | TailwindCSS | v4 | utility-first 样式；`@tailwindcss/vite` 插件 + `@theme inline` 把设计 token 映射成工具类（见 §6.1） |
 | unplugin-vue-components | 1.x | 仅用于 Vant 按需导入（`VantResolver`），并生成 `src/components.d.ts` |
 | vite-plugin-pwa | 1.x | workbox-build / workbox-window 7.x 需显式安装 |
-| Capacitor | 8.x | core / android / cli + @capacitor/app、@capacitor/local-notifications |
+| Capacitor | 8.x | core / android / cli + @capacitor/app（暂未被 import，移除需重跑 `cap sync` 同步 gradle）、@capacitor/local-notifications |
 | sharp | 0.35.x | 仅 `scripts/gen-icons.mjs` 用，生成图标 |
 
 **为什么用 hash 路由**：PWA 离线深链 + Capacitor 的 `https://localhost` 场景，history 模式的 fallback 在两种壳里都不稳定。
@@ -114,7 +114,9 @@ home-steward/
     │   │   ├── schema.ts     # 备份文件格式 + 校验（只校验信封）
     │   │   ├── export.ts     # 导出
     │   │   ├── import.ts     # 导入（replace / merge），写库前先 sanitize
-    │   │   └── sanitize.ts   # v3：记录级清洗（脏备份的防线）
+    │   │   ├── sanitize.ts   # v3：记录级清洗（脏备份的防线）
+    │   │   └── __tests__/    # sanitize 纯函数测试
+    │   ├── sync.ts           # 跨标签写同步广播（BroadcastChannel，检测+自动重读）
     │   └── README.md
     │
     ├── stores/               # 【第 3 层】Pinia 薄层
@@ -129,6 +131,7 @@ home-steward/
     │   ├── useReminder.ts    # 临期提醒（原生通知 / Web 降级）
     │   ├── useToast.ts       # 全局轻提示（模块级单例 state）
     │   ├── useSafeArea.ts    # 顶部安全区（状态栏/刘海）→ 写 <html> 的 --safe-top，顶栏只认它
+    │   ├── useNow.ts         # 响应式当前时刻/今天（60s 心跳 + 切回前台即刷新），跨零点刷新的真源
     │   ├── useTheme.ts       # 外观主题（深浅 + 主题色）→ 写 html[data-theme] 与 --primary-* 内联变量
     │   └── README.md
     │
@@ -282,8 +285,10 @@ export const db: DataSources = createDexieSources();  // ← 换成 createSqlite
 
 四条必须记住的口径：
 
-1. **折叠键 = `locationId | 名称键`**，名称键三级回退 `item.dictKey` → `aliasKey?.(name)`
-   （`data/dict` 的 `foodKeyOf`，依赖注入）→ `normalizeName(name)`。
+1. **折叠键 = `locationId | 名称键 | unit`**。名称键 = `(dictKey ?? name)` **先过 `aliasKey?.(…)`
+   （`data/dict` 的 `foodKeyOf`，依赖注入）再退 `normalizeName(…)`** —— 不能直接拿 `dictKey` 当键：
+   旧数据的 dictKey 是原始输入名（v3 之前 `createItem` 写的是 `name`），直接比对会让别名折叠对
+   存量数据失效。**带 unit**：「2 盒 + 1 袋」不能折成「3 盒」，跨单位数量相加与 FEFO 分配都无意义。
 2. **组卡的状态色 / 排序 / 进度条一律取 `lead`**（组内最早到期那份）。
 3. **待办 / 提醒 / 统计一律按「份」，只有库存列表按组折叠**（段头计数也按份）。
 4. **折叠必须在分段之前**：`foldItems → sortByFreshness → groupByFreshness`。
@@ -421,7 +426,7 @@ npm run typecheck && npm test && npm run build
 
 - 配置文件是**独立的 `vitest.config.ts`**（不是 `vite.config.ts`）：`environment: 'node'`，只注册 `@` 别名，
   `include: ['src/**/*.test.ts']`。只测**纯函数**——不依赖 Vue / Dexie / 浏览器 API。
-  `data/backup/sanitize.ts` 虽然在 data 层，但同样是纯函数，可以直接测（45 例）。
+  `data/backup/sanitize.ts` 虽然在 data 层，但同样是纯函数，可以直接测。
 - 夹具统一放 `src/domain/__tests__/fixtures.ts`（`mkItem` / `mkLocation` / `mkShopping` / `TODAY` / `NOW` / `SETTINGS`）。
   时间基准固定在 `Date.UTC(2026, 9, 5)`，**不要用 `Date.now()`**，否则用例会随日子变化而红。
 - 新增领域函数 → 同步补 `src/domain/__tests__/*.test.ts`。
@@ -566,6 +571,11 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 61 | release 的签名口令躺在仓库里，而签名文件根本不存在 | `android/app/build.gradle` 曾明文写 `storePassword 'home1234'` / `keyAlias` / `storeFile file('../../release.keystore')`，而 `release.keystore` 被 `.gitignore` 忽略、磁盘上也没有 → 口令已外泄，干净 clone 上 `assembleRelease` 必失败 | 签名只从 `android/keystore.properties`（git 忽略，模板 `keystore.properties.example`）或四个 `HOME_STEWARD_*` 环境变量读；`gradle.taskGraph.whenReady` 在 release 任务缺签名时**直接抛错中止**，绝不产出未签名包。见 `README.md`「release 签名」 |
 | 62 | Windows 上 `npm run apk` 报 `'./gradlew' 不是内部或外部命令` | `cd android && ./gradlew` 只能在 POSIX shell 里跑，cmd 不认 `./` 前缀 | 统一走 `scripts/apk.mjs`：按平台选 `gradlew.bat` / `./gradlew`，`npm run apk` 与 `npm run apk:release` 都是它 |
 | 63 | APK 里攒了几百条数据，换机时却在云端冒出来 | `AndroidManifest.xml` 的 `allowBackup` 默认是 `true`，Auto Backup / D2D 会把 WebView 数据（含 IndexedDB）带上云 | 显式 `android:allowBackup="false"`，与「数据 100% 本机」的产品底线一致；改权限 / 备份策略后要真机装一次确认 |
+| 64 | iOS / 部分 Android WebView 上点输入框**整页放大且失焦不还原** | WebView 对字号 < 16px 的输入框聚焦时自动缩放页面 | 输入类字号一律 ≥ 16px（`.field-input` / `.field-textarea` / SearchField），视觉尺寸靠外框高度与内边距收，**别把字号调回 14**。见 `src/styles/README.md` |
+| 65 | 改 `shoppingRules.ts` 后 `git diff` 全是二进制、内容搜索失效 | 源码里内嵌过**真实 NUL 字节**（`NO_LOCATION` 哨兵），git 按二进制处理整文件 | 字符串哨兵一律写**转义序列** `' none'`（运行时等价）；发现 diff 显示 Bin 先查 NUL：`node -e "…indexOf(0)"` |
+| 66 | 「番茄」「西红柿」两条记录**永远折不到一张卡**，入库合并也失效 | 旧数据 `dictKey` 存的是原始输入名；`foldKeyOf` 若直接拿 dictKey 当键，别名解析永远轮不到 | `foldKeyOf` / `findRecentByName` 都要先 `(dictKey ?? name)` 过一遍 `aliasKey` 再退 `normalizeName`；新建物品必须传 `foodKeyOf` 给 `createItem`。见 §5.6 |
+| 67 | 两个标签页同时开着，A 的消耗被 B 的编辑**无声覆盖** | Dexie 写是基于内存旧快照的整条 put，同版本多标签无内置广播 | `data/sync.ts` 用 BroadcastChannel 检测其它窗口的写入并自动重读全部 store（检测+同步，**不是**并发写保护）；根治要 `table.update(id, patch)` 化 |
+| 68 | 「忽略的购物建议」下次打开 App 又冒出来 | 抑制依据住在**软删除行**里，而 `generate()` 曾把 `all()`（已滤软删）喂给 `planShopping`，dismissed 集合恒为空 | `generate()` 必须喂 `db.shopping.allIncludingDeleted()`；抑制时长只认 `DISMISS_DAYS`（domain/shoppingRules）这一处定义 |
 
 ---
 
@@ -592,7 +602,8 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | 备份文件格式 | `src/data/backup/schema.ts`（改后**必须**升 `SCHEMA_VERSION`） |
 | 顶部 Tab / FAB / 弹框返回键 | `src/layouts/TabLayout.vue` |
 | 子页顶栏 / 标题 / 吸顶层留白 | `src/layouts/TabLayout.vue`（`meta.header` 页面）+ `src/components/NavBar.vue`；路由写 `meta: { header: '标题' }` |
-| 顶部安全区 / 返回按钮被状态栏压住 | `src/composables/useSafeArea.ts`（写 `--safe-top`）；组件只写 `pt-[var(--safe-top)]`，别用 `env(safe-area-inset-top)` |
+| 顶部安全区 / 返回按钮被状态栏压住 | `src/composables/useSafeArea.ts`（写 `--safe-top`）；组件只写 `pt-[var(--safe-top)]`，别用 `env(safe-area-inset-top)` |
+| 购物清单「忽略建议」的抑制时长 / 多标签数据同步 | `src/domain/shoppingRules.ts`（`DISMISS_DAYS` 唯一定义）；`src/data/sync.ts`（BroadcastChannel） |
 | 列表页搜索框 | `src/components/SearchField.vue` |
 | 新增路由 | `src/router/index.ts`（懒加载 `() => import('@/views/Xxx.vue')`） |
 | 主题色 / 间距 / 圆角 | `src/styles/index.css` |
@@ -653,7 +664,7 @@ import { ItemCard } from '@/components/ItemCard.vue'; // ❌ 构建失败
 | `src/domain/README.md` | 领域层全部纯函数 API 参考 |
 | `src/data/README.md` | 持久化接口、表结构、备份格式 |
 | `src/stores/README.md` | 各 Pinia store 的状态与方法 |
-| `src/composables/README.md` | useReminder / useToast / useTheme / useStickyFilterOffset / useSafeArea（`--safe-top` 顶部安全区） |
+| `src/composables/README.md` | useReminder / useToast / useTheme / useStickyFilterOffset / useSafeArea（`--safe-top` 顶部安全区）/ useNow（跨零点刷新） |
 | `src/components/README.md` | 组件 props / emits / 用法 |
 | `src/views/README.md` | 页面职责与路由映射 |
 | `src/styles/README.md` | 设计 token 清单与用法 |

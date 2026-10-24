@@ -16,7 +16,6 @@ declare module 'vue' {
     FormField: typeof import('./components/FormField.vue')['default']
     GroupConsumeSheet: typeof import('./components/GroupConsumeSheet.vue')['default']
     IconText: typeof import('./components/IconText.vue')['default']
-    ItemCard: typeof import('./components/ItemCard.vue')['default']
     ItemGroupCard: typeof import('./components/ItemGroupCard.vue')['default']
     LocationChipBar: typeof import('./components/LocationChipBar.vue')['default']
     LocationPickerSheet: typeof import('./components/LocationPickerSheet.vue')['default']

@@ -191,8 +191,8 @@ const showSheet = ref(true);   // ❌ 返回键跳走了页面，showSheet 还�
 
 记录在这里，避免重复讨论：
 
-1. **跨零点不自动刷新**：当天日期变化时 UI 不会自动重算新鲜度，需刷新页面。
+1. ~~**跨零点不自动刷新**~~ **已解决（批次 5，REV-28）**：`composables/useNow.ts` 提供 60s 心跳 + 切回前台即刷新的响应式时刻，按天计算的组件一律接 `useToday()`。
 2. **`store.load()` 全量重读**：当前数据量下无性能问题，量级上去了再优化。
-3. **购物建议的 dedicated dismiss**：删除自动项只是「7 天内不再生成」，不是永久忽略。
-4. **APK 尚未产出**：需要 JDK 21 + Android SDK 环境；PWA 路线已上线。
+3. **购物建议的 dismiss 是 7 天抑制**（批次 4 修复了「忽略后下次启动又出现」的失效 bug，REV-43）：删除自动项是「7 天内不再生成」，不是永久忽略 —— 这是设计意图。
+4. **APK 已可打出**（v3）：`npm run cap:sync && npm run apk`；release 走 `apk:release`（签名见 `android/keystore.properties.example`）。真机走查仍未做。
 5. **`createdAt`/`updatedAt` 不统一**：`ConsumeLog` 只有 `createdAt`，写通用工具时注意。

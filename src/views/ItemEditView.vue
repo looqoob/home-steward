@@ -6,11 +6,12 @@ import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
-import { lookupFood } from '@/data/dict';
+import { lookupFood, foodKeyOf } from '@/data/dict';
 import { computeExpiry, compareLocations } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP, type Item } from '@/domain/types';
 import { todayStr } from '@/domain/dates';
+import { normalizeName } from '@/domain/normalize';
 import { normalizePrice, priceFromInput } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
 import { useToast } from '@/composables/useToast';
@@ -131,6 +132,9 @@ async function save() {
       await items.save({
         ...item.value,
         name,
+        // 改名后同步刷新折叠词根（REV-14）：dictKey 的语义是「定格于最近一次命名」，
+        // 不刷新的话改名后的物品仍按旧词根折叠，与新入库的同名物品分属两卡
+        dictKey: foodKeyOf(name) ?? normalizeName(name),
         quantity: draft.quantity,
         unit: draft.unit || '个',
         price: normalizePrice(draft.price),

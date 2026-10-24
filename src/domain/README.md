@@ -68,7 +68,7 @@ export const ENV_LIST: EnvMeta[];                       // 有序列表，用于
 export const CATEGORY_LABEL: Record<CategoryKey, string>;
 export const DEFAULT_SETTINGS: Omit<Settings, 'createdAt' | 'updatedAt'>;
 
-export const SCHEMA_VERSION = 1;                        // 备份文件格式版本
+export const SCHEMA_VERSION = 2;                        // 备份文件格式版本（v2 加了 barcodes 表）
 export const BUILTIN_DICT_VERSION = 1;
 ```
 
@@ -306,7 +306,7 @@ groupByFreshness(rows);
 | `ExpiryResult` | 接口 | `{ expireAt, days, source, notRecommended, reason, fallbackDays }` |
 | `computeExpiry` | `(input, env, resolver, fallback) => ExpiryResult` | 主函数，见下 |
 | `CompareRow` | 接口 | 多位置对比表的一行 |
-| `compareLocations` | `(input, locations, resolver, fallback) => CompareRow[]` | 列出每个候选位置下的到期日 |
+| `compareLocations` | `(input, locations, resolver, fallback) => CompareRow[]` | 列出每个候选位置下的到期日。`envLabel` 是**文案**（「冷藏」，来自 `ENV_MAP`），不是枚举值 |
 
 ### `computeExpiry(input, env, resolve, fallback)`
 
@@ -353,7 +353,7 @@ const b = computeExpiry({ name: '香蕉', category: 'fruit', storedAt: '2026-09-
 | 导出 | 签名 | 说明 |
 | --- | --- | --- |
 | `NewItemInput` | 接口 | 新建商品的用户输入：`{ name, quantity, unit, locationId, price?, storedAt?, producedAt?, manualShelfLife?, note? }` |
-| `createItem` | `(input, env, resolve, fallback?, now?, categoryHint?) => Item` | 构造完整 Item（含 id、时间戳、到期日） |
+| `createItem` | `(input, env, resolve, fallback?, now?, categoryHint?, aliasKey?) => Item` | 构造完整 Item（含 id、时间戳、到期日）。**store 层必须传 `aliasKey`（`foodKeyOf`）**：`dictKey` 取字典规范词根而不是原始名，别名折叠才成立（REV-14） |
 | `recomputeForLocation` | `(item, env, resolve, fallback) => Pick<Item, 'expireAt' \| 'shelfLifeDays' \| 'shelfLifeSource' \| 'notRecommended' \| 'notRecommendedReason'>` | 切换位置后重算，**入库日期不变** |
 | `applyManualShelfLife` | `(item, days, resolve, fallback, env) => Item` | 变更手填保质期并返回新 Item |
 | `locationEnv` | `(loc?: Location) => EnvType` | 取位置环境，缺省 `'cool'` |
@@ -394,7 +394,7 @@ await items.save({ ...item, ...patch, locationId: otherLocId });
 | --- | --- | --- |
 | `DeleteCheck` | 接口 | `{ ok: boolean; message: string }` |
 | `canDeleteLocation` | `(loc, items) => DeleteCheck` | **有在库物品不允许删除**（只能停用）。返回可直接展示给用户的 message |
-| `countInLocation` | `(locId, items) => number` | 统计某位置的在库数量（过滤 `finished` 与软删） |
+| `countsByLocation` | `(items) => Map<string, number>` | **批次 5**：一次扫描聚合所有位置的计数。列表页（位置管理 / 筛选条）一律用它做一次聚合，别在循环里逐位置过滤 items（O(位置×物品)，REV-35） |
 | `nextSort` | `(locations) => number` | 新位置的排序值 = 当前最大值 + 10 |
 
 ### 边界条件
@@ -437,14 +437,17 @@ if (!check.ok) toast.show(check.message);   // '该位置还有 3 件在库物�
 
 - 同一 `name | reason` 在一次调用内只产出一次（`seen` 去重）。
 - 已存在未删除的同 key 条目 → 跳过。
-- 已删除**但** `dismissedUntil > now` 的同 key 条目 → 跳过（`DISMISS_DAYS = 7` 天内不重生）。
+- 已删除**但**处于抑制期（`dismissedUntil > now`；早期数据没写该字段的按 `deletedAt` 距今 < `DISMISS_DAYS` 天兜底）的同 key 条目 → 跳过（`DISMISS_DAYS = 7`，抑制时长的**唯一**定义，store 层由它换算毫秒）。
 
 所以**反复调用 `planShopping` 不会产生重复项**，可以在 App 启动时安全调用。
+
+⚠️ **`existing` 必须传含软删除行的全量清单**（`ShoppingRepository.allIncludingDeleted()`）：抑制依据就住在软删行里，传 `all()` 过滤后的列表会让 dismissed 集合恒为空 ——「忽略的建议下次启动又冒出来」（REV-43）。
 
 ### 边界条件
 
 - `settings` 缺省 `{ soonDays: 14, urgentDays: 3 }`。
-- 「无同名在库」的判断用的是**精确名称匹配**（字符串相等），不做归一化 —— 别名不同会当成两种东西，这是已知简化。
+- 名称匹配 / 幂等键 / 聚合键一律走 `normalizeName`（REV-47）：「番茄（西红柿）」与「番茄」是同一件东西，只推一条建议、只占一行 Top 浪费。
+- 消耗 / 浪费时间窗有**上界校验**（`l.at <= now`）：时钟跳变产生的未来时间戳不算「最近消耗过」（REV-45）。
 - 该模块**不写库**，只返回建议；由 `stores/shopping.ts` 负责落库。
 
 **示例**
@@ -484,9 +487,7 @@ groupShoppingByLocation(shopping.visible, locations.all);
 | `MonthStats` | 接口 | `{ inbound, consumed, wastedCount, wastedAmount }` |
 | `monthStats` | `(items, logs, now?) => MonthStats` | 本月入库件数 / 消耗与浪费**数量**（累加日志 `quantity`）/ 浪费金额 |
 | `LocationSlice` | 接口 | `{ locationId, name, count, color, percent }` |
-| `locationDistribution` | `(items, locations, colorOf) => LocationSlice[]` | 位置分布（`count > 0` 才返回，按数量降序） |
-| `TodayOverview` | 接口 | `{ dueToday, overdue }` |
-| `todayOverview` | `(items, today, urgentDays) => TodayOverview` | 今日待吃（紧急+过期）/ 已过期数量 |
+| `locationDistribution` | `(items, locations, colorOf, opts?) => LocationSlice[]` | 位置分布（`count > 0` 才返回，按数量降序，「未分配」恒排最后）。孤儿 `locationId`（位置已删/停用）归入「未分配」桶（`locationId: null`），各项占比合计恒为 100%（REV-13） |
 | `MIN_TREND_MONTHS` | `const = 2` | **v3**：趋势图最少有数据的月份数 |
 | `MIN_TURNOVER_SAMPLES` | `const = 5` | **v3**：周转天数最少样本数 |
 | `WastePoint` / `wasteTrend` | `(logs, months?, now?) => WastePoint[]` | **v3**：近 N 月浪费趋势（金额 + 数量） |
@@ -509,6 +510,10 @@ groupShoppingByLocation(shopping.visible, locations.all);
   仍然返回一个有用的顺序，比「因为都是 0 所以随机排」好。
 - `turnoverDays` 按 `itemId` 取**第一次** `consumed` 的 `at`：20 个鸡蛋分 4 次吃完，
   用第 4 次算出来的是「消耗周期」不是「周转速度」。入库日晚于消耗日（补录）的样本跳过。
+- `turnoverDays` **只统计已用完（`finished`）的物品**（REV-46）：在库的没有完整周期，
+  混进来会把周转拉长。脏 `at`（NaN / 字符串 / 非正数）的日志直接跳过（REV-30）。
+- `topWasted` 的聚合键走 `normalizeName`（REV-47）：「番茄（西红柿）」与「番茄」合并成
+  一行，展示名取首次出现的原名。
 - ★ `stockValue` **过期计入**（还没扔，钱已经花了，它就是还在），但 `overAmount` 单独返回，
   由界面标注「含已过期 ¥N」——混在总数里会让人高估还能用的物资。
   金额 = `amountOf(price, quantity)`（单价 × 数量）；没填价的**不计入金额**而是计入 `unpriced`，
@@ -525,12 +530,12 @@ groupShoppingByLocation(shopping.visible, locations.all);
 - `wastedAmount` 累加 `l.price ?? 0`。日志里的 `price` 已是**本次金额**（`单价 × 本次数量`，由 `buildConsumeLog` 折算），没填价格的不报错、计 0。
 - `consumed` / `wastedCount` 是**数量口径**（累加 `l.quantity`）：吃掉 2 个鸡蛋记 2，而不是一次操作记 1 件。跨单位（个/袋/盒）直接相加是本实现的粗略口径，改统计语义时注意。
 - `locationDistribution` 的分母 `total = live.length || 1`，所以**库存为空时 percent 全为 0 而不是 NaN**；但因为过滤了 `count > 0`，此时返回空数组。
-- `todayOverview` 只统计有 `expireAt` 的在库商品。
+- `todayOverview` 已删除（REV-46）：它是全仓无引用的死代码，且规则与 `buildTodayTodo` 分叉（不看 `snoozeUntil`）。今日概览一律走 `domain/todo.buildTodayTodo`。
 
 **示例**
 
 ```ts
-import { locationDistribution, monthStats, todayOverview, topWasted, turnoverDays, wasteTrend } from '@/domain/stats';
+import { locationDistribution, monthStats, topWasted, turnoverDays, wasteTrend } from '@/domain/stats';
 import { ENV_MAP } from '@/domain/types';
 
 const m = monthStats(items.list, items.logs);
@@ -538,7 +543,6 @@ const trend = wasteTrend(items.logs, 6);                // [] = 数据不足
 const top = topWasted(items.logs, 5);
 const turnover = turnoverDays(items.list, items.logs);  // null = 数据不足
 const slices = locationDistribution(items.list, locations.all, (env) => ENV_MAP[env].color);
-const today = todayOverview(items.list, todayStr(), 3);
 const value = stockValue(items.list, todayStr());  // { total, overAmount, priced, unpriced }
 ```
 
@@ -566,7 +570,7 @@ const value = stockValue(items.list, todayStr());  // { total, overAmount, price
 | 导出 | 签名 | 说明 |
 | --- | --- | --- |
 | `ItemGroup` | 接口 | `{ key, name, icon, unit, locationId, members, lead, totalQuantity, allDated }` |
-| `foldKeyOf` | `(item, aliasKey?) => string` | 折叠键 = `` `${locationId}|${名称键}` `` |
+| `foldKeyOf` | `(item, aliasKey?) => string` | 折叠键 = `` `${locationId}|${名称键}|${unit}` `` |
 | `fefoCompare` / `sortFefo` | `(a, b) => number` / `(items) => Item[]` | 到期日升序，无到期日排最后；同天按 `createdAt` 升序 |
 | `foldItems` | `(items, aliasKey?) => ItemGroup[]` | 主入口：过滤已用完/已删 → 分桶 → 组内 FEFO → 组间按 `lead` 排序 |
 | `FefoSlice` / `fefoSlices` | `(members, qty) => FefoSlice[]` | 把 `qty` 按 FEFO 拆到各份上，可跨份顺延 |
@@ -574,17 +578,22 @@ const value = stockValue(items.list, todayStr());  // { total, overAmount, price
 | `expiryCompatible` | `(a, b) => boolean` | 两份能否**无损**合并（都无日期，或相差 ≤ 1 天） |
 | `findMergeTarget` | `(created, items, aliasKey?) => Item \| undefined` | 入库时找可合并的既有行；找不到是**正常路径** |
 
-### 折叠键必须带位置
+### 折叠键必须带位置 + 单位
 
 ```ts
-const nameKey = item.dictKey ?? aliasKey?.(item.name) ?? normalizeName(item.name);
-return `${item.locationId}|${nameKey}`;
+const raw = item.dictKey ?? item.name;
+const nameKey = aliasKey?.(raw) ?? normalizeName(raw);
+return `${item.locationId}|${nameKey}|${item.unit}`;
 ```
 
 - **带位置**：冰箱里的和阳台上的同名物品是两回事，并成一张卡会让用户在错误的柜子里找东西。
-- **名称键三级回退**：`item.dictKey`（入库时定格，之后字典改名也不会漂移）→ 实时解析字典别名
-  （番茄 = 西红柿）→ 纯字面归一（自定义食材没有字典条目）。`aliasKey` 由调用方注入
-  `data/dict` 的 `foodKeyOf`，与 `ShelfLifeResolver` 同一套路：**domain 不得反向依赖 data**。
+- **带单位**（REV-44）：「牛奶 2 盒 + 1 袋」不能折成「共 3 盒」——数量跨单位相加没有意义，
+  FEFO 也无法在 盒/袋 之间分配。不同单位各成一组；`findMergeTarget` 的真合并同理不跨单位。
+- **名称键 = `dictKey ?? name` 先过别名解析、再退 `normalizeName`**（REV-14）：**不能直接拿
+  dictKey 当键用** —— 旧数据的 `dictKey` 存的是原始输入名（v3 之前 `createItem` 写的是 `name`），
+  直接比对会让别名折叠对全部存量数据失效。过一遍 `aliasKey` 后，新数据（规范键自解析不变）
+  与旧数据（原始名归并到规范键）折叠到同一个键。`aliasKey` 由调用方注入 `data/dict` 的
+  `foodKeyOf`，与 `ShelfLifeResolver` 同一套路：**domain 不得反向依赖 data**。
 
 ### 三个必须遵守的口径
 

@@ -71,7 +71,7 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 | `undoConsume` | `(logId: string) => Promise<void>` | 撤销一次消耗：删掉该日志、状态改回 `'in_stock'`，**部分消耗还会把数量加回去** |
 | `remove` | `(id) => Promise<Item \| undefined>` | 软删除（不写日志，用于误添加）。**返回删除前的快照** |
 | `restore` | `(snapshot: Item) => Promise<void>` | 撤销软删：把 `deletedAt` 置回 `null` 整条写回 |
-| `recomputeAll` | `() => Promise<void>` | 用当前字典重算所有在库商品的到期日（**字典变更后必须调**） |
+| `recomputeAll` | `() => Promise<void>` | 用当前字典重算所有在库商品的到期日（`dict.upsert` / `dict.reset` 已**自动**调用） |
 | `bulkConsume` | `(ids, type) => Promise<BulkOp \| null>` | **v2**：批量消耗，每件各自清空剩余量。返回撤销快照 |
 | `bulkMoveTo` | `(ids, locationId) => Promise<BulkOp \| null>` | **v2**：批量换位置，逐件重算到期日 |
 | `bulkRemove` | `(ids) => Promise<BulkOp \| null>` | **v2**：批量软删，**不写消耗日志**（不污染统计） |
@@ -98,7 +98,10 @@ const resolve = computed(() => createResolver(map.value));  // ✅ 内部要用 
 - `consume` 写入的 `ConsumeLog` 含两个**快照字段**：`unitPrice`（消耗时单价，`Item.price` 原样）与 `note`（物品备注 `item.note` 快照）。「消耗明细」页的「单价」「备注」列读它们；旧日志无这两字段（运行时 `undefined`），展示以 `== null` 兜底。「金额」读的是 `log.price`（= 单价 × 数量），**不是** `unitPrice`。
 - `consume` 的 `qty` 会被钳到 `(0, 剩余数量]`：给多了按剩余算，`0` / 负数不写日志直接返回 `''`。数量保留 2 位小数（`0.5 斤` 这类输入不产生浮点残留）。
 - **部分消耗的日志 `price` 是「单价 × 本次数量」**——`Item.price` 的语义是单价，直接抄过去会把「扔 2 个」记成整份的钱。
-- `undoConsume` 靠 `status` 区分整条 / 部分：撤销时商品仍是 `'in_stock'` 视为部分消耗，回加 `log.quantity`；已是 `'finished'` 视为整条消耗，数量不动（整条消耗本来就未扣量）。
+- `undoConsume` 靠**数量对账**区分整条 / 部分（批次 5，REV-32）：`cur.quantity === log.quantity`
+  视为整条消耗（整条消耗时数量保留原值）不加回；不相等（部分消耗扣减过、或部分后紧跟整条）
+  回加 `log.quantity`。此前只看 `status`，「部分消耗 + 整条消耗」后撤销前者会漏加。两次操作
+  数量恰好相等的极端情况无法区分，按「不加回」处理（宁少勿错）。
 - `consume` 不会重复二次消耗：商品变 `'finished'` 后就不在 `active` 里了，但**方法本身不校验**，重复调用会再写一条日志。UI 层的按钮已隐藏，暂不加防御。
 - **`remove` 必须返回快照**：`db.items.all()` 会过滤掉 `deletedAt` 非空的行，删完就查不回来了，撤销只能靠这份快照。
 - `undoConsume` 找不到日志时**静默返回**；`restore` 不校验 `deletedAt`，传错对象会直接写回。
@@ -159,7 +162,6 @@ if (snap) await items.restore(snap);
 | `toggle` | `(id) => Promise<void>` | 启停切换 |
 | `remove` | `(id, items) => Promise<{ ok; message }>` | 删除。**必须先过 `canDeleteLocation` 校验**；返回可直接展示的失败原因 |
 | `move` | `(id, dir: -1 \| 1) => Promise<void>` | 上移/下移。内部整表重排 sort 为 10/20/… |
-| `countOf` | `(id, items) => number` | 该位置在库数量 |
 
 ### 边界条件
 
@@ -180,11 +182,7 @@ await locs.create({ name: '酒柜', icon: '酒', env: 'dark' });
 const res = await locs.remove(id, items.list);
 if (!res.ok) toast.show(res.message);
 
-await locs.move(id, -1);   // 上移
-const n = locs.countOf(id, items.list);
-```
 
-> `remove` / `countOf` 的参数类型是宽泛的 `{ locationId; status; deletedAt }[]`，内部用 `as never` 适配 `domain` 的签名 —— 这是一种刻意的解耦，避免 stores 之间强类型互相绑定。新增调用时别去改这个签名。
 
 ---
 
@@ -216,7 +214,9 @@ const n = locs.countOf(id, items.list);
 - `upsert` 内部会 `normalizeName(dictKey)`，所以传入 `'西红柿（大）'` 会自动归一。
 - `days` 允许传 `NOT_RECOMMENDED (-1)` —— 表示「我明确不想让它放这」。
 - `reset` 找不到对应条目时**静默返回**。
-- **改完字典后，调用方有责任触发 `items.recomputeAll()`**，否则已有商品的到期日不会更新。
+- `upsert` / `reset` 保存后会**自动**调用 `items.recomputeAll()` 重算在库商品的到期日
+  （批次 4，REV-10）—— 此前这步要调用方「记得调」，字典页从来没调过，用户改了保质期、
+  已有商品仍按旧日期提醒。历史日志与已消耗的成品不受影响。
 
 ### 示例
 
@@ -228,8 +228,7 @@ const dict = useDictStore();
 await dict.upsert('榴莲', '榴莲', 'chilled', 5, null);
 dict.isCustom('榴莲', 'chilled');            // true
 
-await dict.reset('榴莲', 'chilled');         // 删掉自定义，回落到内置/品类
-await items.recomputeAll();                  // ★ 别忘了重算已有商品
+await dict.reset('榴莲', 'chilled');         // 删掉自定义，回落到内置/品类（自动重算在库商品）
 
 // 传给 domain 函数
 const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
@@ -256,12 +255,13 @@ const r = computeExpiry(input, 'chilled', dict.resolve, fallbackDays);
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
 | `load` | `() => Promise<void>` | |
-| `generate` | `() => Promise<number>` | 调 `planShopping` 生成建议并落库，**返回新增条数**（0 表示没有新建议） |
+| `generate` | `() => Promise<number>` | 调 `planShopping` 生成建议并落库，**返回新增条数**（0 表示没有新建议）。数据源是 `db.shopping.allIncludingDeleted()`（含软删行）——「忽略 7 天」的抑制依据住在软删行里（REV-43） |
 | `toggle` | `(id) => Promise<void>` | 勾选/取消勾选，同步 `checkedAt` |
 | `addManual` | `(name: string) => Promise<void>` | 手动添加。`name` 为空（`trim()` 后）**静默返回** |
 | `remove` | `(id) => Promise<ShoppingItem \| undefined>` | 删除，**返回删除前快照**（撤销要用）。**自动项**：软删 + 设 `dismissedUntil = now + 7 天`（7 天内不再自动重生）；**手动项**：直接软删 |
 | `restore` | `(snapshot: ShoppingItem) => Promise<void>` | 撤销删除：清掉 `deletedAt` 与 `dismissedUntil` 后整条写回 |
-| `clearDone` | `() => Promise<void>` | 清除已勾选项（同样是软删 + dismissedUntil） |
+| `restoreMany` | `(snapshots: ShoppingItem[]) => Promise<void>` | **批次 4**：批量撤销（`clearDone` 的撤销入口），一次 `bulkPut` + 一次 `load` |
+| `clearDone` | `() => Promise<ShoppingItem[]>` | 清除已勾选项（软删 + dismissedUntil）。**一次 `bulkPut` 写完**并返回删除前快照（toast「撤销」用）；此前逐条 `put`，中途失败会清一半留一半（REV-19） |
 | `inboundOne` | `(id, quantity, locationId, price = null) => Promise<Item \| null>` | **v2**：单项入库，走 `items.addMany`。**v3**：第 4 参是单价（`null` = 没填） |
 | `inboundAll` | `(ids, overrides?) => Promise<{ count, skipped }>` | **v2**：批量入库。`skipped` 必须如实告知用户，不能静默丢弃 |
 | `undoInbound` | `(id) => Promise<Item \| undefined>` | **v2**：撤销入库，返回被删物品的快照 |

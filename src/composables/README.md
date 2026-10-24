@@ -195,6 +195,26 @@ Web（浏览器 / PWA）只用 `env` 实测值 —— 桌面浏览器没有状�
 
 ---
 
+## useNow.ts — 响应式的「当前时刻 / 今天」（跨零点刷新）
+
+`useNow()` 返回模块级单例的 `ref(Date.now())`：60s 一跳 + `visibilitychange`（切回前台立即取新值）。
+`useToday()` 是它的封装，返回 `computed(() => todayStr(now.value))`。
+
+### 为什么必须有它（REV-28）
+
+PWA 会被挂在后台一整天。`const today = todayStr()` 在 setup 里只取一次，之后「剩余天数 /
+今日待办 / 统计」整天停在昨天，只有手动刷新才恢复。所有**按天计算**的组件
+（StockView / TodayTodo / ItemCard / ItemGroupCard / StocktakePanel / GroupConsumeSheet /
+StatsView / QuickAddSheet 的预览）一律走 `useToday()`，别再定格 `todayStr()`。
+
+### 边界条件
+
+- 单例 + 懒启动：首次调用才挂定时器与监听；node 测试环境守了 `typeof document`。
+- 事件驱动的函数（如 ScanSheet 的 watch、ConsumeLogView 的 `relDay`）每次调用现取
+  `todayStr()` 即可，不需要接这个 composable。
+
+---
+
 ## 新增 composable 的约定
 
 - 文件名 `useXxx.ts`，导出同名工厂函数 `useXxx()`。

@@ -50,7 +50,8 @@
 
 ## 3. P1 · 数据与持久化（会丢/脏/看不见，但触发条件有限）
 
-> ✅ 批次 2 已修：REV-05、REV-07、REV-08、REV-09、REV-23（落地明细见 §11）；剩下 REV-10~16、REV-43 仍开放。
+> ✅ 批次 2 已修：REV-05、REV-07、REV-08、REV-09、REV-23（落地明细见 §11）。
+> ✅ 批次 4 已修：REV-10、REV-13（未分配桶 + 入库过滤；「删除位置迁移记录」未做，见 §13）、REV-14、REV-15（检测 + 自动重读；深度并发写保护仍开放）、REV-43（落地明细见 §13）。
 
 | 编号 | 位置 | 问题 | 建议 |
 | --- | --- | --- | --- |
@@ -74,6 +75,7 @@
 ## 4. P1 · 交互与体验（用户当场感知）
 
 > ✅ 本批已修：REV-12、REV-16（落地明细见 §10）。
+> ✅ 批次 4 已修：REV-11（提醒重排程 + 关闭取消）、REV-17~22（落地明细见 §13）。
 
 | 编号 | 位置 | 问题 | 建议 |
 | --- | --- | --- | --- |
@@ -235,3 +237,123 @@
 - 本机 `node_modules` 里仍是 TS 5.9.3，`package.json` 的 `5.6.3` 要等下一次 `npm install` 才落盘 —— 在那之前 `npm run typecheck` 用的还是 5.9.3。
 - 旧的 `home1234` 口令已经外泄过（进过 git 历史），**换钥时务必用新口令**；`release.keystore` 从未入库，不需要吊销。
 
+
+
+---
+
+## 13. 批次 4 落地记录（2026-10-24 · 一致性）
+
+**已修**（编号同 §3 / §4）：
+
+| 编号 | 改动 | 位置 |
+| --- | --- | --- |
+| REV-10 | `dict.upsert` / `dict.reset` 保存后**自动**调用 `items.recomputeAll()`——此前 JSDoc 写着「调用方记得调」，字典页从来没调过 | `src/stores/dict.ts` |
+| REV-11 | 提醒设置（开关 / 时刻）一变即重排程（App 层 watch，避免 store↔composable 环）；`scheduleNative` 把**取消旧排程挪到 remindEnabled 判定之前**——关闭提醒不再「第二天照弹」 | `src/App.vue`、`src/composables/useReminder.ts` |
+| REV-13 | `inboundDefaults` 对自带 / 历史位置做**可用性校验**（未删未停用），孤儿引用回落第一个启用位置；`locationDistribution` 新增**「未分配」桶**（`locationId: null`，恒排最后），占比合计回到 100% | `src/domain/inbound.ts`、`src/domain/stats.ts` |
+| REV-14 | `createItem` 新增 `aliasKey` 注入，`dictKey` 落**字典规范词根**（store 全量传 `foodKeyOf`）；`foldKeyOf` / `findRecentByName` 改为 `(dictKey ?? name)` **先过别名解析再退 normalizeName**——旧数据（dictKey=原始名）的别名折叠从「形同虚设」变为生效；编辑页改名同步刷新 dictKey | `src/domain/itemFactory.ts`、`src/domain/grouping.ts`、`src/domain/inbound.ts`、`src/stores/items.ts`、`src/views/ItemEditView.vue` |
+| REV-15 | 新增 `data/sync.ts`（BroadcastChannel）：Dexie 所有写路径成功后广播；其它窗口收消息后**自动重读全部 store** 并提示「已同步其它窗口的改动」（防抖 300ms）。把「静默覆盖」变成「最多滞后一个通知周期」 | `src/data/sync.ts`（新）、`src/data/dexie/sources.ts`、`src/App.vue` |
+| REV-17 | 输入类字号提到 **16px**（`.field-input` / `.field-textarea` / SearchField），防 iOS / 部分 WebView 聚焦整页放大；视觉尺寸由外框高度与内边距承担 | `src/styles/index.css`、`src/components/SearchField.vue` |
+| REV-18 | 概览卡三个数字统一**同一套口径**（全量、排除「明天再说」）：「已过期」改从 `buildTodayTodo` 的结果里数，不再读受搜索/位置筛选影响的 `rows` | `src/views/StockView.vue` |
+| REV-19 | 「清除已购」：`ConfirmSheet` 二次确认 + `clearDone` 改**一次 bulkPut** 并返回快照 + toast「撤销」走 `restoreMany` 整批回滚 | `src/stores/shopping.ts`、`src/views/ListView.vue` |
+| REV-20 | `customName` 清空时按 **old 值**判定 selected 来源：来自输入的复位为 null（`canAdd` 变 false）；点九宫格导致的清空（selected 是格子名）不受影响 | `src/components/QuickAddSheet.vue` |
+| REV-21 | 组卡默认展开（≤2 份）**跟随份数变化重算**：`watch(group.members.length)` | `src/components/ItemGroupCard.vue` |
+| REV-22 | 页头「需买 N 件」改数 `shopping.pending`（未勾选），不再把已勾选/已入库算进去 | `src/views/ListView.vue` |
+| REV-43 | `ShoppingRepository` 新增 `allIncludingDeleted()`；`generate()` 喂**含软删行**的全量清单——dismissed 集合不再恒为空；抑制时长收敛到 `DISMISS_DAYS`（domain 唯一定义，store 由它换算）；早期没写 `dismissedUntil` 的软删行按 `deletedAt` 距今 < 7 天兜底 | `src/data/repository.ts`、`src/data/dexie/sources.ts`、`src/stores/shopping.ts`、`src/domain/shoppingRules.ts` |
+
+**验证**：`vue-tsc --noEmit` 0 错误；vitest **16 文件 / 253 用例全通过**（新增 `shoppingRules.test.ts` 13 例、`itemFactory.test.ts` 4 例，扩 grouping / stats / inbound / sanitize 共 19 例）。
+
+**有意未做 / 已知代价**：
+
+- **REV-13 的「删除位置时迁移在库记录」未做**：`canDeleteLocation` 本就禁止删除**有在库物品**的位置，孤儿只能来自「停用位置上的历史记录」或备份导入——「未分配」桶 + 入库过滤已覆盖这两条路径的后果。
+- **REV-15 只做检测 + 重读，不是并发写保护**：两个窗口在通知周期内同时写仍会互相覆盖；根治需要 `table.update(id, patch)` 化或字段级 merge，涉及全部写路径重构，单列后续迭代。
+
+---
+
+## 14. 批次 5 落地记录（2026-10-24 · 优化）
+
+**已修**（编号同 §3 / §6）：
+
+| 编号 | 改动 | 位置 |
+| --- | --- | --- |
+| REV-28 | 新增 `composables/useNow.ts`（模块级单例：60s 心跳 + `visibilitychange` 即时刷新），`useToday()` 返回响应式「今天」；按天计算的 8 个组件全部接入（StockView / TodayTodo / ItemCard / ItemGroupCard / StocktakePanel / GroupConsumeSheet / StatsView / QuickAddSheet 预览），PWA 挂后台跨零点不再停在昨天 | `src/composables/useNow.ts`（新）+ 8 处接入 |
+| REV-29 / 47 | 搜索关键字与名称匹配走 `normalizeName`；`planShopping` 的幂等键 / 在库名单 / `lastConsumedQty`、`topWasted` 的聚合键全部归一化——「番茄（西红柿）」与「番茄」不再各占一条 | `src/views/StockView.vue`、`src/domain/shoppingRules.ts`、`src/domain/stats.ts` |
+| REV-30 | `stats` 新增 `epochOf` 守卫：`monthStats` / `wasteTrend` / `turnoverDays` 对脏 `at`（NaN / 字符串 / 非正数）跳过该条，不再产生 `'NaN-NaN-NaN'` 静默少算 | `src/domain/stats.ts` |
+| REV-31 | `compareLocations` 的 `envLabel` 改为 `ENV_MAP[loc.env].label`（此前返回枚举值 `'chilled'`，恰好没被直接消费才没暴露） | `src/domain/shelfLife.ts` |
+| REV-32 | `undoConsume` 改**数量对账**：`cur.quantity === log.quantity` 视为整条消耗不加回，否则回加 `log.quantity`——「部分消耗 + 整条消耗」后撤销前者不再漏加；两次数量恰好相等的极端情况按「不加回」处理（宁少勿错） | `src/stores/items.ts` |
+| REV-33 | merge 导入读现状改用 `allIncludingDeleted()`（tombstone 参与新旧比较，本地删除不被旧备份复活）；位置排序重排移进**同一事务**（不再出现「已导入却报失败」，也不再逐行刷 `updatedAt` 挡住位置改名） | `src/data/backup/import.ts` |
+| REV-34 | `main.ts` 全局接 `QuotaExceededError`（unhandled rejection → 可见 toast「存储空间已满…」）；App 启动时申请 `navigator.storage.persist()`（被拒不影响功能） | `src/main.ts`、`src/App.vue` |
+| REV-35 | `addMany` 合并候选改 **折叠键 Map 索引**（O(n)，此前每 input 全量重建数组 O(n²)）；`locationRules` 新增 `countsByLocation` 一次聚合，位置管理页 / 筛选条接入 | `src/stores/items.ts`、`src/domain/locationRules.ts`、两处 UI |
+| REV-36 | `NO_LOCATION` 的真实 NUL 字节改为 **`'\u0000none'` 转义序列**（运行时字符串完全一致），`shoppingRules.ts` 恢复为纯文本，diff / 搜索 / review 重新可用 | `src/domain/shoppingRules.ts` |
+| REV-37 | PWA 通知优先走 `navigator.serviceWorker.ready.showNotification`（Android Chrome 禁止页面直接 `new Notification`），构造函数只作桌面兜底 | `src/composables/useReminder.ts` |
+| REV-40 | `tsconfig` 显式加 `node` types 与 `vitest.config.ts`；`preview` 脚本去掉与配置打架的 `--port 4173`；`assetsInlineLimit` 注释改为真实理由 | `tsconfig.json`、`package.json`、`vite.config.ts` |
+| REV-41 | 文档漂移清理：ARCHITECTURE「APK 尚未产出 / 跨零点」、domain/README `SCHEMA_VERSION = 1`、AGENTS「base 相对路径」与 `@capacitor/app` 现状 | `docs/ARCHITECTURE.md`、`src/domain/README.md`、`AGENTS.md` |
+| REV-44 | 折叠键纳入 **unit**（`locationId|名称键|unit`）——「牛奶 2 盒 + 1 袋」不再折成「共 3 盒」，`findMergeTarget` 同理不跨单位合并 | `src/domain/grouping.ts` |
+| REV-45 | `expiryCompatible` / `planBulkMove` 过 `isDateStr` 守卫（脏日期按「无到期日 / 今天」处理，不再穿透 `parseDate` 抛错）；`planShopping` 时间窗加 `at <= now` 上界（时钟跳变的未来时间戳不算「最近」） | `src/domain/grouping.ts`、`src/domain/bulk.ts`、`src/domain/shoppingRules.ts` |
+| REV-46 | 删除死代码 `todayOverview`（与 `buildTodayTodo` 规则分叉）；`turnoverDays` 补 `status === 'finished'` 过滤并**修正钉死错误行为的用例** | `src/domain/stats.ts`、`src/domain/__tests__/stats.test.ts` |
+| REV-48 | `sanitize` 日期改**往返校验**（`toDateStr(parseDate(v)) === v`）：`2026-13-01` / `2026-02-31` 这类「格式对但日历上不存在」的日期按非法处理（此前会静默归一成 2027-01 / 03-03） | `src/data/backup/sanitize.ts` |
+| REV-49 | `quantity: 0` 是合法值（「明确清空」）原样保留，负数 / 非数字才归 1；物品 / 日志 / 清单项的 `name` 入库前 `trim()`；修正与实现相反的注释 | `src/data/backup/sanitize.ts` |
+| REV-50 | `grouping` 复用 `price.round2` 与 `dates.todayStr`（删掉本地两份实现）；`locationRules` 的「有效位置」谓词收敛为 `inStockAt` 一份；删除 `freshness.test.ts` 里逐字节重复的 describe 块 | `src/domain/grouping.ts`、`src/domain/locationRules.ts`、`src/domain/__tests__/freshness.test.ts` |
+
+**验证**：`vue-tsc --noEmit` 0 错误；vitest **16 文件 / 253 用例全通过**。`npm run build` 按本轮约定未在沙箱执行，需在普通终端补跑一次。
+
+**有意未做 / 已知代价**：
+
+- REV-38（`base` / CSP / `allowedHosts`）与 REV-39（minify）：维持批次 3 的决定——绑部署方式与真机回归，单独评估。
+- 持久存储的**状态展示**（「已保护 / 可能被清理」）未做 UI，只做了 `persist()` 静默申请。
+- REV-15 的深度并发写保护、产品方向 #4~#9（撤销历史面板 / 虚拟滚动 / CSV 导出 / 无障碍补全 / 真机走查）留待下一轮。
+
+
+---
+
+## 15. 后续批次 · v1.1 功能规划（2026-10-24 与需求方确认）
+
+> 本章是**已确认的功能需求**（优化 / 修复 / 性能与健壮性条目不在此列——优化与修复随批次 4/5 已闭环，
+> 性能与健壮性、真机走查另行排期，见 §13 / §14 的「有意未做」与 §7）。
+> 每项落地时在本章补「落地记录」小节，与 §10~§14 同一格式。
+
+### 批次 F1 · 消耗撤销历史面板
+
+**需求**：把「撤销」从 toast 的 5 秒单槽位升级为「最近操作」列表。
+
+- 入口：「我的」页或库存页（建议先做「我的」→「最近操作」，不打扰高频动线）。
+- 数据源：`ConsumeLog` 已是完整流水，**不需要新表**——按时间倒序展示最近 N 条，
+  每条带「撤销」；撤销逻辑复用 `items.undoConsume`（单条）与 `undoBulk`（批量快照，
+  目前只在内存，见边界）。
+- 边界：批量操作的撤销快照（`BulkOp`）只在内存，刷新即失效——面板里对这类操作
+  要么标注「刷新后不可撤销」，要么把 `BulkOp` 落库（倾向前者，先不扩表）。
+- 涉及：新 view / 路由一条；`stores/items` 增加按需读取（`logs.since` 已有）。
+
+### 批次 F2 · 统计导出 CSV / 分享图
+
+**需求**：纯本地前提下，导出文件是与家人共享消费情况的唯一途径。
+
+- 「统计」页加「导出」：CSV（月度消耗 / 浪费 / Top5 / 品类分布）走既有
+  `downloadJson` 同款 `<a download>` 通道，WebView 不支持时降级「复制到剪贴板」。
+- 分享图（可选，二期）：Canvas 绘制月度摘要卡 → 保存图片；不做社交分享 SDK。
+
+### 批次 F3 · 通知点击直达物品
+
+**需求**：原生壳的通知点击目前只打开 App，应跳到对应临期物品。
+
+- `@capacitor/local-notifications` 的 `actionPerformed` 事件 → 取通知 id（`hashId(item.id)`
+  已写进通知）→ 反查物品 → `router.push` 详情页。
+- PWA 侧 `notificationclick` 事件同理（SW 已注册）；查不到物品（已消耗/已删）时落到库存页。
+
+### 批次 F4 · 月末库存快照对比
+
+**需求**：回答「这个月到底吃掉 / 浪费了什么」。
+
+- 新增 `snapshots` 表（每月最后一天或次月首启时写一份在库摘要：`{ month, items: [{id, name, quantity, unit, price}] }`）。
+- **升 `SCHEMA_VERSION`（2 → 3）与 Dexie version(3)，备份格式同步五处**（见 `data/README` 换表清单与 v2 的教训）。
+- 「统计」页新增「本月 vs 上月」对比视图：消失的 = 吃掉/扔掉（与日志对账）、新增的 = 新购。
+
+### 批次 F5 · 自定义食材图标
+
+**需求**：图标当前固定取名字首字，允许用户选 emoji。
+
+- `Item.icon` 字段语义不变（string），入库 / 编辑页加 emoji 选择器（内置常用食材 emoji 集 + 最近使用）。
+- 无数据结构变化；组卡 icon 取 lead 的 icon，展开行各自显示。
+
+### 建议落地顺序
+
+F1（复用现有流水，成本最低）→ F3（原生壳体验短板）→ F2 → F5 → F4（唯一动 schema 的，放最后单独升版）。

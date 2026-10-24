@@ -80,7 +80,8 @@
    - 常规：齿轮（`.icon-btn`，独立图标用 `md`）+「盘点」「选择」（`.tool-btn`，图标用 `sm`）
    - 多选：`日期 · 在库 N 件`（纯文本元信息，**不配图标**）
    - 盘点：「退出」（`.tool-btn` + `IconText`）
-2. **三张可筛选的语义色概览卡**：今日待吃 / 已过期 / 在库。`urgent` / `over` 两张用对应语义色背景，点击即把列表筛到该状态（再点一次取消），选中态用 **2px ring** 而非仅靠颜色
+2. **三张可筛选的语义色概览卡**：今日待吃 / 已过期 / 在库。`urgent` / `over` 两张用对应语义色背景，点击即把列表筛到该状态（再点一次取消），选中态用 **2px ring** 而非仅靠颜色。
+   ⚠️ 三个数字是**同一套口径**（全量、排除「明天再说」，批次 4 REV-18）：「已过期」从 `buildTodayTodo` 的结果里数，不再读受搜索/位置筛选影响的 `rows` —— 三处口径不一会出现「在库 20 / 已过期 0」配红色列表的矛盾
 3. **搜索框**：`SearchField`（40px 胶囊），支持本名 + 字典标准名 + **别名**匹配
 4. **位置筛选**：`LocationChipBar`，包在 `.filter-sticky` 里**吸顶**（`top: -1px` 贴死容器顶边，负边距铺满整宽）
 5. **分组卡片列表**：`groupByFreshness` 切成 紧急待吃 / 临期 / 新鲜 / 未设保质期 四段。**每段必须是独立 `<section class="group">`**（sticky 受包含块约束，旧标题才会被新分组顶出去，而不是叠在同一位置）。分组头同样吸顶，`top` 由本页 ResizeObserver **实测筛选条高度 - 1px** 注入（内联 style）—— 不能写死，chip 换行 / 字体缩放都会改变筛选条高度
@@ -246,7 +247,7 @@ const rows = computed(() => {
 - 勾选 → `shopping.toggle(id)`
 - 删除 → `shopping.remove(id)`（自动项 7 天内不再重生）
 - 底部输入框手动添加 → `shopping.addManual(name)`
-- 清除已购 → `shopping.clearDone()`
+- 清除已购 → `ConfirmSheet` 二次确认 → `shopping.clearDone()`（一次 bulkPut + 返回快照）→ toast「撤销」走 `restoreMany`（批次 4，REV-19）
 
 ### ★ 勾选与展开必须是两个独立动作
 
@@ -439,7 +440,8 @@ const trendMax = computed(() => Math.max(1, ...trend.value.map((p) => p.amount))
 2. **添加/覆盖表单**：名称 + 环境 + 天数 + 原因 → `dict.upsert`
 3. **内置字典浏览**：按品类分组，点击条目**预填表单**（`prefill`）
 
-> ⚠️ **改完字典后如果不调 `items.recomputeAll()`，已有商品的到期日不会更新。** 目前的行为是：重量级场景需要在 save 后显式触发。改动这块时留意。
+> ⚠️ `dict.upsert` / `dict.reset` 已**自动**触发 `items.recomputeAll()` 重算在库商品（批次 4，REV-10）——
+> 此前这条是「调用方责任」，字典页从来没调过。字典页与 store 都不需要再显式调用。
 
 ---
 

@@ -77,9 +77,28 @@ describe('sanitizeItems', () => {
     expect(r.dropped).toBe(4);
   });
 
-  it('quantity 非正数 / 非数字 → 归 1', () => {
+  it('★ quantity: 0 是合法值（用户「明确清空」），必须保住不能归 1（REV-49）；负数/非数字才归 1', () => {
     const r = sanitizeItems([good({ quantity: 0 }), good({ id: 'i2', quantity: -3 }), good({ id: 'i3', quantity: 'x' })], TODAY);
-    expect(r.rows.map((i) => i.quantity)).toEqual([1, 1, 1]);
+    expect(r.rows.map((i) => i.quantity)).toEqual([0, 1, 1]);
+  });
+
+  it('★ name 带首尾空白 → trim 后入库（判空用 trim 值、入库却是原值会让名称匹配永久失灵）', () => {
+    const r = sanitizeItems([good({ name: '  牛奶 ' })], TODAY);
+    expect(r.rows[0]!.name).toBe('牛奶');
+    expect(r.fixed).toBeGreaterThanOrEqual(1);
+  });
+
+  it('★ 格式合法但日历上不存在的日期（2026-13-01 / 2026-02-31）→ 按非法处理（REV-48）', () => {
+    const r = sanitizeItems([good({ expireAt: '2026-13-01', producedAt: '2026-02-31' })], TODAY);
+    expect(r.rows[0]!.expireAt).toBeNull();
+    expect(r.rows[0]!.producedAt).toBeNull();
+    expect(r.fixed).toBeGreaterThanOrEqual(2);
+  });
+
+  it('闰日 2028-02-29 是真实存在的日期，不能被往返校验误杀', () => {
+    const r = sanitizeItems([good({ expireAt: '2028-02-29' })], TODAY);
+    expect(r.rows[0]!.expireAt).toBe('2028-02-29');
+    expect(r.fixed).toBe(0);
   });
 
   it('status 非法值归 in_stock（finished 保留）', () => {
@@ -161,6 +180,10 @@ describe('sanitizeLogs', () => {
 
   it('expireAt 非法 → null', () => {
     expect(sanitizeLogs([log({ expireAt: 0 })]).rows[0]!.expireAt).toBeNull();
+  });
+
+  it('★ 日志的 name 也 trim（Top 浪费按归一名聚合，空白会让同一物占两行）', () => {
+    expect(sanitizeLogs([log({ name: ' 牛奶 ' })]).rows[0]!.name).toBe('牛奶');
   });
 
   it('price 非数字 → null（不能变成 0，否则统计把「没填价」当「免费」）', () => {
