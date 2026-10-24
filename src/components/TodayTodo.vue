@@ -14,18 +14,12 @@ import { useToast } from '@/composables/useToast';
 import { useConsumeFlow } from '@/composables/useConsumeFlow';
 
 /**
- * 是否在无待办时显示「今天没有待处理的物资」。
- *
- * 由调用方决定而非组件内写死：库存页空库时（压根没东西）不该显示这句，
- * 但处理完最后一条时应该给个收尾反馈。
- */
-const props = withDefaults(defineProps<{ showEmpty?: boolean }>(), { showEmpty: true });
-
-/**
  * 今日待办：把概览卡的数字变成一份**可以直接处理**的清单。
  *
  * 为什么不用弹层：处理「今天该吃什么」是高频动作，弹层会打断浏览；
  * 行内展开让用户逐条勾完，中途还能随时收起。
+ * 没有待办时**整块不渲染**（v1.2 定案）：概览 pill 已表达「0 件」，
+ * 再显示「今天没有待处理的物资」是重复播报。
  */
 const items = useItemsStore();
 const locations = useLocationsStore();
@@ -226,13 +220,6 @@ async function snooze(item: Item) {
       </template>
     </div>
   </section>
-
-  <div
-    v-else-if="props.showEmpty"
-    class="tip mb-3.5"
-  >
-    今天没有待处理的物资。
-  </div>
 
   <ConsumeSheet
     :model-value="consumeTarget !== null"

@@ -585,9 +585,9 @@ function exitStocktake() {
 
       <!--
         ③ 今日待办：数字下面紧跟「是哪几件、怎么处理」，这是本页最高频的动线。
-        空库时不显示收尾文案（`:show-empty="total > 0"`）。层间距由组件根元素的 mb-3.5 提供。
+        没有待办时整块不渲染（v1.2 定案，概览 pill 的「0」已表达）。层间距由组件根元素的 mb-3.5 提供。
       -->
-      <TodayTodo :show-empty="total > 0" />
+      <TodayTodo />
 
       <SearchField v-model="keyword" class="mb-3.5" placeholder="搜索食材（支持别名，如 番茄）" />
 
