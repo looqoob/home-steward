@@ -112,7 +112,7 @@ const backupTip = computed(() =>
 
     <div class="section-label">位置分布</div>
     <div v-if="dist.length === 0" class="text-center py-6 px-6 text-[13px] text-ink-3">暂无在库物品</div>
-    <div v-for="s in dist" :key="s.locationId" class="flex items-center gap-2.5 mb-2.5 text-[12px]">
+    <div v-for="s in dist" :key="s.locationId ?? '__unassigned__'" class="flex items-center gap-2.5 mb-2.5 text-[12px]">
       <span class="w-[60px] flex-none text-ink-2 truncate whitespace-nowrap overflow-hidden">{{ s.name }}</span>
       <span class="flex-1 h-2 bg-sunken rounded overflow-hidden">
         <i class="block h-full rounded" :style="{ width: (s.percent * 100).toFixed(0) + '%', background: s.color }"></i>

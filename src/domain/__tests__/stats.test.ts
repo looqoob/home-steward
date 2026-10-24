@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { categoryDistribution, topWasted, turnoverDays, wasteTrend, stockValue, MIN_TREND_MONTHS, MIN_TURNOVER_SAMPLES } from '../stats';
-import type { ConsumeLog } from '../types';
-import { mkItem, NOW, TODAY, ds } from './fixtures';
+import { categoryDistribution, locationDistribution, monthStats, topWasted, turnoverDays, wasteTrend, stockValue, MIN_TREND_MONTHS, MIN_TURNOVER_SAMPLES } from '../stats';
+import { ENV_MAP } from '../types';
+import type { ConsumeLog, Location } from '../types';
+import { mkItem, mkLocation, NOW, TODAY, ds } from './fixtures';
 
 const DAY = 86_400_000;
 /** 造一条日志，只需测试关心的字段 */
@@ -115,6 +116,18 @@ describe('topWasted', () => {
     expect(topWasted([])).toEqual([]);
   });
 
+  it('★ 归一后同名的浪费合并成一行（番茄（西红柿）= 番茄，REV-47），展示名取首个原名', () => {
+    const logs = [
+      mkLog({ name: '番茄（西红柿）', at: NOW, price: 6, quantity: 1 }),
+      mkLog({ name: '番茄', at: NOW - DAY, price: 4, quantity: 1 }),
+    ];
+    const top = topWasted(logs, 5);
+    expect(top).toHaveLength(1);
+    expect(top[0]!.count).toBe(2);
+    expect(top[0]!.amount).toBe(10);
+    expect(top[0]!.name).toBe('番茄（西红柿）');
+  });
+
   it('n 生效', () => {
     const logs = ['a', 'b', 'c'].map((n, i) => mkLog({ name: n, at: NOW - i * DAY, price: 10 - i }));
     expect(topWasted(logs, 2)).toHaveLength(2);
@@ -135,15 +148,29 @@ describe('topWasted', () => {
 
 describe('turnoverDays', () => {
   it('样本不足 → null', () => {
-    const items = [mkItem({ id: 'a' })];
+    const items = [mkItem({ id: 'a', status: 'finished' })];
     const logs = [mkLog({ itemId: 'a', type: 'consumed', at: Date.parse(`${ds(5)}T10:00:00`) })];
     expect(turnoverDays(items, logs)).toBeNull();
     expect(MIN_TURNOVER_SAMPLES).toBe(5);
   });
 
+  it('★ 只统计已用完（finished）的物品（REV-46）：在库的没有完整周期，混进来会把周转拉长', () => {
+    // 5 件 finished 各 4 天 + 1 件 in_stock（第 1 天就被消耗了一部分）——
+    // 若在库的也算样本，平均会被 (4*5+1)/6 拉低；正确口径只看 finished 的 5 件
+    const items = [
+      ...Array.from({ length: 5 }, (_, i) => mkItem({ id: `f${i}`, storedAt: TODAY, status: 'finished' })),
+      mkItem({ id: 'alive', storedAt: TODAY, status: 'in_stock' }),
+    ];
+    const logs = [
+      ...items.slice(0, 5).map((it) => mkLog({ itemId: it.id, type: 'consumed', at: Date.parse(`${ds(4)}T10:00:00`) })),
+      mkLog({ itemId: 'alive', type: 'consumed', at: Date.parse(`${ds(1)}T10:00:00`) }),
+    ];
+    expect(turnoverDays(items, logs)).toBe(4);
+  });
+
   it('够样本时取「入库 → 第一次消耗」的平均天数', () => {
     // 5 件，每件入库日 = TODAY，第 i 件在 i 天后被消耗
-    const items = Array.from({ length: 5 }, (_, i) => mkItem({ id: `i${i}`, storedAt: TODAY }));
+    const items = Array.from({ length: 5 }, (_, i) => mkItem({ id: `i${i}`, storedAt: TODAY, status: 'finished' }));
     const logs = items.map((it, i) =>
       mkLog({ itemId: it.id, type: 'consumed', at: Date.parse(`${ds(i + 1)}T10:00:00`) }),
     );
@@ -152,7 +179,7 @@ describe('turnoverDays', () => {
   });
 
   it('多次消耗只取第一次（否则算的是消耗周期，不是周转速度）', () => {
-    const items = Array.from({ length: 5 }, (_, i) => mkItem({ id: `i${i}`, storedAt: TODAY }));
+    const items = Array.from({ length: 5 }, (_, i) => mkItem({ id: `i${i}`, storedAt: TODAY, status: 'finished' }));
     const logs = [
       ...items.map((it, i) => mkLog({ itemId: it.id, type: 'consumed', at: Date.parse(`${ds(2)}T09:00:00`) })),
       ...items.map((it) => mkLog({ itemId: it.id, type: 'consumed', at: Date.parse(`${ds(30)}T09:00:00`) })),
@@ -162,7 +189,7 @@ describe('turnoverDays', () => {
 
   it('补录导致的负间隔被跳过，不会把平均值拉成负数', () => {
     // 6 件：第 0 件的消耗日志早于入库日（事后补录），其余 5 件都是 4 天
-    const items = Array.from({ length: 6 }, (_, i) => mkItem({ id: `i${i}`, storedAt: TODAY }));
+    const items = Array.from({ length: 6 }, (_, i) => mkItem({ id: `i${i}`, storedAt: TODAY, status: 'finished' }));
     const logs = items.map((it, i) =>
       mkLog({ itemId: it.id, type: 'consumed', at: Date.parse(`${ds(i === 0 ? -3 : 4)}T10:00:00`) }),
     );
@@ -171,8 +198,52 @@ describe('turnoverDays', () => {
   });
 });
 
-describe('categoryDistribution', () => {
-  it('按数量降序，百分比之和为 1', () => {
+describe('locationDistribution', () => {
+  const colorOf = (env: Location['env']) => ENV_MAP[env].color;
+  const locs = [mkLocation('L1', '冷藏', 'chilled', 10), mkLocation('L2', '冷冻', 'frozen', 20)];
+
+  it('★ 孤儿 locationId（位置已删/停用）归入「未分配」桶，百分比合计回到 100%（REV-13）', () => {
+    const items = [
+      mkItem({ id: 'a', loc: 'L1' }),
+      mkItem({ id: 'b', loc: 'L1' }),
+      mkItem({ id: 'orphan', loc: 'L-GONE' }),
+    ];
+    const d = locationDistribution(items, locs, colorOf);
+    expect(d.map((s) => [s.name, s.count, s.locationId])).toEqual([
+      ['冷藏', 2, 'L1'],
+      ['未分配', 1, null],
+    ]);
+    // 各片相加必须回到 1：此前孤儿不计入任何片，合计 < 100% 像是统计丢了数据
+    expect(d.reduce((s, x) => s + x.percent, 0)).toBeCloseTo(1, 5);
+  });
+
+  it('没有孤儿时不出现「未分配」片', () => {
+    const d = locationDistribution([mkItem({ id: 'a', loc: 'L1' })], locs, colorOf);
+    expect(d.some((s) => s.locationId === null)).toBe(false);
+  });
+
+  it('已停用的位置里的物品也归「未分配」', () => {
+    const disabled = [mkLocation('L1', '冷藏', 'chilled', 10, false)];
+    const d = locationDistribution([mkItem({ id: 'a', loc: 'L1' })], disabled, colorOf);
+    expect(d).toHaveLength(1);
+    expect(d[0]!.name).toBe('未分配');
+  });
+});
+
+describe('monthStats', () => {
+  it('★ 脏 at（NaN / 字符串 / 0）的日志跳过，不抛错也不计入（REV-30）', () => {
+    const logs = [
+      mkLog({ type: 'consumed', quantity: 2, at: NOW }),
+      mkLog({ type: 'consumed', quantity: 5, at: NaN }),
+      mkLog({ type: 'wasted', quantity: 1, at: 'x' as unknown as number }),
+    ];
+    const m = monthStats([], logs, NOW);
+    expect(m.consumed).toBe(2);
+    expect(m.wastedCount).toBe(0);
+  });
+});
+
+describe('categoryDistribution', () => {  it('按数量降序，百分比之和为 1', () => {
     const items = [
       mkItem({ id: 'a', category: 'vegetable' }),
       mkItem({ id: 'b', category: 'vegetable' }),

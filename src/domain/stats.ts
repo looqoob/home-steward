@@ -1,13 +1,10 @@
 import type { ConsumeLog, Item, Location } from './types';
 import { CATEGORY_LABEL } from './types';
-import { diffDays, fromEpoch, monthKey, todayStr, isDateStr } from './dates';
-// 金额口径复用 domain/price：累加前先把脏值（字符串 / 负数 / Infinity）归成 null，
+import { monthKey, todayStr, isDateStr, fromEpoch, diffDays } from './dates';
+import { normalizeName } from './normalize';
+// 金额口径复用 domain/price：累加前先把脏值（字符串 / 负数）归成 null，
 // 否则一次 `+=` 字符串拼接就能把整月「浪费金额」变成 NaN。
-import { normalizePrice, normalizeQty, amountOf } from './price';
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+import { normalizePrice, normalizeQty, amountOf, round2 } from './price';
 
 /**
  * 合法日期字符串才参与统计。
@@ -19,6 +16,16 @@ function round2(n: number): number {
  */
 function dateOf(v: unknown): string | null {
   return isDateStr(v) ? v : null;
+}
+
+/**
+ * 合法的事件时间戳才参与统计（`ConsumeLog.at`）。
+ *
+ * 守的是 `fromEpoch(NaN)` → `'NaN-NaN-NaN'` 这条链：不抛错但被静默丢弃，
+ * 统计**悄悄少算**而无人知晓（REV-30）。非法 `at`（非数字 / 非有限数）直接跳过该条。
+ */
+function epochOf(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
 }
 
 export interface MonthStats {
@@ -59,7 +66,8 @@ export function monthStats(items: Item[], logs: ConsumeLog[], now: number = Date
   let wastedAmount = 0;
   for (const l of logs) {
     if (l.deletedAt) continue;
-    if (monthKey(fromEpoch(l.at)) !== key) continue;
+    const at = epochOf(l.at);
+    if (at === null || monthKey(fromEpoch(at)) !== key) continue;
     if (l.type === 'consumed') consumed += normalizeQty(l.quantity);
     else {
       wastedCount += normalizeQty(l.quantity);
@@ -70,7 +78,8 @@ export function monthStats(items: Item[], logs: ConsumeLog[], now: number = Date
 }
 
 export interface LocationSlice {
-  locationId: string;
+  /** 位置 id；「未分配」桶（孤儿 locationId / 全部位置停用）为 `null` */
+  locationId: string | null;
   name: string;
   count: number;
   color: string;
@@ -81,17 +90,27 @@ export interface LocationSlice {
  * 位置分布统计（「我的」页的分布条用）。
  *
  * - 只统计**未删除且启用**的位置，且**只返回 `count > 0` 的片**（空位置不占视觉空间）；
- * - 结果按数量**降序**排列；
+ * - `locationId` 指向不存在 / 已停用 / 已删除位置的物品（孤儿引用）归入
+ *   **「未分配」桶**（`locationId: null`）——此前它们不计入任何片，
+ *   各片百分比相加 < 100%，用户会以为统计丢了数据（REV-13）；
+ * - 结果按数量**降序**排列，「未分配」恒排最后（它是异常态，不该抢真实位置的位置）；
  * - `total` 为空时分母按 1 处理（避免 NaN），此时结果为空数组。
  *
  * @param colorOf 环境 → 颜色的映射函数，通常传 `(env) => ENV_MAP[env].color`。
+ * @param opts.unassignedColor 「未分配」片的颜色。默认取 `ENV_MAP.none` 同款中性灰。
  * @example locationDistribution(items, locations, (env) => ENV_MAP[env].color)
  */
-export function locationDistribution(items: Item[], locations: Location[], colorOf: (env: Location['env']) => string): LocationSlice[] {
+export function locationDistribution(
+  items: Item[],
+  locations: Location[],
+  colorOf: (env: Location['env']) => string,
+  opts: { unassignedColor?: string } = {},
+): LocationSlice[] {
   const live = items.filter((i) => !i.deletedAt && i.status === 'in_stock');
   const total = live.length || 1;
-  return locations
-    .filter((l) => !l.deletedAt && l.enabled)
+  const usable = new Set(locations.filter((l) => !l.deletedAt && l.enabled).map((l) => l.id));
+  const slices: LocationSlice[] = locations
+    .filter((l) => usable.has(l.id))
     .map((l) => {
       const count = live.filter((i) => i.locationId === l.id).length;
       return {
@@ -104,35 +123,18 @@ export function locationDistribution(items: Item[], locations: Location[], color
     })
     .filter((s) => s.count > 0)
     .sort((a, b) => b.count - a.count);
-}
-
-export interface TodayOverview {
-  /** 今日待吃（紧急 + 已过期） */
-  dueToday: number;
-  /** 已过期 */
-  overdue: number;
-}
-
-/**
- * 今日概览。
- *
- * @param today 日期字符串 'YYYY-MM-DD'
- * @param urgentDays 紧急阈值；`0 ≤ 剩余天数 ≤ urgentDays` 计入「今日待吃」
- * @returns `dueToday` = 紧急 + 已过期的数量；`overdue` = 仅已过期数量（`overdue ≤ dueToday`）
- * @remarks 只统计**有 `expireAt`** 的在库商品；不计保质期的（环境 `none`）不进统计。
- */
-export function todayOverview(items: Item[], today: string, urgentDays: number): TodayOverview {
-  const live = items.filter((i) => !i.deletedAt && i.status === 'in_stock' && dateOf(i.expireAt));
-  let dueToday = 0;
-  let overdue = 0;
-  for (const i of live) {
-    const d = diffDays(i.expireAt as string, today);
-    if (d < 0) {
-      overdue++;
-      dueToday++;
-    } else if (d <= urgentDays) dueToday++;
+  const unassigned = live.filter((i) => !usable.has(i.locationId)).length;
+  if (unassigned > 0) {
+    slices.push({
+      locationId: null,
+      name: '未分配',
+      count: unassigned,
+      // 中性灰，与 ENV_MAP['none'] 的 #5E6B78 同源（环境色不在 domain 硬编码，由默认值对齐）
+      color: opts.unassignedColor ?? '#5E6B78',
+      percent: unassigned / total,
+    });
   }
-  return { dueToday, overdue };
+  return slices;
 }
 
 /* ==================== 统计页 ==================== */
@@ -185,7 +187,9 @@ export function wasteTrend(logs: ConsumeLog[], months = 6, now: number = Date.no
   let monthsWithData = 0;
   for (const l of logs) {
     if (l.deletedAt || l.type !== 'wasted') continue;
-    const k = monthKey(fromEpoch(l.at));
+    const at = epochOf(l.at);
+    if (at === null) continue;
+    const k = monthKey(fromEpoch(at));
     if (!set.has(k)) continue;
     const cur = acc.get(k) ?? { amount: 0, count: 0 };
     cur.amount += normalizePrice(l.price) ?? 0;
@@ -264,6 +268,9 @@ export interface WastedTop {
 /**
  * 「最常浪费」Top N，按**累计浪费金额**降序。
  *
+ * ⚠️ 聚合键走 `normalizeName`：「番茄（西红柿）」与「番茄」是**同一件东西**，
+ * 各占一行会让 Top5 的名次失真（REV-47）；展示名取首次出现的原名。
+ *
  * ⚠️ 金额可能全是 0（用户没填价格），此时退化为按数量排 —— 仍然返回一个有用的顺序，
  * 比「因为都是 0 所以随机排」好。
  * @returns 没有浪费记录时返回空数组
@@ -272,10 +279,11 @@ export function topWasted(logs: ConsumeLog[], n = 5): WastedTop[] {
   const acc = new Map<string, WastedTop>();
   for (const l of logs) {
     if (l.deletedAt || l.type !== 'wasted') continue;
-    const cur = acc.get(l.name) ?? { name: l.name, count: 0, amount: 0 };
+    const k = normalizeName(l.name);
+    const cur = acc.get(k) ?? { name: l.name, count: 0, amount: 0 };
     cur.count += normalizeQty(l.quantity);
     cur.amount += normalizePrice(l.price) ?? 0;
-    acc.set(l.name, cur);
+    acc.set(k, cur);
   }
   const list = [...acc.values()].map((x) => ({ ...x, amount: round2(x.amount) }));
   return list
@@ -295,11 +303,16 @@ export function turnoverDays(items: Item[], logs: ConsumeLog[]): number | null {
   const first = new Map<string, number>();
   for (const l of logs) {
     if (l.deletedAt || l.type !== 'consumed') continue;
+    const at = epochOf(l.at);
+    if (at === null) continue;
     const prev = first.get(l.itemId);
-    if (prev === undefined || l.at < prev) first.set(l.itemId, l.at);
+    if (prev === undefined || at < prev) first.set(l.itemId, at);
   }
   const gaps: number[] = [];
   for (const i of items) {
+    // 只统计**已用完**的物品（与 JSDoc 的口径一致，REV-46）：还在库里的物品
+    // 只有「入库到现在」的时长，没有「入库到消耗」的完整周期，混进来会把周转拉长。
+    if (i.deletedAt || i.status !== 'finished') continue;
     const at = first.get(i.id);
     const storedAt = dateOf(i.storedAt);
     // 入库日非法就跳过：宁可少一个样本，也不能让 parseDate 抛错把主 Tab 打成白屏
