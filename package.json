@@ -1,7 +1,7 @@
 {
   "name": "home-steward",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "家庭物资管家 · 本地优先的移动端 App（无服务器 / 无账号 / 数据全在本机）",
   "scripts": {
