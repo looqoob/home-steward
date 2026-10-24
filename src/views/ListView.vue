@@ -183,7 +183,7 @@ async function doClearDone() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <div class="h-full flex flex-col pt-4">
     <!--
       ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
       清单与表单 flex-1 内部滚动。「手动添加」属低频操作，随内容滚动不占固定高度。
@@ -216,7 +216,7 @@ async function doClearDone() {
       </PillGroup>
     </div>
 
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4">
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4 pb-3">
     <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
     <FormField label="手动添加" for-id="manual-name">
       <div class="flex gap-2">

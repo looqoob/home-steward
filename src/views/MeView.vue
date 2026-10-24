@@ -70,9 +70,10 @@ const backupTip = computed(() =>
 </script>
 
 <template>
-  <div>
-    <!-- 顶部 16px 占位由 PageHeader 提供；与库存 / 清单同一套页头节奏 -->
+  <div class="h-full flex flex-col pt-4">
+    <!-- v1.1 F9：标题行固定，其余内容内部滚动（与其他 Tab 页同一模式） -->
     <PageHeader title="我的" />
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain pb-3">
 
     <button
       v-if="backupTip.level !== 'none'"
@@ -139,6 +140,7 @@ const backupTip = computed(() =>
 
     <div class="tip mt-3">
       所有数据仅保存在本机（IndexedDB），无服务器、无账号。建议定期在「数据备份」导出 JSON 以防丢失。
+    </div>
     </div>
   </div>
 </template>

@@ -182,7 +182,7 @@ const wastedAmount = computed(() =>
       </div>
     </div>
 
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4">
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4 pb-3">
     <EmptyState v-if="groups.length === 0" text="没有符合筛选条件的消耗记录">
       <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -229,7 +229,7 @@ const wastedAmount = computed(() =>
       </section>
     </template>
 
-    <div v-if="groups.length > 0" class="sticky bottom-0 bg-card border-t border-line rounded-t-md px-3.5 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-2 flex justify-between items-center shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" role="status" aria-live="polite">
+    <div v-if="groups.length > 0" class="sticky bottom-0 z-[20] bg-card border-t border-line rounded-t-md px-3.5 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-2 flex justify-between items-center shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" role="status" aria-live="polite">
       <span class="text-[13px] text-ink-2">合计（{{ totalCount }} 笔）</span>
       <span class="text-[18px] font-bold text-ink-1">{{ money(totalAmount) }}</span>
     </div>

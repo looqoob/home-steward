@@ -20,18 +20,6 @@ const isStock = computed(() => route.path.startsWith('/stock'));
  */
 const headerTitle = computed(() => route.meta.header);
 
-/**
- * 滚动容器的上下内边距。
- *
- * - **库存页**：筛选条吸顶 → `pt-0`；底部要给悬浮的「快速入库」FAB 让位 → `pb-[84px]`。
- * - **有顶栏的页面**（`meta.header`）：顶栏由本外壳渲染在滚动容器**外面**，页面里的筛选条 / 合计条
- *   又要分别贴容器顶边、底边 → 上下都 `0`，留白由页面内的占位元素提供。
- * - **其余主 Tab 页**（清单 / 我的）：顶部 `0`（留白由 PageHeader.topGap 承担，与库存页对齐），
- *   底部 12px 收尾。
- *
- * 不能随便给带 sticky 元素的页面加容器 padding：sticky 偏移是相对内容盒算的，
- * padding 会把吸顶/吸底条整体推离容器边缘，中间漏出的缝里能看到滚动中的卡片。
- */
 
 /**
  * 快速入库弹框的开合由路由 query 驱动（?quickadd=1），而非普通的局部状态。
@@ -76,19 +64,6 @@ function closeScan() {
   if (route.query.scan) router.back();
 }
 
-/** 多选态下让出 FAB 与操作条占用的底部空间（操作条约 120px 高） */
-const padClass = computed(() => {
-  if (isStock.value) {
-    if (selectMode.value) return 'pt-0 pb-[132px]';
-    if (stocktakeMode.value) return 'pt-0 pb-[84px]';
-    return 'pt-0 pb-[84px]';
-  }
-  if (headerTitle.value) return 'pt-0 pb-0';
-  // 主 Tab（库存之外的清单 / 我的）：顶部留白交给 PageHeader.topGap（与库存页同款节奏），
-  // 这里只给底部收尾留白。曾写 pt-4 pb-3，pt-4 与 PageHeader.topGap 的 h-4 重复 16px，
-  // 导致这两个页面 header 整体比库存页低 16px。
-  return 'pt-0 pb-3';
-});
 
 function go(path: string) {
   if (!route.path.startsWith(path)) router.push(path);
@@ -110,12 +85,14 @@ function go(path: string) {
     <NavBar v-else :title="headerTitle" show-back @back="router.back()" />
 
     <!--
-      padClass 里为什么有 pt-0 / pb-0：
-      sticky 的偏移量是相对**内容盒**算的，滚动容器的 padding 会把吸顶/吸底条整体朝内推一个 padding，
-      于是条与容器边缘之间留出一条缝，滚动中的卡片会从缝里漏出来（看起来像卡片穿过了顶栏 / 合计条）。
-      所以凡是页面自己带吸顶条、吸底条的，容器上下都不给 padding，留白交给页面内的普通流元素。
+      ★ v1.1 F9：这里是**纯外壳**——不滚动、无垂直 padding，只保留水平 px-4
+      （页面里 -mx-4 全出血块以它为基准）。滚动由每个子页面自己管理：
+      列表页是 h-full flex flex-col（头部 flex-none + 列表 flex-1 内滚），
+      整页内容型（统计页）是 h-full overflow-y-auto。
+      垂直留白与 FAB 让位（库存页列表 pb-[84px]）同样由页面承担，
+      外壳不再知道这些细节。
     -->
-    <div class="flex-1 overflow-y-auto no-scrollbar overscroll-contain px-4" :class="padClass">
+    <div class="flex-1 min-h-0 overflow-hidden px-4">
       <router-view />
     </div>
 

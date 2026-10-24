@@ -603,8 +603,8 @@ function exitStocktake() {
     </template>
     </div>
 
-    <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器 -->
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4">
+    <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器。底部让位随模式变化：多选态给吸底操作条留 132px，其余给 FAB 留 84px -->
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4" :class="selectMode ? 'pb-[132px]' : 'pb-[84px]'">
     <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
     <StocktakePanel
       v-if="stocktakeMode"

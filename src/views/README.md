@@ -287,6 +287,8 @@ async function toggleCheck(s) {
 
 ## StatsView.vue — **v3**：统计
 
+> **v1.1 F9 起自持滚动**：整页内容型页面，根元素即 `h-full overflow-y-auto`（顶栏由 meta.header 外壳渲染）。
+
 > v1.1 F4 起新增「本月 vs 上月末」区：上月末快照 vs 当前在库的差集（新购 / 减少+去向对账），无快照时显示生成时机说明。v1.1 F2 新增底部「导出 CSV」。
 
 从「我的 → 统计」进入（`/stats`，`meta: { header: '统计' }`，顶栏由外壳渲染）。
@@ -331,6 +333,8 @@ const trendMax = computed(() => Math.max(1, ...trend.value.map((p) => p.amount))
 ---
 
 ## MeView.vue — 我的
+
+> **v1.1 F9 起固定头部 + 内滚**：标题行 flex-none，其余内容 flex-1 内部滚动（与其他 Tab 页同模式）。
 
 顶部三个数字（本月入库 / 已消耗 / 扔掉金额），中部位置分布条（`locationDistribution`），底部入口：统计（**v3 新增，排在 links 首位**）/ 位置管理 / 保质期字典 / 提醒设置 / 数据备份。
 

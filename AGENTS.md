@@ -304,7 +304,7 @@ home-steward/
 - `TabLayout`（三个主 Tab）：纯白背景、不显示标题；顶部纯白占位负责「安全区 + 12px」。
 - **独立路由子页**：页面自己渲染 `NavBar.vue`，它是页面根容器首个 flex item——在滚动容器**外面**，不随内容滚动。
 - **★ TabLayout 下又需要标题栏的页面**：路由写 `meta: { header: '标题' }`，由外壳渲染 NavBar；**页面里不要再写 `<NavBar>`**。代价：滚动容器 `pt-0 pb-0`，留白由页面内普通流占位元素提供（`sticky` 偏移相对内容盒，容器 padding 会漏缝，坑位 #16b）。
-- **固定头部 + 内滚列表（v1.1 F8 模式）**：库存 / 清单 / 消耗明细是 `h-full flex flex-col` 页——头部（标题+概览+待办+搜索+筛选）`flex-none` 永不滚动，列表区 `flex-1 min-h-0 overflow-y-auto` 内部滚动；分组头 `sticky top-[-1px]` 直接吸在**列表容器**顶，**零测量**（F7 的吸顶+测高方案已被替代，useStickyFilterOffset 已删除）。头部占位元素（h-4 / h-5）在头部块内部。
+- **固定头部 + 内滚列表（v1.1 F8/F9 模式，所有 Tab 页强制）**：`TabLayout` 的内容区是**纯外壳**（`flex-1 min-h-0 overflow-hidden px-4`——不滚动、无垂直 padding，只保留水平 px-4 供页面 -mx-4 全出血）。每个 Tab 子页面必须自治滚动：列表页（库存/清单/我的/消耗明细）是 `h-full flex flex-col`（头部 `flex-none` + 列表 `flex-1 min-h-0 overflow-y-auto`）；整页内容型（统计页）是 `h-full overflow-y-auto`。垂直留白与 FAB / 多选操作条让位（库存列表 `pb-[84px]` / 多选 `pb-[132px]`）由页面自己承担。分组头 `sticky top-[-1px]` 直吸列表容器顶，零测量；吸底条加 `z-[20]`（要压过 z-[19] 的分组头）。
 - `index.html` 的 `theme-color` / manifest 的 `theme_color` 只有**一份**，由 `useTheme` 切换时写入（浅 `#FFFFFF` / 深 `#1C211F`）。**不要改成两套 meta + media 查询**——用户手选深色但系统浅色时状态栏会错。
 
 ### 6.4 ★ 外观主题（深浅 + 主题色）

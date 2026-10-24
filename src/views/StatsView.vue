@@ -121,7 +121,7 @@ async function exportCsv() {
 </script>
 
 <template>
-  <div>
+  <div class="h-full overflow-y-auto no-scrollbar overscroll-contain pb-3">
     <!-- 本月概览：与「我的」页同一套数字来源（monthStats），口径不会打架 -->
     <div class="section-label">本月概览</div>
     <div class="grid grid-cols-4 gap-2 mb-5">
