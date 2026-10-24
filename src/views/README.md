@@ -18,6 +18,7 @@
 | `/settings` | `SettingsView.vue` | NavBar | 设置（提醒） |
 | `/backup` | `BackupView.vue` | NavBar | 备份导出/导入（顶部显示上次备份时间） |
 | `/barcodes` | `BarcodeManageView.vue` | NavBar | **v2**：条码映射的查看/改名/删除 |
+| `/recent-ops` | `RecentOpsView.vue` | NavBar(PageShell) | **v1.1 F1**：最近操作（消耗流水逐条撤销） |
 | `/consume-log` | `ConsumeLogView.vue` | TabLayout + 顶栏（`meta.header`） | 消耗明细（每次用掉/扔掉的逐条记录） |
 | `/stats` | `StatsView.vue` | TabLayout + 顶栏（`meta.header`） | **v3**：统计（趋势 / Top 浪费 / 周转天数 / 品类分布） |
 
@@ -329,6 +330,15 @@ const trendMax = computed(() => Math.max(1, ...trend.value.map((p) => p.amount))
 > 「本月」按 `Date.now()` 的月份计算，依赖 `monthStats`。
 >
 > 「已消耗」指标是可点击的按钮（`<button class="metric metric-btn">`），跳转 `/consume-log`；设置区也增加「消耗明细」入口。
+
+---
+
+## RecentOpsView.vue — 最近操作（v1.1 F1）
+
+把「撤销」从 toast 的 5 秒单槽位升级为可回滚列表：倒序最近 30 条消耗流水，逐条撤销（`items.undoConsume` 数量对账回滚）。物品已删除的记录按钮置灰（无从回滚）。入口在「我的」→「最近操作」。
+
+- 数据源即 `ConsumeLog`，**无新表**；批量操作产生的多条日志在这里逐条撤销，不依赖内存里的 BulkOp 快照。
+- 撤销「扔掉」只从统计移除该记录，不回退款。
 
 ---
 

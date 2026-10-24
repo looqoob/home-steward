@@ -48,6 +48,8 @@ const router = createRouter({
     { path: '/appearance', component: () => import('@/views/AppearanceView.vue') },
     { path: '/settings', component: () => import('@/views/SettingsView.vue') },
     { path: '/backup', component: () => import('@/views/BackupView.vue') },
+    // v1.1 F1：最近操作（消耗流水的逐条撤销面板）
+    { path: '/recent-ops', component: () => import('@/views/RecentOpsView.vue') },
     // v2：条码映射管理（扫码扫错时要能改能删，必须有出口）
     { path: '/barcodes', component: () => import('@/views/BarcodeManageView.vue') },
   ],

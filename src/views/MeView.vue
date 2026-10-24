@@ -43,6 +43,7 @@ const themeHint = computed(() => {
 const links = computed(() => [
   { label: '统计', to: '/stats', hint: '' },
   { label: '消耗明细', to: '/consume-log', hint: '' },
+  { label: '最近操作', to: '/recent-ops', hint: '可撤销' },
   { label: '位置管理', to: '/locations', hint: '' },
   { label: '保质期字典', to: '/dict', hint: '' },
   {
