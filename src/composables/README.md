@@ -123,39 +123,6 @@ reminder.isNative;             // 是否运行在原生壳（APK）
 
 ---
 
-## useStickyFilterOffset.ts — 吸顶筛选条的实测高度
-
-```ts
-import { useStickyFilterOffset } from '@/composables/useStickyFilterOffset';
-
-const { filterEl, filterH, measure } = useStickyFilterOffset();
-// 模板：<div ref="filterEl" class="sticky top-[-1px] z-20 bg-page ...">…</div>
-const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
-```
-
-| 成员 | 类型 | 说明 |
-| --- | --- | --- |
-| `filterEl` | `Ref<HTMLElement \| null>` | 挂到吸顶条上的模板 ref |
-| `filterH` | `Ref<number>` | 实测高度（内容高度），初始 56 只是首帧估计 |
-| `measure()` | `() => void` | 手动重新测量（筛选条被 `v-if` 重新挂载后调用） |
-
-### 为什么需要它
-
-分组头的 `sticky top` 必须等于「筛选条实际高度 − 1px」。筛选条高度会变：日期 / 位置胶囊在窄屏换行、
-系统字体缩放、各页行数不同。写死像素只有两种结局 —— 压住分组头，或在两条之间漏出发丝缝。
-
-`StockView` / `ConsumeLogView` 原本各抄了一份 40 行的 `ResizeObserver` 逻辑，唯一的差别是
-`StockView` 在多选 / 盘点态下要走「直接贴容器顶」的偏移 —— 那个判断留在调用点，不进 composable。
-
-### 边界条件
-
-- **必须在 `onMounted` 之后才有实测值**：`filterH` 的初值只用于挂载前那一帧。
-- 筛选条被 `v-if` 移除（如库存页多选态）时 `measure()` 会保留上一次的值，不会归零 ——
-  这正是调用点需要自己判断「筛选条此刻在不在」的原因。
-- `ResizeObserver` 不存在时（极老 WebView）退化为挂载时测一次，不抛错。
-
----
-
 ## useSafeArea.ts — 顶部安全区（状态栏 / 刘海）的唯一真源
 
 ```ts

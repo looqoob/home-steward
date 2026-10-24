@@ -10,7 +10,6 @@ import { useItemsStore } from '@/stores/items';
 import type { ConsumeLog, ConsumeType } from '@/domain/types';
 import { fromEpoch, monthKey, todayStr, toDateStr } from '@/domain/dates';
 import { normalizePrice } from '@/domain/price';
-import { useStickyFilterOffset } from '@/composables/useStickyFilterOffset';
 
 const router = useRouter();
 const route = useRoute();
@@ -134,24 +133,21 @@ const wastedAmount = computed(() =>
   ) / 100,
 );
 
-/** 吸顶头部块（概览卡 + 搜索 + 筛选）的实测高度 → 按天分组头偏移 */
-const { filterEl, filterH } = useStickyFilterOffset();
-const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
 </script>
 
-<template>
-  <div>
+<template>
+  <div class="h-full flex flex-col">
     <!--
       顶栏不在这里渲染：本页挂在 TabLayout 下，标题栏由外壳根据 `meta.header` 渲染在滚动容器外面，
       才能贴死顶部、不随内容滚动，并像底部 Tab 一样占满整宽（页面内渲染会被容器的 px-4 缩进）。
     -->
 
-    <!--
-      ★ 吸顶头部块（v1.1 F7）：顶部留白 + 概览卡 + 搜索 + 筛选整体钉在顶栏下，
-      只有按天分组的记录列表滚动。占位元素必须在块**内部**（否则吸顶后顶栏下漏缝），
-      详见 src/styles/README.md「吸顶层约定」。
-    -->
-    <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pb-2">
+    <!--
+      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
+      记录列表 flex-1 内部滚动；按天分组头直接吸在列表容器顶（top:-1px，零测量），
+      吸底合计条同样吸在列表容器底。详见 src/styles/README.md「吸顶层约定」。
+    -->
+    <div class="flex-none -mx-4 px-4 pb-2">
       <div class="h-5" aria-hidden="true"></div>
 
       <div v-if="totalCount > 0" class="grid grid-cols-3 gap-2 mb-3.5">
@@ -186,6 +182,7 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
       </div>
     </div>
 
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4">
     <EmptyState v-if="groups.length === 0" text="没有符合筛选条件的消耗记录">
       <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -202,7 +199,7 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
 
     <template v-for="g in groups" :key="g.day">
       <section class="group">
-        <div class="sticky z-[19] bg-page -mx-4 px-4 py-1.5 mt-3 mb-2 flex items-center gap-2 text-[13px] font-medium text-ink-1" :style="{ top: groupTop }">
+        <div class="sticky top-[-1px] z-[19] bg-page -mx-4 px-4 py-1.5 mt-3 mb-2 flex items-center gap-2 text-[13px] font-medium text-ink-1">
           <span>{{ groupTitle(g.day) }}</span>
           <span class="text-[12px] text-ink-3 font-normal">{{ g.list.length }}</span>
         </div>
@@ -234,7 +231,8 @@ const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px
 
     <div v-if="groups.length > 0" class="sticky bottom-0 bg-card border-t border-line rounded-t-md px-3.5 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-2 flex justify-between items-center shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" role="status" aria-live="polite">
       <span class="text-[13px] text-ink-2">合计（{{ totalCount }} 笔）</span>
-      <span class="text-[18px] font-bold text-ink-1">{{ money(totalAmount) }}</span>
-    </div>
-  </div>
+      <span class="text-[18px] font-bold text-ink-1">{{ money(totalAmount) }}</span>
+    </div>
+    </div>
+  </div>
 </template>

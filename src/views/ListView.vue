@@ -183,12 +183,12 @@ async function doClearDone() {
 </script>
 
 <template>
-  <div>
+  <div class="h-full flex flex-col">
     <!--
-      ★ 吸顶头部（v1.1 F7）：标题 / 需买计数 / 分组切换钉在顶部，列表滚动。
-      「手动添加」表单属低频操作，随内容滚动，不占固定高度。
+      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 吸顶）：头部 flex-none 永不滚动，
+      清单与表单 flex-1 内部滚动。「手动添加」属低频操作，随内容滚动不占固定高度。
     -->
-    <div class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pb-2">
+    <div class="flex-none -mx-4 px-4 pb-2">
       <PageHeader title="清单">
         <template #actions>
           <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
@@ -216,6 +216,7 @@ async function doClearDone() {
       </PillGroup>
     </div>
 
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4">
     <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
     <FormField label="手动添加" for-id="manual-name">
       <div class="flex gap-2">
@@ -336,6 +337,8 @@ async function doClearDone() {
           @click="confirmClearDone = true"
         >清除</button>
       </div>
+    </div>
+
     </div>
 
     <ConfirmSheet

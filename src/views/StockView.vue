@@ -32,7 +32,6 @@ import { normalizeName } from '@/data/dict/normalize';
 import type { ConsumeType, Item } from '@/domain/types';
 import type { BulkOp } from '@/domain/bulk';
 import { useToast } from '@/composables/useToast';
-import { useStickyFilterOffset } from '@/composables/useStickyFilterOffset';
 import { useToday } from '@/composables/useNow';
 
 const router = useRouter();
@@ -45,18 +44,6 @@ const { show } = useToast();
 const today = useToday();
 const keyword = ref('');
 const filterLoc = ref<string | null>(null);
-
-/** 吸顶头部块的实测高度（ResizeObserver 跟随内容增减与换行），分组头偏移用 */
-const { filterEl, filterH } = useStickyFilterOffset();
-
-/**
- * 分组头吸顶位置：紧贴吸顶头部块的下沿（-1px 做重叠，避免发丝缝）。
- *
- * v1.1 起 filterEl 度量的是**整个吸顶头部块**（标题/概览/待办/搜索/筛选），
- * 块本身在多选 / 盘点态只是把内部条目 v-if 掉、元素常驻——ResizeObserver
- * 随块收缩即时更新高度，分组头偏移在三种模式下都准确，不再需要特判。
- */
-const groupTop = computed(() => `${Math.max(0, Math.round(filterH.value) - 1)}px`);
 
 /** 概览卡筛选：`FreshGroup` 走分组，'overdue' 单独筛「已过期」，null 表示不筛 */
 const statusFilter = ref<FreshGroup | 'overdue' | null>(null);
@@ -465,7 +452,7 @@ function exitStocktake() {
 </script>
 
 <template>
-  <div>
+  <div class="h-full flex flex-col">
     <!--
       顶部区域自上而下四层，层间距统一 14px（mb-3.5），每层只放本层的内容：
 
@@ -479,11 +466,12 @@ function exitStocktake() {
       PageHeader 自带顶部 16px 占位（TabLayout 给本页取消了滚动容器上内边距）。
     -->
     <!--
-      ★ 吸顶头部（v1.1 F7）：标题 / 概览卡 / 待办 / 搜索 / 筛选全部钉在顶部，
-      只有分组列表滚动——头部是"我现在在哪、有多少东西"，滚动时不该消失。
-      多选 / 盘点态块内条目被 v-if 收掉，块自动缩成一行标题。
+      ★ 固定头部 + 内滚列表（v1.1 F8，替代 F7 的吸顶方案）：
+      头部（标题 / 概览卡 / 待办 / 搜索 / 筛选）flex-none 永不滚动；
+      分组列表独占剩余空间（flex-1 内部滚动）。头部高度变化（待办展开 /
+      多选 / 盘点收缩）时列表自动让位——不需要任何实测高度的吸顶偏移。
     -->
-    <div ref="filterEl" class="sticky top-[-1px] z-20 bg-page -mx-4 px-4 pb-2.5">
+    <div class="flex-none -mx-4 px-4 pb-2.5">
     <PageHeader :title="stocktakeMode ? '盘点' : '库存'">
       <!--
         右侧操作区：三种模式填不同内容，但**容器对齐方式与控件高度一致**
@@ -615,6 +603,8 @@ function exitStocktake() {
     </template>
     </div>
 
+    <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器 -->
+    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4">
     <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
     <StocktakePanel
       v-if="stocktakeMode"
@@ -651,8 +641,7 @@ function exitStocktake() {
         -->
         <div
           v-if="sec.label"
-          class="group-head sticky z-[19] bg-page -mx-4 px-4 py-1.5 mt-2.5 mb-2.5 flex items-center gap-2 text-[13px] font-medium text-ink-1"
-          :style="{ top: groupTop }"
+          class="group-head sticky top-[-1px] z-[19] bg-page -mx-4 px-4 py-1.5 mt-2.5 mb-2.5 flex items-center gap-2 text-[13px] font-medium text-ink-1"
         >
           <span>{{ sec.label }}</span>
           <span class="text-[12px] text-ink-3 font-normal">{{ sec.count }}</span>
@@ -677,6 +666,7 @@ function exitStocktake() {
         />
       </section>
     </template>
+    </div>
 
     <ConsumeSheet
       :model-value="consumeTarget !== null"

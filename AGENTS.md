@@ -129,8 +129,7 @@ home-steward/
     │   ├── useToast.ts       # 全局轻提示（模块级单例）
     │   ├── useSafeArea.ts    # 顶部安全区真源 → 写 <html> 的 --safe-top
     │   ├── useNow.ts         # 响应式当前时刻/今天（60s 心跳 + 回前台刷新），跨零点真源
-    │   ├── useTheme.ts       # 外观主题 → 写 html[data-theme] 与 --primary-* 内联变量
-    │   └── useStickyFilterOffset.ts
+    │   └── useTheme.ts       # 外观主题 → 写 html[data-theme] 与 --primary-* 内联变量
     │
     ├── layouts/TabLayout.vue # 底部 Tab 外壳 + meta.header 子页顶栏 + FAB + 快速入库
     ├── router/index.ts       # 全部路由，懒加载；子页标题用 meta.header
@@ -305,7 +304,7 @@ home-steward/
 - `TabLayout`（三个主 Tab）：纯白背景、不显示标题；顶部纯白占位负责「安全区 + 12px」。
 - **独立路由子页**：页面自己渲染 `NavBar.vue`，它是页面根容器首个 flex item——在滚动容器**外面**，不随内容滚动。
 - **★ TabLayout 下又需要标题栏的页面**：路由写 `meta: { header: '标题' }`，由外壳渲染 NavBar；**页面里不要再写 `<NavBar>`**。代价：滚动容器 `pt-0 pb-0`，留白由页面内普通流占位元素提供（`sticky` 偏移相对内容盒，容器 padding 会漏缝，坑位 #16b）。
-- **页内吸顶头部块（v1.1 F7 模式）**：库存 / 清单 / 消耗明细把「标题 + 概览 + 搜索 + 筛选」整体做成一个 `sticky top-[-1px] z-20 bg-page -mx-4 px-4` 块，`filterEl`（useStickyFilterOffset）度量**整块**高度供分组头偏移；占位元素（h-4 / h-5）必须在块**内部**。多选 / 盘点态用块内条目 v-if 收缩，块常驻。
+- **固定头部 + 内滚列表（v1.1 F8 模式）**：库存 / 清单 / 消耗明细是 `h-full flex flex-col` 页——头部（标题+概览+待办+搜索+筛选）`flex-none` 永不滚动，列表区 `flex-1 min-h-0 overflow-y-auto` 内部滚动；分组头 `sticky top-[-1px]` 直接吸在**列表容器**顶，**零测量**（F7 的吸顶+测高方案已被替代，useStickyFilterOffset 已删除）。头部占位元素（h-4 / h-5）在头部块内部。
 - `index.html` 的 `theme-color` / manifest 的 `theme_color` 只有**一份**，由 `useTheme` 切换时写入（浅 `#FFFFFF` / 深 `#1C211F`）。**不要改成两套 meta + media 查询**——用户手选深色但系统浅色时状态栏会错。
 
 ### 6.4 ★ 外观主题（深浅 + 主题色）
