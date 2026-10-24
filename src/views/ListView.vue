@@ -163,8 +163,22 @@ async function addManual() {
   manualName.value = '';
 }
 
-async function clearDone() {
-  await shopping.clearDone();
+/**
+ * 「清除已购」：二次确认 + 一次性写库 + 整批撤销（REV-19）。
+ *
+ * 此前既无确认也无撤销，且逐条 `await put`——中途失败会清一半留一半。
+ * 快照回 `restoreMany`（一次 bulkPut）实现整批回滚。
+ */
+const confirmClearDone = ref(false);
+
+async function doClearDone() {
+  confirmClearDone.value = false;
+  const snapshot = await shopping.clearDone();
+  if (!snapshot.length) return;
+  show(`已清除 ${snapshot.length} 件已购项`, 2200, {
+    text: '撤销',
+    run: () => shopping.restoreMany(snapshot),
+  });
 }
 </script>
 
@@ -173,7 +187,9 @@ async function clearDone() {
     <!-- 与库存页保持同一套页头节奏：标题 + 右侧计数（顶部 16px 占位由 PageHeader 提供） -->
     <PageHeader title="清单">
       <template #actions>
-        <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.visible.length }} 件</span>
+        <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
+             「需买 5 件」配 3 件划掉的行，用户只会觉得数字错了 -->
+        <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.pending.length }} 件</span>
       </template>
     </PageHeader>
 
@@ -312,7 +328,7 @@ async function clearDone() {
         <button
           type="button"
           class="text-[13px] text-ink-2 cursor-pointer min-h-10 px-1"
-          @click="clearDone"
+          @click="confirmClearDone = true"
         >清除</button>
       </div>
     </div>
@@ -327,6 +343,16 @@ async function clearDone() {
       danger
       @update:model-value="confirmRemove = null"
       @confirm="doRemove"
+    />
+
+    <ConfirmSheet
+      :model-value="confirmClearDone"
+      title="清除已购"
+      :message="`将清除 ${shopping.done.length} 件已勾选的清单项，自动建议 7 天内不会再次出现。可在提示中撤销。`"
+      confirm-text="清除"
+      danger
+      @update:model-value="confirmClearDone = false"
+      @confirm="doClearDone"
     />
   </div>
 </template>

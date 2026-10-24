@@ -3,14 +3,15 @@ import { computed, ref } from 'vue';
 import { db } from '@/data';
 import type { Item, ShoppingItem } from '@/domain/types';
 import { newId } from '@/domain/ids';
-import { planShopping, type Suggestion } from '@/domain/shoppingRules';
+import { planShopping, DISMISS_DAYS, type Suggestion } from '@/domain/shoppingRules';
 import { inboundInputs } from '@/domain/inbound';
 import { foodKeyOf } from '@/data/dict';
 import { useItemsStore } from './items';
 import { useLocationsStore } from './locations';
 import { useSettingsStore } from './settings';
 
-const DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
+/** 抑制时长只允许由 `DISMISS_DAYS` 换算而来（单一数值来源，别再写一个 7） */
+const DISMISS_MS = DISMISS_DAYS * 24 * 60 * 60 * 1000;
 
 export const useShoppingStore = defineStore('shopping', () => {
   const list = ref<ShoppingItem[]>([]);
@@ -28,8 +29,12 @@ export const useShoppingStore = defineStore('shopping', () => {
   /**
    * 根据商品与消耗日志自动生成购物建议并落库。
    *
-   * **幂等**：同一 `name|reason` 不会重复生成，且被删除的自动项在 7 天内不会重生
-   *（`domain/shoppingRules.planShopping` 保证），所以可以安全地每次启动都调用。
+   * **幂等**：同一 `name|reason` 不会重复生成，且被删除的自动项在 `DISMISS_DAYS`（7 天）内
+   * 不会重生（`domain/shoppingRules.planShopping` 保证），所以可以安全地每次启动都调用。
+   *
+   * ⚠️ 喂给 `planShopping` 的必须是 `allIncludingDeleted()`（含软删除行）：抑制依据住在
+   * 软删除行里。此前传 `list.value`（`all()` 已滤软删），dismissed 集合恒为空，
+   * 「忽略牛奶建议」后下次启动又冒出来（REV-43）。
    *
    * @returns 本次新增条数；`0` 表示没有新建议。
    * @remarks 依赖 `items`、`settings` store 已加载，否则结果为空。
@@ -38,7 +43,8 @@ export const useShoppingStore = defineStore('shopping', () => {
   async function generate(): Promise<number> {
     const items = useItemsStore();
     const settings = useSettingsStore();
-    const suggestions: Suggestion[] = planShopping(items.list, items.logs, list.value, Date.now(), settings.settings);
+    const existing = await db.shopping.allIncludingDeleted();
+    const suggestions: Suggestion[] = planShopping(items.list, items.logs, existing, Date.now(), settings.settings);
     if (!suggestions.length) return 0;
     const now = Date.now();
     const rows: ShoppingItem[] = suggestions.map((s) => ({
@@ -123,13 +129,32 @@ export const useShoppingStore = defineStore('shopping', () => {
     await load();
   }
 
-  /** 清除所有已勾选项（软删除 + `dismissedUntil`，同自动项的删除策略）。未勾选项不受影响。 */
-  async function clearDone() {
+  /**
+   * 批量撤销删除（`clearDone` 的撤销入口）：一次 `bulkPut` + 一次 `load`。
+   * 逐条 `restore` 会触发 N 次全量重读，勾了十几件时肉眼可见地卡。
+   */
+  async function restoreMany(snapshots: ShoppingItem[]) {
+    if (!snapshots.length) return;
     const now = Date.now();
-    for (const s of done.value) {
-      await db.shopping.put({ ...s, deletedAt: now, dismissedUntil: now + DISMISS_MS, updatedAt: now });
-    }
+    await db.shopping.bulkPut(snapshots.map((s) => ({ ...s, deletedAt: null, dismissedUntil: null, updatedAt: now })));
     await load();
+  }
+
+  /**
+   * 清除所有已勾选项（软删除 + `dismissedUntil`，同自动项的删除策略）。未勾选项不受影响。
+   *
+   * - **一次 `bulkPut` 写完**：此前逐条 `await put`，中途失败会清一半留一半（REV-19）；
+   * - 返回删除前的快照供 toast「撤销」（`restoreMany` 整批回滚）。
+   */
+  async function clearDone(): Promise<ShoppingItem[]> {
+    const targets = done.value.map((s) => ({ ...s }));
+    if (!targets.length) return [];
+    const now = Date.now();
+    await db.shopping.bulkPut(
+      targets.map((s) => ({ ...s, deletedAt: now, dismissedUntil: now + DISMISS_MS, updatedAt: now })),
+    );
+    await load();
+    return targets;
   }
 
   /* ==================== 一键入库 ==================== */
@@ -232,7 +257,7 @@ export const useShoppingStore = defineStore('shopping', () => {
   }
 
   return {
-    list, loaded, visible, pending, done, load, generate, toggle, addManual, remove, restore, clearDone,
+    list, loaded, visible, pending, done, load, generate, toggle, addManual, remove, restore, restoreMany, clearDone,
     inboundOne, inboundAll, undoInbound,
   };
 });
