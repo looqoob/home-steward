@@ -109,6 +109,12 @@ reminder.isNative;             // 是否运行在原生壳（APK）
 - PWA 路径会检查 `'Notification' in window`，不支持时直接返回。
 - 权限弹窗策略：`Notification.permission === 'default'` 时才请求，**`'denied'` 时不再骚扰用户**。
 
+### 通知点击直达（v1.1 F3，原生壳）
+
+排程时通知 id = `hashId(item.id)`；点击导航的监听在 `App.vue`（`LocalNotifications 事件 localNotificationActionPerformed`，
+冷启动事件先于 stores 加载，App 用 pendingNavId 挂起到 boot 完成）。改通知 id 生成方式时
+**两处必须同步**（useReminder 排程 + App 反查）。PWA 侧需 injectManifest 自定义 SW，暂未做。
+
 ### ⚠️ 改这个文件的注意事项
 
 1. 任何分支都不要 `throw` —— 用户禁用通知是常态，不是异常。

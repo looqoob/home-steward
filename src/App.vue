@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 import { db } from '@/data';
 import { onDataChanged } from '@/data/sync';
 import { ensureSeed } from '@/data/seed';
+import { hashId } from '@/domain/ids';
 import { useSettingsStore } from '@/stores/settings';
 import { useDictStore } from '@/stores/dict';
 import { useLocationsStore } from '@/stores/locations';
@@ -53,7 +57,41 @@ watch(
   },
 );
 
+const router = useRouter();
+
+/**
+ * 通知点击直达物品（v1.1 F3，仅原生壳）。
+ *
+ * 排程时通知 id 就是 `hashId(item.id)`（见 useReminder），点击时反查物品跳详情；
+ * 查不到（已消耗 / 已删 / 数据变了）就落到库存页。
+ *
+ * ⚠️ 冷启动竞态：Capacitor 会把「点通知拉起 App」的 actionPerformed 缓冲到首个
+ * addListener 才派发，而此时 stores 还没加载完（items.list 为空，必查不到）——
+ * 先挂起 pendingNavId，等 boot 完成后再导航。PWA 侧的 notificationclick 需要
+ * injectManifest 自定义 SW（当前是 generateSW），暂不做，保持默认聚焦行为。
+ */
+let pendingNavId: number | null = null;
+
+function navigateByNotification(id: number) {
+  const hit = items.list.find((i) => hashId(i.id) === id);
+  void router.push(hit ? `/item/${hit.id}` : '/stock');
+}
+
+function initNotificationNavigation() {
+  if (!Capacitor.isNativePlatform()) return;
+  void LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+    const id = event.notification.id;
+    if (typeof id !== 'number') return;
+    if (ready.value) navigateByNotification(id);
+    else pendingNavId = id;
+  }).catch(() => {
+    /* 插件不可用时静默：通知点击退化为普通打开 */
+  });
+}
+
 onMounted(async () => {
+  // 越早注册越好：热点击随时可能发生，冷启动事件也在等首个 listener
+  initNotificationNavigation();
   try {
     const ok = await db.probe();
     if (!ok) {
@@ -82,6 +120,13 @@ onMounted(async () => {
     ready.value = true;
     await shopping.generate();
     await reminder.refresh();
+
+    // 冷启动时通知点击先于数据到达（见 initNotificationNavigation）：此刻再补导航
+    if (pendingNavId !== null) {
+      const id = pendingNavId;
+      pendingNavId = null;
+      navigateByNotification(id);
+    }
 
     // 多标签同步（REV-15）：其它窗口写库后本窗口自动重读全部 store。
     // 不做的话，本窗口继续用旧快照整条 put，会把另一个窗口的写入无声覆盖掉。
