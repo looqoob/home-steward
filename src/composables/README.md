@@ -96,13 +96,13 @@ reminder.isNative;             // 是否运行在原生壳（APK）
 
 | 平台 | 实现 | 可靠性 |
 | --- | --- | --- |
-| **原生壳（APK）** | `@capacitor/local-notifications` 为**每件**临期物品排一条通知，时间为下一个 `remindHour:remindMinute`（`nextDailyAt`） | 真定时，App 不在前台也能弹 |
-| **PWA** | Web `Notification` API，在**打开 App 时**立即弹一条汇总通知（最多列 3 条） | 不是真定时；浏览器没有可靠的后台定时器 |
+| **原生壳（APK）** | `@capacitor/local-notifications`，时间为下一个 `remindHour:remindMinute`（`nextDailyAt`）。**单件到期发独立通知**（保留 F3 点击直达）；**多件聚合成一条**「今日有 N 件需要关注」（v1.1 F10，防 N 连击轰炸逼用户关权限） | 真定时，App 不在前台也能弹 |
+| **PWA** | Web `Notification` API，在**打开 App 时**立即弹一条汇总通知（最多列 3 条；单件时标题用物品名，与原生侧一致） | 不是真定时；浏览器没有可靠的后台定时器 |
 
 ### 边界条件（重要）
 
 - **两条路径都用 `try {} catch {}` 吞掉所有异常**：权限被拒、插件不可用、非安全上下文，一律**静默降级**为 App 内的提醒条。提醒失败绝不能让应用崩。
-- 通知 id 用 `hashId(item.id)`：同一个商品每次排通知拿到同一 id，便于覆盖。**存在哈希碰撞可能**（见 `domain/ids.ts`），对本场景可接受。
+- 通知 id 用 `hashId(item.id)`：同一个商品每次排通知拿到同一 id，便于覆盖。**存在哈希碰撞可能**（见 `domain/ids.ts`），对本场景可接受。多件聚合通知的 id 是 `hashId('hs-daily-summary')`（固定命名空间），点击后反查不到物品 → 自动落到库存页（与 F3 的兜底路径一致）。
 - `scheduleNative` 会**先取消全部 pending 再重排**，避免重复堆积。
 - **`schedule` 不设 `exact`**：Android 12+ 的精确闹钟需要 `SCHEDULE_EXACT_ALARM` 特殊权限，普通 App 不应申请。本产品对通知精度要求只是「明早告诉你该吃啥」，差几分钟无所谓。
 - `due()` 依赖 `items.active` 已加载；在空/未加载状态下返回空数组，不抛错。

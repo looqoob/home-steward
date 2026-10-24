@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planShopping, DISMISS_DAYS } from '../shoppingRules';
+import { planShopping, DISMISS_DAYS, shoppingListText } from '../shoppingRules';
 import type { ConsumeLog, ShoppingItem } from '../types';
 import { mkItem, mkShopping, NOW } from './fixtures';
 
@@ -105,5 +105,29 @@ describe('planShopping · 时间窗（REV-45）', () => {
   it('60 天窗口外的消耗不触发库存 0', () => {
     const logs = [mkLog({ name: '牛奶', type: 'consumed', at: NOW - 61 * DAY })];
     expect(planShopping([], logs, [], NOW)).toHaveLength(0);
+  });
+});
+
+describe('shoppingListText · 复制为文本（v1.1 F10）', () => {
+  it('★ 按组输出：首行件数汇总 +【组名】+ 名称×数量单位', () => {
+    const text = shoppingListText([
+      { label: '冷藏', items: [mkShopping({ name: '牛奶', qty: 2, unit: '盒' })] },
+      { label: '未指定位置', items: [mkShopping({ name: '抽纸', qty: 1, unit: null })] },
+    ]);
+    expect(text).toBe(
+      ['购物清单（2 件）', '【冷藏】', '牛奶 ×2盒', '【未指定位置】', '抽纸 ×1'].join('\n'),
+    );
+  });
+
+  it('数量未知的项只写名称，不带 × 与单位', () => {
+    const text = shoppingListText([
+      { label: '冷藏', items: [mkShopping({ name: '牛奶', qty: 2, unit: '盒' }), mkShopping({ name: '豆腐', qty: null, unit: '盒' })] },
+    ]);
+    expect(text).toContain('牛奶 ×2盒\n豆腐');
+  });
+
+  it('空组跳过；全部为空返回空串（调用方据此提示无可复制项）', () => {
+    expect(shoppingListText([{ label: '冷藏', items: [] }])).toBe('');
+    expect(shoppingListText([])).toBe('');
   });
 });

@@ -14,6 +14,7 @@ import { useItemsStore } from '@/stores/items';
 import { useShoppingStore } from '@/stores/shopping';
 import { useBarcodesStore } from '@/stores/barcodes';
 import { useSnapshotsStore } from '@/stores/snapshots';
+import OnboardingOverlay from '@/components/OnboardingOverlay.vue';
 import { useToast } from '@/composables/useToast';
 import { useReminder } from '@/composables/useReminder';
 import { useTheme } from '@/composables/useTheme';
@@ -32,6 +33,26 @@ const theme = useTheme();
 const ready = ref(false);
 const storageError = ref(false);
 const bootError = ref('');
+
+/**
+ * 新用户首启引导（v1.1 F10-5）。
+ *
+ * 出现条件 = 没看过（localStorage `hs.onboarded`）**且**库里没有任何数据
+ * （物品 / 消耗日志 / 清单全空）。后者是关键：老用户升级后 localStorage
+ * 可能没有标记（比如换了浏览器），但只要库里有数据就不是新用户，不该被打扰。
+ * 引导只出现一次，跳过与完成等价。
+ */
+const ONBOARDING_KEY = 'hs.onboarded';
+const showOnboarding = ref(false);
+
+function finishOnboarding() {
+  try {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+  } catch {
+    /* 隐私模式写不了也不阻塞：下次启动再看一次引导，可接受 */
+  }
+  showOnboarding.value = false;
+}
 
 /**
  * 外观（深浅 + 主题色）的唯一落点：设置一变就重算色阶并写进 DOM。
@@ -56,6 +77,34 @@ watch(
   () => [settings.settings.remindEnabled, settings.settings.remindHour, settings.settings.remindMinute] as const,
   () => {
     if (ready.value) void reminder.refresh();
+  },
+);
+
+/**
+ * 消耗 / 入库 / 撤销后**即时重算购物清单**（v1.1 F10）。
+ *
+ * 此前 `generate()` 只在启动时跑一次：今天吃掉最后一盒鸡蛋，要等下次启动才出现
+ * 「库存 0」的补货建议——清单和库存是断开的。
+ *
+ * 挂在 `items.list` 的**引用**变化上：items store 的所有写操作都以 `load()`
+ * （给 `list` 换新数组）收尾，所以一次浅 watch 就能覆盖全部写路径，不用逐个动作埋点。
+ * 防抖 800ms：连续消耗 / 批量操作时不反复全量重算（`generate` 本身幂等，
+ * 且手动删掉的自动项有 7 天抑制保护，不会这里一删那边就重生）。
+ *
+ * ⚠️ `ready` 判定挡住启动序列：boot 时 `items.load()` 也会触发本 watch，
+ * 而启动流程后面本来就有一句 `await shopping.generate()`，不挡会重复跑。
+ * 跨标签同步（onDataChanged → load）触发的重算同样安全：对端已生成过，
+ * 本端幂等跑一遍不会产生重复项。
+ */
+let shoppingRegenTimer: ReturnType<typeof setTimeout> | null = null;
+watch(
+  () => items.list,
+  () => {
+    if (!ready.value) return;
+    if (shoppingRegenTimer) clearTimeout(shoppingRegenTimer);
+    shoppingRegenTimer = setTimeout(() => {
+      void shopping.generate();
+    }, 800);
   },
 );
 
@@ -128,6 +177,18 @@ onMounted(async () => {
     await shopping.generate();
     await reminder.refresh();
 
+    // 首启引导：只对「无任何数据」的新用户显示（见 showOnboarding 的注释）
+    try {
+      if (
+        !localStorage.getItem(ONBOARDING_KEY) &&
+        items.list.length === 0 && items.logs.length === 0 && shopping.list.length === 0
+      ) {
+        showOnboarding.value = true;
+      }
+    } catch {
+      /* localStorage 不可读（隐私模式）：直接跳过引导 */
+    }
+
     // 冷启动时通知点击先于数据到达（见 initNotificationNavigation）：此刻再补导航
     if (pendingNavId !== null) {
       const id = pendingNavId;
@@ -182,6 +243,9 @@ onMounted(async () => {
     </div>
 
     <router-view v-else />
+
+    <!-- 首启引导：盖在路由之上，boot 失败（storageError / bootError）时根本走不到这里 -->
+    <OnboardingOverlay v-if="showOnboarding" @done="finishOnboarding" />
 
     <div v-if="message" class="absolute left-1/2 bottom-[92px] -translate-x-1/2 w-full max-w-[480px] flex justify-center px-4 z-[60] pointer-events-none">
       <div class="bg-[rgba(20,30,25,0.9)] text-white text-[13px] px-4 py-2.5 rounded-full max-w-full text-center inline-flex items-center gap-3 pointer-events-auto">

@@ -197,6 +197,77 @@ function groupOfState(g: FreshGroup) {
   return (s: string) => s === 'warn' || s === 'none';
 }
 
+/* ==================== 窗口化渲染（v1.1 F10-6） ==================== */
+
+/**
+ * 长列表只渲染「首屏 + 滚过的地方」，不一次渲染全部组卡。
+ *
+ * 几百件物资时掉帧的主因是 DOM 数量（每张组卡含徽标 / 进度条 / 展开区），
+ * 而不是 `foldItems` 的排序本身（几百量级的 O(n log n) 是毫秒级）。
+ *
+ * 采用**增量窗口**而不是回收式虚拟滚动：组卡高度可变（展开 / 两行名 / 备注标签）、
+ * 分组头 sticky 依赖各自的 `<section>` 包含块（回收式要在单容器里做偏移计算，
+ * F8/F9 刚收口的滚动体系会被大面积重写）。窗口化追加零偏移计算、零滚动跳动，
+ * 代价是滚过的卡片不回收——在「几百件」的目标规模下 DOM 上界完全可接受。
+ *
+ * - 段头数量有限（≤10），全部照常渲染，只有组卡参与窗口化；
+ * - 盘点面板（StocktakePanel）不参与：盘点本来就要逐张判定，截断反而碍事；
+ * - 多选「全选」仍作用于**全部**筛选结果（`rows`），与渲染窗口无关。
+ */
+const WINDOW_INITIAL = 40;
+const WINDOW_BATCH = 30;
+/** 触底提前量：距底部 600px（约两屏）就开始追加，用户几乎感知不到加载 */
+const WINDOW_TRIGGER = 600;
+
+const visibleCount = ref(WINDOW_INITIAL);
+
+/** 当前筛选下的组卡总数（窗口化的分母，也用于重置判断） */
+const totalGroups = computed(() => sections.value.reduce((s, sec) => s + sec.rows.length, 0));
+
+/** 按段分配可见配额：从第一段开始消耗 `visibleCount`，取完为止；被截空的段整段不渲染 */
+const visibleSections = computed(() => {
+  let remain = visibleCount.value;
+  const out: { key: string; label: string; count: number; rows: typeof sections.value[number]['rows'] }[] = [];
+  for (const sec of sections.value) {
+    if (remain <= 0) break;
+    const take = Math.min(sec.rows.length, remain);
+    remain -= take;
+    if (take < sec.rows.length) {
+      out.push({ ...sec, rows: sec.rows.slice(0, take) });
+    } else {
+      out.push(sec);
+    }
+  }
+  return out;
+});
+
+/**
+ * 筛选 / 搜索 / 视图变化后回到初始窗口：新结果集的排序完全不同，
+ * 保留大的 `visibleCount` 会让首屏一次性渲染几百张卡，失去窗口化意义。
+ * 数据增删（`totalGroups` 变化）**不**重置：滚动位置附近的窗口继续有效。
+ */
+watch([keyword, filterLoc, statusFilter, viewMode], () => {
+  visibleCount.value = WINDOW_INITIAL;
+});
+
+const listEl = ref<HTMLElement | null>(null);
+let scrollRafPending = false;
+
+/** rAF 节流的触底追加：scroll 事件每帧最多处理一次 */
+function onListScroll() {
+  if (scrollRafPending) return;
+  scrollRafPending = true;
+  requestAnimationFrame(() => {
+    scrollRafPending = false;
+    const el = listEl.value;
+    if (!el) return;
+    if (visibleCount.value >= totalGroups.value) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - WINDOW_TRIGGER) {
+      visibleCount.value += WINDOW_BATCH;
+    }
+  });
+}
+
 function openItem(id: string) {
   router.push(`/item/${id}`);
 }
@@ -604,7 +675,12 @@ function exitStocktake() {
     </div>
 
     <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器。底部让位随模式变化：多选态给吸底操作条留 132px，其余给 FAB 留 84px -->
-    <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4" :class="selectMode ? 'pb-[132px]' : 'pb-[84px]'">
+    <div
+      ref="listEl"
+      class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4"
+      :class="selectMode ? 'pb-[132px]' : 'pb-[84px]'"
+      @scroll.passive="onListScroll"
+    >
     <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->
     <StocktakePanel
       v-if="stocktakeMode"
@@ -633,8 +709,9 @@ function exitStocktake() {
       <!--
         每个分组必须是独立的 <section>：sticky 元素被约束在自己的包含块内，
         分组切换时旧标题才会被新分组「顶」出去，而不是两个标题叠在同一位置。
+        循环的是 `visibleSections`（窗口化切片）：见 script 中「窗口化渲染」的说明。
       -->
-      <section v-for="sec in sections" :key="sec.key" class="group">
+      <section v-for="sec in visibleSections" :key="sec.key" class="group">
         <!--
           `flat`（不分组）时 `label` 为空串，段头整体不渲染 ——
           仍走同一条 v-for 路径，不为此单开一套模板。
@@ -665,6 +742,14 @@ function exitStocktake() {
           @longpress="enterSelectGroup"
         />
       </section>
+
+      <!--
+        窗口化提示：还有未渲染的组时告诉用户「下面还有多少」，继续滚动自动加载。
+        防止「看起来到底了、其实只是窗口截断」的误判。
+      -->
+      <div v-if="totalGroups > visibleCount" class="text-center text-[12px] text-ink-3 py-3">
+        已显示 {{ visibleCount }} / {{ totalGroups }} 组，继续滚动加载更多
+      </div>
     </template>
     </div>
 

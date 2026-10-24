@@ -59,8 +59,12 @@ function confirm() {
 watch(
   () => props.modelValue,
   (open) => {
-    // 默认 1（不够就取上限），不默认「全部」——大多时候是部分消耗
-    if (open) qty.value = clamp(1);
+    if (!open) return;
+    // 用掉默认 1（大多时候是部分消耗：20 个鸡蛋这次用 2 个）；
+    // 扔掉默认**全部**（v1.1 F10）——扔东西几乎总是「这份坏了」，整个处理掉。
+    // 此前两种类型都默认 1，过期丢弃要多点一次「全部」，浪费登记的录入成本越高
+    // 越没人记，「易浪费」建议就越没数据。
+    qty.value = clamp(props.type === 'wasted' ? max.value : 1);
   },
 );
 </script>

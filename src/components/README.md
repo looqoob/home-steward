@@ -18,8 +18,8 @@
 | `SearchField.vue` | 列表页搜索框：胶囊外框 + 放大镜 + 原生 input（字号 ≥16px 防 iOS 聚焦整页缩放，REV-17） | StockView、ConsumeLogView |
 | `QuickAddSheet.vue` | 快速入库底部弹框 | TabLayout |
 | `ConfirmSheet.vue` | 二次确认弹层：标题 + 说明 + 取消/确认，危险操作用实心红 | ItemEditView、LocationManageView、BackupView |
-| `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（默认 1，含「全部」） | StockView、ItemEditView、TodayTodo |
-| `GroupConsumeSheet.vue` | **v3**：一组多份时的「选份」弹层（FEFO 默认选中最早到期那份 + 越序警告） | StockView |
+| `ConsumeSheet.vue` | 部分消耗弹层：选择本次用掉/扔掉的数量（**v1.1 F10**：用掉默认 1、扔掉默认全部），含快捷档位 | StockView、ItemEditView、TodayTodo |
+| `GroupConsumeSheet.vue` | **v3**：一组多份时的「选份」弹层（FEFO 默认选中最早到期那份 + 越序警告）。**v1.1 F10**：扔掉时数量默认「这一份全部」（与 ConsumeSheet 同一语义） | StockView |
 | `StocktakePanel.vue` | **v3**：盘点模式面板（逐张核对：还在 / 用掉了 / 扔掉了） | StockView |
 | `BottomSheet.vue` | 底部弹层外壳：遮罩、Esc/点遮罩关闭、焦点管理、可选固定底栏 | 6 个 Sheet |
 | `QtyStepper.vue` | 数量步进器：− 输入 ＋，上下限钳制、步长自适应、单位后缀 | 消耗 / 盘点 / 编辑 / 清单 / 扫码 |
@@ -30,13 +30,8 @@
 | `StatCard.vue` | 统计数字卡：20px 数字 + 12px 标签，`tone` 语义色、`clickable` 可点击筛选 | StockView、MeView、StatsView、ConsumeLogView |
 | `EmptyState.vue` | 空状态：可选 `#icon` 插画 + 文案 + 可选 `#action` 按钮 | 6 处列表 / 详情 |
 | `IconPicker.vue` | **v1.1 F5**：emoji 图标选择器（横滚胶囊 + 「默认」档；「你的常用」由调用方从 items 统计传入） | QuickAddSheet、ItemEditView |
-| `BottomSheet.vue` | 底部弹层外壳：遮罩、Esc/点遮罩关闭、焦点管理、可选固定底栏 | 6 个 Sheet |
-| `QtyStepper.vue` | 数量步进器：− 输入 ＋，上下限钳制、步长自适应、单位后缀 | 消耗 / 盘点 / 编辑 / 清单 / 扫码 |
-| `Pill.vue` / `PillGroup.vue` | 胶囊筛选按钮与容器：选中态、环境色点、`aria-pressed`、换行/横滑布局 | 12 个页面 |
-| `FormField.vue` | 表单字段结构：标签 + 控件 + 说明，配合 `.field-input` 组件类 | 8 个页面 |
-| `PageShell.vue` | 二级页外壳：NavBar + 返回 + 可滚动内容区（含 `padding` 预置） | 7 个独立页 |
-| `PageHeader.vue` | Tab 页页内标题行：标题 + 右侧操作，自带顶部 16px 占位 | StockView、ListView、MeView |
-| `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」。**v1.1 起默认收起**（数字在概览卡，处理时再展开） | StockView |
+| `OnboardingOverlay.vue` | **v1.1 F10**：新用户首启引导（3 步讲「环境决定保质期 / 位置是载体 / 同名折叠 + FEFO」），跳过与完成等价，只出现一次 | App.vue |
+| `TodayTodo.vue` | **v2**：今日待办折叠区块，逐条「用掉/扔掉/明天再说」。**v1.1 起默认收起**（数字在概览卡，处理时再展开）；**v1.1 F10**：过期行的「扔掉」升级为红色主按钮并排第一位 | StockView |
 | `ShoppingInboundRow.vue` | **v2**：清单项的行内入库卡（数量/单价/位置/到期日预览）。**v3**：单价预填「上次买这个的价格」 | ListView |
 | `BulkActionBar.vue` | **v2**：多选态吸底操作条（用掉/扔掉/换位置/删除） | StockView |
 | `LocationPickerSheet.vue` | **v2**：选择存放位置的弹层，带到期日预览 | StockView |

@@ -256,10 +256,15 @@ const dueSummary = computed(() => {
           title="用掉了"
           @click="emit('consume-group', props.group, 'consumed')"
         >✓</button>
+        <!-- v1.1 F10：lead 已过期时 ✕ 升级为红底白字——过期物的主导动作是「扔掉记浪费」， -->
+        <!-- 与待办区的红底「扔掉」同一视觉语言，不靠用户从两个灰按钮里猜哪个该点 -->
         <button
           type="button"
-          class="relative w-9 h-9 rounded-md border border-line-strong bg-card flex items-center justify-center text-danger hover:bg-sunken before:absolute before:content-[''] before:-inset-2"
-          :aria-label="`${props.group.name} 扔掉了`"
+          class="relative w-9 h-9 rounded-md border flex items-center justify-center hover:bg-sunken before:absolute before:content-[''] before:-inset-2"
+          :class="leadFresh.state === 'over'
+            ? 'bg-danger border-danger text-white'
+            : 'border-line-strong bg-card text-danger'"
+          :aria-label="`${props.group.name} 扔掉了${props.group.members.length > 1 ? '（默认扔最早到期的那份）' : ''}`"
           title="扔掉了"
           @click="emit('consume-group', props.group, 'wasted')"
         >✕</button>

@@ -10,7 +10,8 @@ import ShoppingInboundRow from '@/components/ShoppingInboundRow.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import FormField from '@/components/FormField.vue';
-import { REASON_LABEL, groupShoppingByLocation } from '@/domain/shoppingRules';
+import { REASON_LABEL, groupShoppingByLocation, shoppingListText } from '@/domain/shoppingRules';
+import { copyToClipboard } from '@/data/backup/export';
 import type { ShopReason, ShoppingItem } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
 
@@ -122,6 +123,24 @@ const doneNotInbound = computed(() =>
   shopping.done.filter((s) => !s.inboundItemId),
 );
 
+/**
+ * 「复制为文本」只发**要买的**（未勾选）：发给家人的是采购指令，
+ * 已购 / 已入库的项发过去只会造成重复采购。
+ * 分组维度沿用当前页面所见（按原因 / 按位置），所见即所发。
+ */
+const pendingGroups = computed(() =>
+  groups.value
+    .map((g) => ({ label: g.label, items: g.items.filter((s) => !s.checked) }))
+    .filter((g) => g.items.length > 0),
+);
+
+async function copyList() {
+  const text = shoppingListText(pendingGroups.value);
+  if (!text) return;
+  const ok = await copyToClipboard(text);
+  show(ok ? '清单已复制，可发给家人' : '复制失败，请重试', ok ? 2400 : 2200);
+}
+
 async function inboundAllDone() {
   const ids = doneNotInbound.value.map((s) => s.id);
   if (!ids.length) return;
@@ -194,6 +213,21 @@ async function doClearDone() {
           <!-- 需买数只数**未勾选**的（REV-22）：把已勾选/已入库的也算进去，
                「需买 5 件」配 3 件划掉的行，用户只会觉得数字错了 -->
           <span class="text-[12px] text-ink-3 whitespace-nowrap">需买 {{ shopping.pending.length }} 件</span>
+          <!-- 复制为纯文本（v1.1 F10）：发给没装 App 的家人。没有要买项时置灰 -->
+          <button
+            type="button"
+            class="tool-btn text-primary-700 disabled:opacity-40"
+            :disabled="shopping.pending.length === 0"
+            :aria-label="`复制购物清单为文本，共 ${shopping.pending.length} 件`"
+            title="复制为文本"
+            @click="copyList"
+          >
+            <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="12" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+            </svg>
+            复制
+          </button>
         </template>
       </PageHeader>
 

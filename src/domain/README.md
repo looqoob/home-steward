@@ -441,6 +441,7 @@ if (!check.ok) toast.show(check.message);   // '该位置还有 3 件在库物�
 | `ShopLocationGroup` | 接口 | **v3**：`{ locationId: string \| null, label, items }` |
 | `NO_LOCATION` | `const` | **v3**：「未指定位置」组的内部键 |
 | `groupShoppingByLocation` | `(list, locations) => ShopLocationGroup[]` | **v3**：清单按存放位置分组 |
+| `shoppingListText` | `(groups: { label, items }[]) => string` | **v1.1 F10**：清单分组导出为可分享纯文本（「复制为文本」的数据源；空清单返回 `''`） |
 
 ### 三条规则
 

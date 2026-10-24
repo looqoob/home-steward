@@ -97,7 +97,9 @@ watch(
     if (open && props.group) {
       // 每次打开都重置到 FEFO 首份：默认值必须是「该先吃的那份」，不能是上次选过的
       pickedId.value = props.group.lead.id;
-      qty.value = clamp(1);
+      // 用掉默认 1（部分消耗是常态）；扔掉默认**全部**（v1.1 F10，与 ConsumeSheet 同一语义：
+      // 扔东西几乎总是「这份坏了」整份处理，过期丢弃不该多一次「这一份全部」）
+      qty.value = clamp(props.type === 'wasted' ? max.value : 1);
     }
   },
 );

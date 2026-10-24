@@ -209,3 +209,35 @@ export function groupShoppingByLocation(
   if (rest?.length) out.push({ locationId: null, label: '未指定位置', items: rest });
   return out;
 }
+
+/* ==================== 清单复制为文本 ==================== */
+
+/**
+ * 把清单分组导出为可分享的纯文本（v1.1 F10）。
+ *
+ * 家人没装 App 时，这是把清单「发出去」的唯一通道（纯文本，微信 / 短信都能贴）。
+ * 只做格式化不做过滤：喂什么就排什么，调用方决定传未勾选的（要买的）还是全量。
+ *
+ * @param groups 已分组的清单（`groupShoppingByLocation` 的产出，或按原因分组的同形结构）
+ * @returns 首行「购物清单（N 件）」，其后每组一个【标签】头 + 逐行「名称 ×数量单位」；
+ *          没有任何条目时返回空串（调用方据此提示「没有可复制的项」）
+ * @example
+ * const text = shoppingListText(groupShoppingByLocation(shopping.pending, locations.all));
+ * if (text) await copyToClipboard(text);
+ */
+export function shoppingListText(groups: { label: string; items: ShoppingItem[] }[]): string {
+  const parts: string[] = [];
+  let total = 0;
+  for (const g of groups) {
+    if (!g.items.length) continue;
+    total += g.items.length;
+    parts.push(`【${g.label}】`);
+    for (const s of g.items) {
+      const qty =
+        s.quantity !== null && s.quantity > 0 ? ` ×${s.quantity}${s.unit ?? ''}` : '';
+      parts.push(`${s.name}${qty}`);
+    }
+  }
+  if (!total) return '';
+  return [`购物清单（${total} 件）`, ...parts].join('\n');
+}

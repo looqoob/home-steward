@@ -138,19 +138,41 @@ async function snooze(item: Item) {
           >{{ e.label }}</span>
         </div>
 
+        <!--
+          v1.1 F10：过期行的按钮顺序对调，「扔掉」升级为红色实底主按钮。
+          过期物的主导动作是「扔掉 + 记一笔浪费」（统计与「易浪费」建议都靠这份日志），
+          「用掉」降为次要——刚过期一天有些人还会吃，但不再是默认动作。
+          未过期行维持「用掉」优先。
+        -->
         <div class="flex gap-2">
-          <button
-            type="button"
-            class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-10"
-            :aria-label="`用掉了${e.item.name}`"
-            @click="askConsume(e.item, 'consumed')"
-          >用掉</button>
-          <button
-            type="button"
-            class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-danger cursor-pointer min-h-10"
-            :aria-label="`扔掉了${e.item.name}`"
-            @click="askConsume(e.item, 'wasted')"
-          >扔掉</button>
+          <template v-if="e.state === 'over'">
+            <button
+              type="button"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-danger border border-danger rounded-md text-[13px] text-white cursor-pointer min-h-10"
+              :aria-label="`扔掉了${e.item.name}`"
+              @click="askConsume(e.item, 'wasted')"
+            >扔掉</button>
+            <button
+              type="button"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-10"
+              :aria-label="`用掉了${e.item.name}`"
+              @click="askConsume(e.item, 'consumed')"
+            >用掉</button>
+          </template>
+          <template v-else>
+            <button
+              type="button"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-10"
+              :aria-label="`用掉了${e.item.name}`"
+              @click="askConsume(e.item, 'consumed')"
+            >用掉</button>
+            <button
+              type="button"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-danger cursor-pointer min-h-10"
+              :aria-label="`扔掉了${e.item.name}`"
+              @click="askConsume(e.item, 'wasted')"
+            >扔掉</button>
+          </template>
           <button
             type="button"
             class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-ink-2 cursor-pointer min-h-10"

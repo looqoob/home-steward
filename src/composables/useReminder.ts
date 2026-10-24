@@ -45,11 +45,33 @@ export function useReminder() {
       const at = new Date(nextDailyAt(settings.settings.remindHour, settings.settings.remindMinute));
       const list = due();
       if (!list.length) return;
+      // v1.1 F10：多件到期时聚合成**一条**通知。此前每件一条，某天 8 件到期
+      // 就是 8 连击轰炸，用户的第一反应是关掉通知权限——提醒功能就废了。
+      // 单件保持独立通知（保留 F3「点击直达物品」的 id 反查路径）；
+      // 聚合通知的 id 用固定命名空间的哈希，点击后反查不到物品 → 落到库存页。
+      const notifications =
+        list.length === 1
+          ? [
+              {
+                id: hashId(list[0].item.id),
+                title: `${list[0].item.name} 快到期了`,
+                body: list[0].f.label,
+              },
+            ]
+          : [
+              {
+                id: hashId('hs-daily-summary'),
+                title: `今日有 ${list.length} 件需要关注`,
+                body:
+                  list
+                    .slice(0, 5)
+                    .map(({ item, f }) => `${item.name}（${f.label}）`)
+                    .join('、') + (list.length > 5 ? ` 等 ${list.length} 件` : ''),
+              },
+            ];
       await LocalNotifications.schedule({
-        notifications: list.map(({ item, f }) => ({
-          id: hashId(item.id),
-          title: `${item.name} 快到期了`,
-          body: f.label,
+        notifications: notifications.map((n) => ({
+          ...n,
           // 不设 exact，避开 Android 12+ 的 SCHEDULE_EXACT_ALARM 权限
           schedule: { at },
         })),
@@ -67,7 +89,7 @@ export function useReminder() {
     try {
       if (Notification.permission === 'default') await Notification.requestPermission();
       if (Notification.permission !== 'granted') return;
-      const title = `今日待吃 ${list.length} 件`;
+      const title = list.length === 1 ? `${list[0].item.name} 快到期了` : `今日待吃 ${list.length} 件`;
       const body = list.slice(0, 3).map(({ item, f }) => `${item.name} ${f.label}`).join('、');
       // ⚠️ Android Chrome 禁止页面直接 new Notification（必须走 SW registration），
       // iOS Safari 则完全不支持页面通知 —— 优先 SW 路径，构造函数只作桌面兜底（REV-37）

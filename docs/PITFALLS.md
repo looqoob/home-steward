@@ -83,3 +83,4 @@
 | 66 | 「番茄」「西红柿」两条记录**永远折不到一张卡**，入库合并也失效 | 旧数据 `dictKey` 存的是原始输入名；`foldKeyOf` 若直接拿 dictKey 当键，别名解析永远轮不到 | `foldKeyOf` / `findRecentByName` 都要先 `(dictKey ?? name)` 过一遍 `aliasKey` 再退 `normalizeName`；新建物品必须传 `foodKeyOf` 给 `createItem`。见 §5.6 |
 | 67 | 两个标签页同时开着，A 的消耗被 B 的编辑**无声覆盖** | Dexie 写是基于内存旧快照的整条 put，同版本多标签无内置广播 | `data/sync.ts` 用 BroadcastChannel 检测其它窗口的写入并自动重读全部 store（检测+同步，**不是**并发写保护）；根治要 `table.update(id, patch)` 化 |
 | 68 | 「忽略的购物建议」下次打开 App 又冒出来 | 抑制依据住在**软删除行**里，而 `generate()` 曾把 `all()`（已滤软删）喂给 `planShopping`，dismissed 集合恒为空 | `generate()` 必须喂 `db.shopping.allIncludingDeleted()`；抑制时长只认 `DISMISS_DAYS`（domain/shoppingRules）这一处定义 |
+| 69 | 消耗弹层的默认数量只改了一处，另一处行为没变 | `ConsumeSheet`（单条路径）与 `GroupConsumeSheet`（组路径）是**两条平行弹层**：单份组 qty>1 时 `askGroupConsume` 走的是 GroupConsumeSheet，不是 ConsumeSheet。v1.1 F10 改「扔掉默认全部」时漏了后者，preview 实测才抓到 | 改两个消耗弹层任一的行为时，**另一处必须同步**（默认数量、快捷档位、确认文案都各自维护了一份）；改动后用「单份多数量」物品各点一遍两条路径 | 

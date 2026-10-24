@@ -164,6 +164,7 @@ home-steward/
     │   ├── BottomSheet.vue / ConfirmSheet.vue            # 弹层脚手架与二次确认
     │   ├── FormField.vue / Pill.vue / PillGroup.vue / QtyStepper.vue / StatCard.vue
     │   ├── EmptyState.vue / IconText.vue / SearchField.vue / BulkActionBar.vue
+    │   ├── OnboardingOverlay.vue   # v1.1 F10：首启引导（3 步，App.vue 条件挂载）
     │   └── components.d.ts       # unplugin 自动生成的 Vant 组件声明
     │
     └── styles/
@@ -423,7 +424,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 
 ## 10. 已知坑位（速查）
 
-**全表在 [`docs/PITFALLS.md`](docs/PITFALLS.md)（68 条，含原因与对策；新增坑位从 #69 起记入该文件）。** 这里只列最高频十条：
+**全表在 [`docs/PITFALLS.md`](docs/PITFALLS.md)（69 条，含原因与对策；新增坑位从 #70 起记入该文件）。** 这里只列最高频十条：
 
 | # | 一句话 |
 | --- | --- |
@@ -499,7 +500,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | 文件 | 内容 |
 | --- | --- |
 | `docs/BATCHES.md` | ★ **批次台账**：完成/规划批次的唯一登记处 |
-| `docs/PITFALLS.md` | ★ **坑位全表**（68 条）：坑 / 原因 / 对策 |
+| `docs/PITFALLS.md` | ★ **坑位全表**（69 条）：坑 / 原因 / 对策 |
 | `docs/ITERATION-REVIEW.md` | v1.0 迭代评审 + **批次 1~5 落地记录（§10~§14）** + **v1.1 功能规划（§15）** |
 | `docs/V2-CHANGELOG.md` / `docs/V3-CHANGELOG.md` | v2 / v3 引入的新概念与坑（改对应代码前先看） |
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |
