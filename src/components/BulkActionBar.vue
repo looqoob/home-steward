@@ -5,7 +5,7 @@ import { computed } from 'vue';
  * 批量操作吸底条。
  *
  * 出现在多选态下，替代 FAB 的位置（多选时 FAB 隐藏，避免两个悬浮元素打架）。
- * 视觉与 `ItemCard` 的两个快捷按钮保持同一套尺寸节奏，但这里文字 + 语义色，
+ * 视觉与组卡（`ItemGroupCard`）的两个快捷按钮保持同一套尺寸节奏，但这里文字 + 语义色，
  * 因为四个动作并排时图标太难辨。
  */
 const props = defineProps<{

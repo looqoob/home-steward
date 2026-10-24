@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { db } from '@/data';
 import type { EnvType, Location } from '@/domain/types';
 import { newId } from '@/domain/ids';
-import { canDeleteLocation, countInLocation, nextSort } from '@/domain/locationRules';
+import { canDeleteLocation, nextSort } from '@/domain/locationRules';
 
 export interface NewLocationInput {
   name: string;
@@ -108,9 +108,6 @@ export const useLocationsStore = defineStore('locations', () => {
     await load();
   }
 
-  function countOf(id: string, items: { locationId: string; status: string; deletedAt: number | null }[]): number {
-    return countInLocation(id, items as never);
-  }
 
-  return { list, loaded, all, enabled, load, byId, envOf, create, update, toggle, remove, move, countOf };
+  return { list, loaded, all, enabled, load, byId, envOf, create, update, toggle, remove, move };
 });
