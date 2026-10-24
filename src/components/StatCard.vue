@@ -70,7 +70,7 @@ const labelClass = computed(() => LABEL_CLASS[props.tone]);
       selected ? 'ring-2 ring-primary-600' : '',
     ]"
   >
-    <span class="block text-[20px] font-semibold leading-[1.2]" :class="numClass">{{ value }}</span>
+    <span class="block text-[20px] font-semibold leading-[1.2] tabular-nums" :class="numClass">{{ value }}</span>
     <span class="block text-[12px] mt-0.5" :class="labelClass">{{ label }}</span>
   </component>
 </template>

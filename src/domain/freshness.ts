@@ -67,7 +67,9 @@ export function barColor(state: FreshnessState): string {
       return 'var(--state-over-bar)';
     // ⚠️ warn / none 此前走 default（= over 红色），组内成员色条会被误染成过期色
     default:
-      return 'var(--ink-3)';
+      // `--ink-3` 是 Tailwind 工具类命名空间，CSS 变量真名是 `--text-3`——
+      // 此前写 var(--ink-3) 解析失败，无日期份的色条 background 整条失效（F11 顺手修）
+      return 'var(--text-3)';
   }
 }
 

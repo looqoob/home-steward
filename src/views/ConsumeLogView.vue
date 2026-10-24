@@ -233,8 +233,8 @@ const wastedAmount = computed(() =>
          padding 缝里会露出穿行的卡片（吸底版「吸顶 top-[-1px] 封缝」问题，见 PITFALLS #16）。
          条内自带 pb-[calc(12px+safe-area)]，文字与屏幕底部仍有安全间距。 -->
     <div v-if="groups.length > 0" class="sticky bottom-[-12px] z-[20] bg-card border-t border-line rounded-t-md px-3.5 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] mt-2 flex justify-between items-center shadow-[0_-2px_8px_rgba(0,0,0,0.04)]" role="status" aria-live="polite">
-      <span class="text-[13px] text-ink-2">合计（{{ totalCount }} 笔）</span>
-      <span class="text-[18px] font-bold text-ink-1">{{ money(totalAmount) }}</span>
+      <span class="text-[13px] text-ink-2 tabular-nums">合计（{{ totalCount }} 笔）</span>
+      <span class="text-[18px] font-bold text-ink-1 tabular-nums">{{ money(totalAmount) }}</span>
     </div>
     </div>
   </div>

@@ -7,9 +7,11 @@ import { useSettingsStore } from '@/stores/settings';
 import ItemGroupCard from '@/components/ItemGroupCard.vue';
 import LocationChipBar from '@/components/LocationChipBar.vue';
 import IconText from '@/components/IconText.vue';
+import Pill from '@/components/Pill.vue';
+import PillGroup from '@/components/PillGroup.vue';
 import PageHeader from '@/components/PageHeader.vue';
 import EmptyState from '@/components/EmptyState.vue';
-import StatCard from '@/components/StatCard.vue';
+
 import ConsumeSheet from '@/components/ConsumeSheet.vue';
 import GroupConsumeSheet from '@/components/GroupConsumeSheet.vue';
 import StocktakePanel from '@/components/StocktakePanel.vue';
@@ -625,35 +627,35 @@ function exitStocktake() {
 
     <!-- 头部条目（吸顶块内）：多选 / 盘点态整体收掉，块缩成一行标题 -->
     <template v-if="!selectMode && !stocktakeMode">
-      <!-- ② 统计 / 筛选：三张卡既是概览也是状态筛选器，点一下即过滤，再点一下取消 -->
-      <div class="grid grid-cols-3 gap-2 mb-3.5">
-        <StatCard
-          :value="todo.length"
-          label="今日待吃"
-          tone="urgent"
-          clickable
+      <!--
+        ② 概览 / 筛选（v1.1 F11-④ 紧凑化）：原先三张 StatCard 占约 64px 高——
+        概览是辅助信息，不该占主内容的视觉分量；小屏上头部（标题+概览+待办+搜索+筛选）
+        会吃掉三分之一视口。合并为一行胶囊：非零项才显示（在库恒显），
+        点击即筛选（沿用原 statusFilter 互斥逻辑）。数字不染色：语义色只留给
+        列表里的徽标（F11-① 的「让需要行动的自己浮出来」），概览行保持安静。
+      -->
+      <PillGroup gap="xs" role="group" aria-label="库存概览筛选" class="mb-3.5">
+        <Pill
+          v-if="todo.length > 0"
+          size="sm"
           :selected="statusFilter === 'urgent'"
           :aria-pressed="statusFilter === 'urgent'"
           @click="toggleStatus('urgent')"
-        />
-        <StatCard
-          :value="overdueCount"
-          label="已过期"
-          tone="over"
-          clickable
+        >今日待吃 <b class="font-semibold tabular-nums">{{ todo.length }}</b></Pill>
+        <Pill
+          v-if="overdueCount > 0"
+          size="sm"
           :selected="statusFilter === 'overdue'"
           :aria-pressed="statusFilter === 'overdue'"
           @click="toggleStatus('overdue')"
-        />
-        <StatCard
-          :value="total"
-          label="在库"
-          clickable
+        >已过期 <b class="font-semibold tabular-nums">{{ overdueCount }}</b></Pill>
+        <Pill
+          size="sm"
           :selected="statusFilter === null"
           :aria-pressed="statusFilter === null"
           @click="statusFilter = null"
-        />
-      </div>
+        >在库 <b class="font-semibold tabular-nums">{{ total }}</b></Pill>
+      </PillGroup>
 
       <!--
         ③ 今日待办：数字下面紧跟「是哪几件、怎么处理」，这是本页最高频的动线。
@@ -674,11 +676,11 @@ function exitStocktake() {
     </template>
     </div>
 
-    <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器。底部让位随模式变化：多选态给吸底操作条留 132px，其余给 FAB 留 84px -->
+    <!-- 列表区：盘点态与常规列表共用这一个内部滚动容器。底部让位随模式变化：多选态给吸底操作条留位，其余给 FAB 留位（高度取自 token，见 index.css「底部悬浮元素让位」） -->
     <div
       ref="listEl"
       class="flex-1 min-h-0 overflow-y-auto no-scrollbar overscroll-contain -mx-4 px-4"
-      :class="selectMode ? 'pb-[132px]' : 'pb-[84px]'"
+      :class="selectMode ? 'pb-[var(--actionbar-space)]' : 'pb-[var(--fab-space)]'"
       @scroll.passive="onListScroll"
     >
     <!-- 盘点态独占整个内容区：概览卡 / 搜索 / 筛选条 / 分组头全部不参与，避免两套操作并存 -->

@@ -28,7 +28,7 @@ withDefaults(
 <template>
   <button
     type="button"
-    class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full cursor-pointer min-h-10"
+    class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap text-[13px] border rounded-full cursor-pointer min-h-11"
     :class="[
       size === 'sm' ? 'px-3 py-1' : 'px-3 py-1.5',
       selected

@@ -424,7 +424,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 
 ## 10. 已知坑位（速查）
 
-**全表在 [`docs/PITFALLS.md`](docs/PITFALLS.md)（69 条，含原因与对策；新增坑位从 #70 起记入该文件）。** 这里只列最高频十条：
+**全表在 [`docs/PITFALLS.md`](docs/PITFALLS.md)（70 条，含原因与对策；新增坑位从 #71 起记入该文件）。** 这里只列最高频十条：
 
 | # | 一句话 |
 | --- | --- |
@@ -500,7 +500,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | 文件 | 内容 |
 | --- | --- |
 | `docs/BATCHES.md` | ★ **批次台账**：完成/规划批次的唯一登记处 |
-| `docs/PITFALLS.md` | ★ **坑位全表**（69 条）：坑 / 原因 / 对策 |
+| `docs/PITFALLS.md` | ★ **坑位全表**（70 条）：坑 / 原因 / 对策 |
 | `docs/ITERATION-REVIEW.md` | v1.0 迭代评审 + **批次 1~5 落地记录（§10~§14）** + **v1.1 功能规划（§15）** |
 | `docs/V2-CHANGELOG.md` / `docs/V3-CHANGELOG.md` | v2 / v3 引入的新概念与坑（改对应代码前先看） |
 | `docs/ARCHITECTURE.md` | 分层架构详解、数据流图、换存储实操 |

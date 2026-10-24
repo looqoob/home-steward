@@ -125,7 +125,7 @@ const inputSize = computed(() => (props.size === 'lg' ? 'text-[16px]' : 'text-[1
       :min="lower"
       :max="max"
       inputmode="decimal"
-      class="flex-1 min-w-0 text-center font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none"
+      class="flex-1 min-w-0 text-center font-medium text-ink-1 bg-transparent border-0 p-0 focus:outline-none tabular-nums"
       :class="inputSize"
       :aria-label="ariaLabel"
       @focus="focused = true"

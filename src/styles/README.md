@@ -90,6 +90,7 @@ chip / 分段控件 / 卡片的选中与未选中配色必须写成**互斥的�
 - 圆角：`rounded-sm`=8px、`rounded-md`=12px、`rounded-lg`=16px、`rounded-xl`=16px、`rounded-2xl`=18px、`rounded-3xl`=20px、`rounded-full`=999px（已在 `@theme inline` 覆盖 Tailwind 默认刻度）。
 - 阴影：`shadow-card`（`0 1px 2px rgba(20,30,25,.06)`）、`shadow-pop`（`0 6px 24px rgba(20,30,25,.12)`）。
 - 动效：`--ease` = `200ms ease`。
+- 底部悬浮让位（v1.1 F11-⑤）：`--fab-space`=84px（FAB）/ `--actionbar-space`=132px（多选吸底操作条）——列表页底部 padding 的单一真源，用 `pb-[var(--fab-space)]` 等。改 FAB（TabLayout）或 BulkActionBar 高度时**必须同步这两个值**，否则卡片会从吸底元素下穿行（PITFALLS #16 族）。
 - 安全区：`--safe-top` —— **顶部安全区（状态栏 / 刘海）的唯一真源**。`index.css` 里的值是 `env(safe-area-inset-top, 0px)`，只作 JS 还没跑时的首帧兜底；运行时由 `src/composables/useSafeArea.ts` 量好写成 `<html>` 的 inline 变量（含 iOS 47 / Android 24 兜底）。组件一律 `pt-[var(--safe-top)]`，**禁止写 `env(safe-area-inset-top)`**（Android WebView 里恒为 0）。底部 `env(safe-area-inset-bottom)` 仍可直接用。
 
 ### 图标排版（`--ic-*`，完整规范见 `docs/ICON-TEXT-SPEC.md`）

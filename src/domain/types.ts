@@ -47,8 +47,10 @@ export const ENV_LIST: EnvMeta[] = [
   { key: 'cool', label: '阴凉', fullLabel: '常温阴凉', group: 'normal', dotClass: 'cool', color: '#8C7FA6' }, // 3.68:1
   { key: 'dry', label: '干燥', fullLabel: '常温干燥', group: 'normal', dotClass: 'dry', color: '#A9823C' }, // 3.53:1
   { key: 'ventilated', label: '通风', fullLabel: '常温通风', group: 'normal', dotClass: 'air', color: '#4F8A6E' }, // 4.04:1
-  { key: 'dark', label: '避光', fullLabel: '常温避光', group: 'normal', dotClass: 'dark', color: '#5E6B78' }, // 5.45:1
-  { key: 'none', label: '不计', fullLabel: '不计保质期', group: 'normal', dotClass: 'dark', color: '#5E6B78' },
+  // dark/none 的色点原 #5E6B78 在深色卡（#1c211f）上 2.99:1 差一丝（F11-⑥），
+  // 提亮到 #6a7886：深色卡 3.61:1、白卡 4.52:1 双达标
+  { key: 'dark', label: '避光', fullLabel: '常温避光', group: 'normal', dotClass: 'dark', color: '#6a7886' }, // 4.52:1（浅）/ 3.61:1（深）
+  { key: 'none', label: '不计', fullLabel: '不计保质期', group: 'normal', dotClass: 'dark', color: '#6a7886' },
 ];
 
 export const ENV_MAP: Record<EnvType, EnvMeta> = ENV_LIST.reduce(

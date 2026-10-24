@@ -266,13 +266,17 @@ async function doClearDone() {
       </div>
     </FormField>
 
-    <EmptyState v-if="shopping.visible.length === 0" text="暂无需购买的物品">
+    <!-- v1.1 F11-⑧：空态不只说「没有」，还要说清「这里的东西从哪来」——
+         「自动生成」是本页的核心机制，新用户第一次见到空清单会以为要自己从头记 -->
+    <EmptyState v-if="shopping.visible.length === 0">
       <template #icon>
         <svg class="icon icon-ill" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="9 11 12 14 22 4" />
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </svg>
       </template>
+      暂无需购买的物品
+      <span class="block mt-1.5 text-[12px] leading-relaxed">吃完了的东西会自动出现在这里；也可以用上面的「手动添加」记一笔。</span>
     </EmptyState>
 
     <template v-for="g in groups" :key="g.key">
@@ -293,7 +297,7 @@ async function doClearDone() {
         <div class="flex items-center gap-3">
           <button
             type="button"
-            class="relative w-[22px] h-[22px] rounded-md border flex-none flex items-center justify-center text-[12px] leading-none cursor-pointer before:absolute before:content-[''] before:-inset-2"
+            class="relative w-[22px] h-[22px] rounded-md border flex-none flex items-center justify-center text-[12px] leading-none cursor-pointer before:absolute before:content-[''] before:-inset-[11px]"
             :class="s.inboundItemId
               ? 'bg-primary-600 border-primary-600 text-white opacity-60'
               : s.checked
@@ -319,7 +323,7 @@ async function doClearDone() {
           <button
             v-if="s.checked && !s.inboundItemId"
             type="button"
-            class="flex-none text-[12px] text-primary-700 border border-primary-600 rounded-full px-2.5 py-1 cursor-pointer min-h-10"
+            class="flex-none text-[12px] text-primary-700 border border-primary-600 rounded-full px-2.5 py-1 cursor-pointer min-h-11"
             :aria-label="`入库「${s.name}」`"
             @click="toggleInbound(s)"
           >入库</button>
@@ -363,12 +367,12 @@ async function doClearDone() {
         <button
           v-if="doneNotInbound.length > 0"
           type="button"
-          class="text-[13px] text-primary-700 cursor-pointer min-h-10 px-1"
+          class="text-[13px] text-primary-700 cursor-pointer min-h-11 px-1"
           @click="inboundAllDone"
         >全部入库（{{ doneNotInbound.length }}）</button>
         <button
           type="button"
-          class="text-[13px] text-ink-2 cursor-pointer min-h-10 px-1"
+          class="text-[13px] text-ink-2 cursor-pointer min-h-11 px-1"
           @click="confirmClearDone = true"
         >清除</button>
       </div>

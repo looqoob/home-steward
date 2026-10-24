@@ -395,6 +395,23 @@
 7. **触控目标审计**：步进按钮 / 筛选 pill / 复选框热区 ≥44×44（视觉可小，热区不能小）。
 8. **空状态带主行动**：库存空 →「入库第一件」直开快速入库；清单空 → 解释自动生成规则。
 
+**落地记录（2026-10-24 完成）**：
+
+| # | 改动 | 位置 |
+| --- | --- | --- |
+| ① 视觉焦点 | `--state-fresh-*` 三变量改为引用既有中性 token（`var(--bg-sunken/--text-2/--text-3)`），浅深自动跟随；徽标、进度条、组内色条全部经变量生效 | `styles/index.css` |
+| ② 色盲兜底 | 新增 `--state-over-solid(-fg)` token（浅 #8e2f27 / 深 #b0564d + 白字，对比 8.1 / 4.9:1）；组卡与待办区的过期徽标改实底 | `index.css`、`ItemGroupCard`、`TodayTodo` |
+| ③ tabular-nums | StatCard 数字、QtyStepper 输入框、待办/组卡数量、消耗明细合计、我的页分布计数（StatsView 既有覆盖已全） | 6 文件 |
+| ④ 头部紧凑 | 库存页三张 StatCard（约 64px）→ 一行 44px Pill（非零显示，「在库」恒显；沿用 statusFilter 互斥筛选）；数字不染语义色（留给列表徽标） | `StockView.vue` |
+| ⑤ 底部 token | `--fab-space: 84px` / `--actionbar-space: 132px` 入 `:root`；StockView 列表让位、TabLayout 注释同步 | `index.css`、`StockView`、`TabLayout` |
+| ⑥ 对比度校验 | 一次性脚本 48 项（文字 ≥4.5 / 图形 ≥3，浅深 × 徽标/进度条/文本/主色/环境点）：3 项不达标已修——浅色 soon bar #e0952f→#b8761f（2.19→3.30）、over bar #a9857f→#9a746f（2.93→3.65）、ENV_MAP 避光点 #5E6B78→#6a7886（深色卡 2.99→3.61） | `index.css`、`domain/types.ts` |
+| ⑦ 触控 44px | Pill/位置条/待办按钮/清单文字按钮 min-h-10→min-h-11；复选框热区 before:-inset-2→-inset-[11px]（22+22=44）；组卡展开行 ✓/✕ 补热区扩展（28+16=44）；QtyStepper 原样（lg 44 / md·sm 36/32+扩 16 ≥44） | `Pill`、`LocationChipBar`、`TodayTodo`、`ListView`、`ItemGroupCard` |
+| ⑧ 空态 | 清单空态改双行：主文案 +「吃完了的东西会自动出现在这里；也可以用上面的手动添加记一笔」（库存空态 F10 前已有主行动按钮） | `ListView.vue` |
+
+**附带修复**：`domain/freshness.barColor` 默认值写 `var(--ink-3)`——`@theme inline` **不发布 CSS 变量**（真名是 `--text-3`），warn/none 份的色条颜色一直无效（坑位 #70）。
+
+**验证**：typecheck 0 错误；271 例全过；build 成功。preview（390×780）实测：概览 pill 行 44px 且筛选互斥（点「已过期」→ 仅 1 卡 + 段头「已过期 1」，取消恢复）；fresh 徽标 #eff2f0/#5f6763、进度条 #6b736e 精确命中；过期徽标浅 #8e2f27 实底白字 / 深色 `data-theme=dark` 下 #b0564d；`--fab-space`/`--actionbar-space` 变量解析正确。
+
 ### 建议落地顺序
 
 F1（复用现有流水，成本最低）→ F3（原生壳体验短板）→ F2 → F5 → F4（唯一动 schema 的，放最后单独升版）。

@@ -27,10 +27,18 @@
   --primary-600: #228055;
   --primary-700: #1a6442;
 
-  --state-fresh-bg: #e8f5ef; --state-fresh-fg: #1a6442; --state-fresh-bar: #2e9e6b;
-  --state-soon-bg: #fbeeda; --state-soon-fg: #7a4e0f; --state-soon-bar: #e0952f;
+  /* fresh 态弱化为中性灰（v1.1 F11-①）：引用既有中性 token，浅深自动跟随。
+     「还剩很多天」不需要争夺注意力——让 urgent/over 自己浮出来，
+     四态全彩时「都有颜色 = 没有重点」。fg 取 text-2（徽标文字要够读），bar 取 text-3。 */
+  --state-fresh-bg: var(--bg-sunken); --state-fresh-fg: var(--text-2); --state-fresh-bar: var(--text-3);
+  --state-soon-bg: #fbeeda; --state-soon-fg: #7a4e0f; --state-soon-bar: #b8761f;
   --state-urgent-bg: #fbeae8; --state-urgent-fg: #8e2f27; --state-urgent-bar: #d9534a;
-  --state-over-bg: #f0eae9; --state-over-fg: #6e322e; --state-over-bar: #a9857f;
+  --state-over-bg: #f0eae9; --state-over-fg: #6e322e; --state-over-bar: #9a746f;
+  /* over 实底徽标（v1.1 F11-②）：红绿不靠色相区分的兜底——过期徽标用实底 + 白字，
+     与其他浅底徽标形成形状/明度差异，色盲用户单凭灰度也能锁定「哪个坏掉了」 */
+  --state-over-solid: #8e2f27; --state-over-solid-fg: #ffffff;
+  /* soon/over 的 bar 在浅色轨道（--bg-sunken）上原值 #e0952f/#a9857f 对比不足 3:1（F11-⑥），
+     已加深达标；徽标底 bg 与深色块的 bar 不受影响 */
 
   --bg-page: #f6f7f6;
   --bg-card: #ffffff;
@@ -46,6 +54,17 @@
 
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
   --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-pill: 999px;
+
+  /*
+   * 底部悬浮元素给列表的让位高度（v1.1 F11-⑤，单一真源）：
+   * 此前 `pb-[84px]`（FAB）/ `pb-[132px]`（多选操作条）散在页面里各写各的，
+   * 悬浮元素调高度时列表让位不会跟着变，就会露出「卡片从吸底条下穿行」的缝（PITFALLS #16 族）。
+   * ⚠️ 改 FAB（TabLayout，52px 高 + 12px 间隙）或 BulkActionBar（约 108px 含 safe-area）
+   * 的高度时，**这里必须同步**；列表页一律 `pb-[var(--fab-space)]` / `pb-[var(--actionbar-space)]`。
+   */
+  --fab-space: 84px;
+  --actionbar-space: 132px;
+
   --shadow-card: 0 1px 2px rgba(20, 30, 25, 0.06);
   --shadow-pop: 0 6px 24px rgba(20, 30, 25, 0.12);
   --ease: 200ms ease;
@@ -118,10 +137,13 @@ html[data-theme='dark'] {
   --primary-600: #228055; /* 保持：白字在其上 4.9:1，提亮会掉到 4.5 以下 */
   --primary-700: #7fc9a5; /* 提亮：深底上的强调文字需要更高对比 */
 
-  --state-fresh-bg: #143527; --state-fresh-fg: #9fe1cb; --state-fresh-bar: #2e9e6b;
+  /* fresh 中性灰跟随本块的中性 token（浅色块同理，见 :root 注释） */
+  --state-fresh-bg: var(--bg-sunken); --state-fresh-fg: var(--text-2); --state-fresh-bar: var(--text-3);
   --state-soon-bg: #3a2c14; --state-soon-fg: #fac775; --state-soon-bar: #e0952f;
   --state-urgent-bg: #3d1b17; --state-urgent-fg: #f7c1c1; --state-urgent-bar: #d9534a;
   --state-over-bg: #2c2625; --state-over-fg: #c9bcb9; --state-over-bar: #a9857f;
+  /* 深色下的实底红要提亮一档（浅色块用 #8e2f27），白字对比 ≥4.5:1（F11-⑥ 校验） */
+  --state-over-solid: #b0564d; --state-over-solid-fg: #ffffff;
 
   --danger: #f09595;
 
@@ -418,6 +440,7 @@ html[data-theme='dark'] {
   --color-soon-bg: var(--state-soon-bg); --color-soon-fg: var(--state-soon-fg);
   --color-urgent-bg: var(--state-urgent-bg); --color-urgent-fg: var(--state-urgent-fg);
   --color-over-bg: var(--state-over-bg); --color-over-fg: var(--state-over-fg);
+  --color-over-solid: var(--state-over-solid); --color-over-solid-fg: var(--state-over-solid-fg);
 
   --color-env-chilled: var(--env-chilled);
   --color-env-frozen: var(--env-frozen);

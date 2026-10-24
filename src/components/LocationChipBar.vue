@@ -47,7 +47,7 @@ function countOf(id: string) {
     <button
       v-if="props.showManage !== false"
       type="button"
-      class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] text-ink-3 bg-transparent border border-dashed border-line rounded-full px-3 py-1.5 cursor-pointer min-h-10"
+      class="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] text-ink-3 bg-transparent border border-dashed border-line rounded-full px-3 py-1.5 cursor-pointer min-h-11"
       @click="emit('manage')"
     >管理</button>
   </PillGroup>

@@ -122,7 +122,7 @@ const backupTip = computed(() =>
       <span class="flex-1 h-2 bg-sunken rounded overflow-hidden">
         <i class="block h-full rounded" :style="{ width: (s.percent * 100).toFixed(0) + '%', background: s.color }"></i>
       </span>
-      <span class="w-9 text-right text-ink-2 flex-none">{{ s.count }}</span>
+      <span class="w-9 text-right text-ink-2 flex-none tabular-nums">{{ s.count }}</span>
     </div>
 
     <div class="section-label">设置</div>

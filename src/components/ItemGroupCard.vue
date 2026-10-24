@@ -108,7 +108,9 @@ const badgeColor: Record<string, string> = {
   fresh: 'bg-fresh-bg text-fresh-fg',
   soon: 'bg-soon-bg text-soon-fg',
   urgent: 'bg-urgent-bg text-urgent-fg',
-  over: 'bg-over-bg text-over-fg',
+  // 过期徽标用实底白字（v1.1 F11-②）：与其他浅底徽标拉开明度差，
+  // 红绿色盲用户不靠色相也能锁定「哪份坏了」
+  over: 'bg-over-solid text-over-solid-fg',
   warn: 'bg-sunken text-ink-2',
   none: 'bg-sunken text-ink-2',
 };
@@ -204,7 +206,7 @@ const dueSummary = computed(() => {
         role="checkbox"
         :aria-checked="selected"
         :aria-label="`选择 ${props.group.name}`"
-        class="w-[22px] h-[22px] flex-none rounded-md border flex items-center justify-center text-[12px] leading-none mt-0.5 cursor-pointer"
+        class="relative w-[22px] h-[22px] flex-none rounded-md border flex items-center justify-center text-[12px] leading-none mt-0.5 cursor-pointer before:absolute before:content-[''] before:-inset-[11px]"
         :class="selected ? 'bg-primary-600 border-primary-600 text-white' : 'bg-card border-line-strong text-transparent'"
         @click.stop="emit('select', props.group)"
       >✓</button>
@@ -235,7 +237,7 @@ const dueSummary = computed(() => {
             <span class="text-[12px] px-2 py-0.5 rounded-full whitespace-nowrap flex-none" :class="badgeColor[leadFresh.state]">{{ leadFresh.label }}</span>
           </span>
           <span class="flex items-center gap-1.5 text-[12px] text-ink-3 flex-wrap mt-0.5">
-            <span>{{ totalQtyText() }}</span>
+            <span class="tabular-nums">{{ totalQtyText() }}</span>
             <span v-if="groupPriceText" class="tabular-nums">{{ groupPriceText }}</span>
             <span class="text-ink-2">{{ dueSummary }}</span>
             <span v-if="props.location" class="inline-flex items-center gap-1 text-[12px] text-ink-2 bg-sunken px-1.5 py-0.5 rounded">
@@ -304,13 +306,13 @@ const dueSummary = computed(() => {
         <span class="flex gap-1.5 flex-none">
           <button
             type="button"
-            class="w-7 h-7 rounded border border-line-strong text-[12px] text-primary-700 flex items-center justify-center"
+            class="relative w-7 h-7 rounded border border-line-strong text-[12px] text-primary-700 flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
             :aria-label="`用掉第 ${row.index} 份 ${props.group.name}`"
             @click="emit('consume-one', row.item, 'consumed')"
           >✓</button>
           <button
             type="button"
-            class="w-7 h-7 rounded border border-line-strong text-[12px] text-danger flex items-center justify-center"
+            class="relative w-7 h-7 rounded border border-line-strong text-[12px] text-danger flex items-center justify-center before:absolute before:content-[''] before:-inset-2"
             :aria-label="`扔掉第 ${row.index} 份 ${props.group.name}`"
             @click="emit('consume-one', row.item, 'wasted')"
           >✕</button>

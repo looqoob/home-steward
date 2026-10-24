@@ -120,7 +120,7 @@ async function snooze(item: Item) {
           <div class="min-w-0">
             <div class="text-[14px] font-medium text-ink-1 truncate">{{ e.item.name }}</div>
             <div class="flex items-center gap-1.5 text-[12px] text-ink-2 mt-0.5 flex-wrap">
-              <span>{{ qtyText(e.item) }}</span>
+              <span class="tabular-nums">{{ qtyText(e.item) }}</span>
               <span
                 v-if="locName(e.item)"
                 class="inline-flex items-center gap-1 bg-card bg-opacity-70 px-1.5 py-0.5 rounded"
@@ -134,7 +134,7 @@ async function snooze(item: Item) {
           </div>
           <span
             class="text-[12px] px-2 py-0.5 rounded-full flex-none"
-            :class="e.state === 'over' ? 'bg-over-bg text-over-fg' : 'bg-urgent-bg text-urgent-fg'"
+            :class="e.state === 'over' ? 'bg-over-solid text-over-solid-fg' : 'bg-urgent-bg text-urgent-fg'"
           >{{ e.label }}</span>
         </div>
 
@@ -148,13 +148,13 @@ async function snooze(item: Item) {
           <template v-if="e.state === 'over'">
             <button
               type="button"
-              class="flex-1 inline-flex items-center justify-center gap-1 bg-danger border border-danger rounded-md text-[13px] text-white cursor-pointer min-h-10"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-danger border border-danger rounded-md text-[13px] text-white cursor-pointer min-h-11"
               :aria-label="`扔掉了${e.item.name}`"
               @click="askConsume(e.item, 'wasted')"
             >扔掉</button>
             <button
               type="button"
-              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-10"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-11"
               :aria-label="`用掉了${e.item.name}`"
               @click="askConsume(e.item, 'consumed')"
             >用掉</button>
@@ -162,20 +162,20 @@ async function snooze(item: Item) {
           <template v-else>
             <button
               type="button"
-              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-10"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-primary-700 cursor-pointer min-h-11"
               :aria-label="`用掉了${e.item.name}`"
               @click="askConsume(e.item, 'consumed')"
             >用掉</button>
             <button
               type="button"
-              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-danger cursor-pointer min-h-10"
+              class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-danger cursor-pointer min-h-11"
               :aria-label="`扔掉了${e.item.name}`"
               @click="askConsume(e.item, 'wasted')"
             >扔掉</button>
           </template>
           <button
             type="button"
-            class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-ink-2 cursor-pointer min-h-10"
+            class="flex-1 inline-flex items-center justify-center gap-1 bg-card border border-line-strong rounded-md text-[13px] text-ink-2 cursor-pointer min-h-11"
             :aria-label="`${e.item.name} 明天再说`"
             @click="snooze(e.item)"
           >明天再说</button>

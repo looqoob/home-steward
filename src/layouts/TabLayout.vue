@@ -41,7 +41,7 @@ const selectMode = computed(() => route.query.select === '1');
  * 盘点态（`?check=1`）与多选态互斥，同样要隐藏 FAB、让出底部空间。
  *
  * 盘点页面底部没有常驻操作条（三个判定按钮在内容流里），所以只让 FAB 的位置即可，
- * 不需要像多选那样留 132px。
+ * 不需要像多选那样留 `var(--actionbar-space)`。
  */
 const stocktakeMode = computed(() => route.query.check === '1');
 
@@ -89,7 +89,7 @@ function go(path: string) {
       （页面里 -mx-4 全出血块以它为基准）。滚动由每个子页面自己管理：
       列表页是 h-full flex flex-col（头部 flex-none + 列表 flex-1 内滚），
       整页内容型（统计页）是 h-full overflow-y-auto。
-      垂直留白与 FAB 让位（库存页列表 pb-[84px]）同样由页面承担，
+      垂直留白与 FAB 让位（库存页列表 `pb-[var(--fab-space)]`）同样由页面承担，
       外壳不再知道这些细节。
     -->
     <div class="flex-1 min-h-0 overflow-hidden px-4">
