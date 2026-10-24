@@ -15,7 +15,7 @@ import { mkItem, NOW, TODAY, ds } from './fixtures';
 const alias = (name: string) => (name === '番茄' || name === '西红柿' ? '西红柿' : null);
 
 describe('foldKeyOf', () => {
-  it('同位置同名字 → 同键', () => {
+  it('同位置同名字同单位 → 同键', () => {
     expect(foldKeyOf(mkItem({ name: '牛奶', loc: 'L1' }))).toBe(foldKeyOf(mkItem({ name: '牛奶', loc: 'L1' })));
   });
 
@@ -27,10 +27,23 @@ describe('foldKeyOf', () => {
     expect(foldKeyOf(mkItem({ name: '番茄' }), alias)).toBe(foldKeyOf(mkItem({ name: '西红柿' }), alias));
   });
 
-  it('item.dictKey 优先于实时解析（入库时定格，之后字典改名也不漂移）', () => {
-    // dictKey 已定格为旧名字；即便别名解析器现在返回别的，也该以 dictKey 为准
-    const it = mkItem({ name: '牛奶', dictKey: '纯牛奶' });
-    expect(foldKeyOf(it, () => '另一个key')).toBe('L1|纯牛奶');
+  it('★ 旧数据的 dictKey 是原始名：也必须过别名解析后折叠（REV-14 的核心场景）', () => {
+    // v3 之前 createItem 写 dictKey = 原始输入名，两条记录各存各的「西红柿」/「番茄」。
+    // 若直接拿 dictKey 当键比对，别名折叠对全部存量数据形同虚设。
+    const a = mkItem({ id: 'a', name: '西红柿', dictKey: '西红柿' });
+    const b = mkItem({ id: 'b', name: '番茄', dictKey: '番茄' });
+    expect(foldKeyOf(a, alias)).toBe(foldKeyOf(b, alias));
+  });
+
+  it('dictKey 未命中字典时回落 normalizeName（自定义食材没有词根）', () => {
+    const a = mkItem({ name: '自制酸奶', dictKey: '自制酸奶' });
+    const b = mkItem({ name: '自制酸奶', dictKey: null });
+    expect(foldKeyOf(a, alias)).toBe(foldKeyOf(b, alias));
+  });
+
+  it('★ 同位置同名但单位不同 → 不同键（「2 盒 + 1 袋」不能折成「3 盒」，REV-44）', () => {
+    expect(foldKeyOf(mkItem({ name: '牛奶', loc: 'L1', unit: '盒' })))
+      .not.toBe(foldKeyOf(mkItem({ name: '牛奶', loc: 'L1', unit: '袋' })));
   });
 });
 
@@ -67,6 +80,15 @@ describe('foldItems', () => {
   it('不同位置 → 两组', () => {
     const g = foldItems([milkA(), mkItem({ id: 'c', name: '牛奶', loc: 'L2', expireIn: 3 })]);
     expect(g).toHaveLength(2);
+  });
+
+  it('★ 同位置同名但单位不同 → 两组，数量不跨单位相加（REV-44）', () => {
+    const g = foldItems([
+      mkItem({ id: 'a', name: '牛奶', loc: 'L1', expireIn: 3, qty: 2, unit: '盒' }),
+      mkItem({ id: 'b', name: '牛奶', loc: 'L1', expireIn: 5, qty: 1, unit: '袋' }),
+    ]);
+    expect(g).toHaveLength(2);
+    expect(g.every((x) => x.totalQuantity !== 3)).toBe(true);
   });
 
   it('已用完 / 已删除的不参与分组', () => {
@@ -162,6 +184,12 @@ describe('expiryCompatible / findMergeTarget', () => {
     expect(expiryCompatible(ds(0), ds(3))).toBe(false);
   });
 
+  it('★ 脏日期（0 / "abc"）不抛错，按「无到期日」参与判定（REV-45）', () => {
+    expect(expiryCompatible(0 as never, null)).toBe(true);
+    expect(expiryCompatible('abc' as never, 'abc' as never)).toBe(true);
+    expect(expiryCompatible(ds(3), 'abc' as never)).toBe(false);
+  });
+
   it('找到同名同位置且到期日相同的既有记录', () => {
     const created = mkItem({ id: 'new', name: '牛奶', loc: 'L1', expireIn: 5 });
     const old = mkItem({ id: 'old', name: '牛奶', loc: 'L1', expireIn: 5 });
@@ -177,6 +205,12 @@ describe('expiryCompatible / findMergeTarget', () => {
   it('已用完的旧记录不作为合并目标', () => {
     const created = mkItem({ id: 'new', name: '牛奶', expireIn: 5 });
     const old = mkItem({ id: 'old', name: '牛奶', expireIn: 5, status: 'finished' });
+    expect(findMergeTarget(created, [old])).toBeUndefined();
+  });
+
+  it('★ 单位不同 → 不合并（数量相加跨单位无意义，REV-44）', () => {
+    const created = mkItem({ id: 'new', name: '牛奶', unit: '袋', expireIn: 5 });
+    const old = mkItem({ id: 'old', name: '牛奶', unit: '盒', expireIn: 5 });
     expect(findMergeTarget(created, [old])).toBeUndefined();
   });
 });

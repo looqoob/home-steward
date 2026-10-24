@@ -4,6 +4,8 @@ import { todayStr } from './dates';
 import { fallbackDays, guessCategory } from './categories';
 import { computeExpiry, type ShelfLifeResolver } from './shelfLife';
 import { normalizePrice } from './price';
+import { normalizeName } from './normalize';
+import type { AliasKeyResolver } from './inbound';
 
 export interface NewItemInput {
   name: string;
@@ -17,7 +19,14 @@ export interface NewItemInput {
   note?: string | null;
 }
 
-/** 由输入 + 位置创建物品，自动算到期日 */
+/**
+ * 由输入 + 位置创建物品，自动算到期日。
+ *
+ * @param aliasKey 字典别名解析器（store 层传 `data/dict` 的 `foodKeyOf`）。
+ *        **必须传**，否则 `dictKey` 会退化成字面归一名——「西红柿」与「番茄」
+ *        各存各的键，别名折叠（`grouping.foldKeyOf`）形同虚设（REV-14）。
+ *        未命中字典时回落 `normalizeName(name)`（自定义食材没有词根）。
+ */
 export function createItem(
   input: NewItemInput,
   env: EnvType,
@@ -25,6 +34,7 @@ export function createItem(
   fallback: (env: EnvType, category: Item['category']) => number | null = fallbackDays,
   now: number = Date.now(),
   categoryHint: Item['category'] = null,
+  aliasKey?: AliasKeyResolver,
 ): Item {
   const storedAt = input.storedAt ?? todayStr(now);
   const name = input.name.trim();
@@ -38,7 +48,9 @@ export function createItem(
   return {
     id: newId(),
     name,
-    dictKey: name,
+    // 折叠键的词根：入库时定格。取「字典规范 key」而不是原始输入名 ——
+    // 原始名会让「番茄」「西红柿」两条记录的键永不相等，折叠与合并都失效。
+    dictKey: aliasKey?.(name) ?? normalizeName(name),
     category,
     icon: Array.from(name)[0] ?? '?',
     quantity: input.quantity,

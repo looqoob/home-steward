@@ -50,7 +50,10 @@ export function findRecentByName(items: Item[], name: string, aliasKey?: AliasKe
   return recentItems(items).find((i) => {
     if (normalizeName(i.name) === target) return true;
     if (!targetKey) return false;
-    const key = i.dictKey ?? aliasKey?.(i.name) ?? null;
+    // 键的解析：先过别名（覆盖旧数据存原始名的情况，见 foldKeyOf 的说明），
+    // 解析不到再退回 dictKey 原值 —— 它可能是入库时由**另一套**词根表定格的规范键
+    //（如自定义字典），直接比对仍然有效。与 `foldKeyOf` 同一教训（REV-14）。
+    const key = aliasKey?.(i.dictKey ?? i.name) ?? i.dictKey ?? null;
     return key !== null && key === targetKey;
   });
 }
@@ -59,6 +62,18 @@ export function findRecentByName(items: Item[], name: string, aliasKey?: AliasKe
 function firstEnabled(locations: Location[]): string | null {
   const on = locations.filter((l) => !l.deletedAt && l.enabled).sort((a, b) => a.sort - b.sort);
   return on[0]?.id ?? null;
+}
+
+/**
+ * 位置 id 是否**可用**（未删除且启用）。
+ *
+ * 历史记录 / 清单项里存的 `locationId` 可能指向一个后来被删除或停用的位置
+ * （孤儿引用，REV-13）。直接沿用会把物品写进一个 UI 里找不到的柜子——
+ * 此后它只在「全部」筛选下可见，用户会以为东西丢了。
+ */
+function usableLocation(locations: Location[], id: string | null | undefined): id is string {
+  if (!id) return false;
+  return locations.some((l) => l.id === id && !l.deletedAt && l.enabled);
 }
 
 /**
@@ -86,7 +101,12 @@ export function inboundDefaults(
   const prev = findRecentByName(items, s.name, aliasKey);
   const quantity = s.quantity && s.quantity > 0 ? s.quantity : prev?.quantity ?? 1;
   const unit = (s.unit || prev?.unit || '个').trim() || '个';
-  const locationId = s.locationId ?? prev?.locationId ?? firstEnabled(locations);
+  // 自带的 / 上次的位置**必须仍可用**（未删未停用），孤儿引用回落第一个启用位置（REV-13）
+  const locationId = usableLocation(locations, s.locationId)
+    ? s.locationId
+    : usableLocation(locations, prev?.locationId)
+      ? prev?.locationId
+      : firstEnabled(locations);
   return { quantity, unit, locationId, price: normalizePrice(prev?.price) };
 }
 

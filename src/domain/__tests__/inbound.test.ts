@@ -41,6 +41,13 @@ describe('inboundDefaults 的三级优先级', () => {
     const off = [mkLocation('L1', '冰箱冷藏', 'chilled', 10, false)];
     expect(inboundDefaults(mkShopping({ name: '随便' }), [], off).locationId).toBeNull();
   });
+
+  it('★ 自带 / 历史的位置已停用或删除（孤儿引用）→ 回落第一个启用位置（REV-13）', () => {
+    // 不校验的话，物品会被写进一个 UI 里找不到的柜子，之后只在「全部」筛选下可见
+    const locs2 = [mkLocation('L9', '旧柜子', 'dry', 5, false), mkLocation('L1', '冰箱冷藏', 'chilled', 10)];
+    const hist = [mkItem({ id: 'h', name: '牛奶', loc: 'L9' })];
+    expect(inboundDefaults(mkShopping({ name: '牛奶', loc: 'L9' }), hist, locs2).locationId).toBe('L1');
+  });
 });
 
 describe('别名匹配', () => {

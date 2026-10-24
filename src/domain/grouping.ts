@@ -16,8 +16,9 @@
 
 import type { ConsumeLog, ConsumeType, Item } from './types';
 import { normalizeName } from './normalize';
-import { diffDays } from './dates';
+import { diffDays, todayStr, isDateStr } from './dates';
 import { buildConsumeLog } from './bulk';
+import { round2 } from './price';
 import type { AliasKeyResolver } from './inbound';
 
 /** 一组同名同位置的物品 */
@@ -40,17 +41,25 @@ export interface ItemGroup {
 }
 
 /**
- * 折叠键 = `位置 + 名称`。
+ * 折叠键 = `位置 + 名称 + 单位`。
  *
  * ⚠️ **必须带位置**：冰箱里的和阳台上的同名物品是两回事，并成一张卡会让用户
  * 在错误的柜子里找东西。同位置的判断交给调用方传 `aliasKey`（字典别名）。
  *
- * 名称键优先用 `item.dictKey`（入库时定格，之后字典改名也不会漂移），
- * 没有再实时解析别名，最后才退到纯字面归一（自定义食材没有字典条目）。
+ * ⚠️ **必须带单位**：「牛奶 2 盒 + 1 袋」不能折成「共 3 盒」——数量跨单位相加没有
+ * 意义，FEFO 的「从这组扣 N 个」也无法在 盒/袋 之间分配（REV-44）。不同单位各成一组。
+ *
+ * 名称键的取法：`dictKey ?? name` 先过一遍**别名解析**，命中字典（含内置别名词根）就用
+ * 规范 key，否则退到 `normalizeName` 纯字面归一。**不能直接拿 dictKey 当 key 用**：
+ * 旧数据的 `dictKey` 存的是用户输入的原始名（v3 之前 `createItem` 写的是 `name`），
+ * 「西红柿」与「番茄」各存各的原始名，直接比对永远不相等，别名折叠形同虚设（REV-14）。
+ * 过一遍 `aliasKey` 后：新数据（dictKey 已是规范 key，自解析不变）、旧数据（原始名被
+ * 归并到规范 key）都能折叠到同一个键上。
  */
 export function foldKeyOf(item: Item, aliasKey?: AliasKeyResolver): string {
-  const nameKey = item.dictKey ?? aliasKey?.(item.name) ?? normalizeName(item.name);
-  return `${item.locationId}|${nameKey}`;
+  const raw = item.dictKey ?? item.name;
+  const nameKey = aliasKey?.(raw) ?? normalizeName(raw);
+  return `${item.locationId}|${nameKey}|${item.unit}`;
 }
 
 /**
@@ -73,10 +82,6 @@ export function fefoCompare(a: Item, b: Item): number {
 /** 组内排序 */
 export function sortFefo(items: Item[]): Item[] {
   return [...items].sort(fefoCompare);
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }
 
 /**
@@ -172,8 +177,8 @@ export function planGroupConsume(
   type: ConsumeType,
   now: number = Date.now(),
 ): GroupConsumePlan {
-  const fromEpochStr = new Date(now);
-  const today = `${fromEpochStr.getFullYear()}-${String(fromEpochStr.getMonth() + 1).padStart(2, '0')}-${String(fromEpochStr.getDate()).padStart(2, '0')}`;
+  // 手拼 YYYY-MM-DD 与 `todayStr` 是两份实现，历史教训（批次 B §10）是它们必漂移
+  const today = todayStr(now);
   const logs: ConsumeLog[] = [];
   const out: Item[] = [];
   for (const s of fefoSlices(members, qty)) {
@@ -193,11 +198,16 @@ export function planGroupConsume(
  * 判据：同名同位置，且到期日**都为空**或**相差 ≤ 1 天**。
  * 差 1 天算「同一天」是因为日期是用户手填的，`10-08` 与 `10-09` 差一天
  * 在实际场景里就是同一批；而差 3 天就该让用户自己看清两行。
+ *
+ * ⚠️ 入参先过 `isDateStr` 守卫：格式非法的日期（`0`、`'abc'`）按「无到期日」参与
+ * 判定而不是穿透进 `diffDays` 抛 TypeError（§5.7 三层防御的运行时兜底，REV-45）。
  */
 export function expiryCompatible(a: string | null, b: string | null): boolean {
-  if (a === null && b === null) return true;
-  if (a === null || b === null) return false;
-  return Math.abs(diffDays(a, b)) <= 1;
+  const da = isDateStr(a) ? a : null;
+  const db = isDateStr(b) ? b : null;
+  if (da === null && db === null) return true;
+  if (da === null || db === null) return false;
+  return Math.abs(diffDays(da, db)) <= 1;
 }
 
 /**
