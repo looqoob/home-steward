@@ -31,14 +31,17 @@ export function useReminder() {
   }
 
   async function scheduleNative() {
-    if (!settings.settings.remindEnabled) return;
     try {
       const perm = await LocalNotifications.requestPermissions();
       if (perm.display !== 'granted') return;
+      // ⚠️ 取消必须在 remindEnabled 判定**之前**（REV-11）：关闭提醒 / 改时间后
+      // refresh() 会走到这里，若先 return，旧排程的通知第二天照弹 —— 「关了还响」
+      // 比不响更毁信任。先清空再按需重排，两种情况都正确。
       const pending = await LocalNotifications.getPending();
       if (pending.notifications.length) {
         await LocalNotifications.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });
       }
+      if (!settings.settings.remindEnabled) return;
       const at = new Date(nextDailyAt(settings.settings.remindHour, settings.settings.remindMinute));
       const list = due();
       if (!list.length) return;
@@ -64,11 +67,18 @@ export function useReminder() {
     try {
       if (Notification.permission === 'default') await Notification.requestPermission();
       if (Notification.permission !== 'granted') return;
-      new Notification(`今日待吃 ${list.length} 件`, {
-        body: list.slice(0, 3).map(({ item, f }) => `${item.name} ${f.label}`).join('、'),
-      });
+      const title = `今日待吃 ${list.length} 件`;
+      const body = list.slice(0, 3).map(({ item, f }) => `${item.name} ${f.label}`).join('、');
+      // ⚠️ Android Chrome 禁止页面直接 new Notification（必须走 SW registration），
+      // iOS Safari 则完全不支持页面通知 —— 优先 SW 路径，构造函数只作桌面兜底（REV-37）
+      if (navigator.serviceWorker) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, { body, tag: 'hs-reminder' });
+        return;
+      }
+      new Notification(title, { body });
     } catch {
-      /* 忽略 */
+      /* 忽略：没有 SW / 权限被拒都静默降级为 App 内提醒条 */
     }
   }
 

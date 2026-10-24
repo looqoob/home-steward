@@ -9,6 +9,8 @@ import './styles/index.css';
 import App from './App.vue';
 import router from './router';
 import { initSafeArea } from './composables/useSafeArea';
+// 静态导入即可：useToast 已被 App/组件静态引用，动态 import 拆不了 chunk（构建会告警）
+import { useToast } from './composables/useToast';
 
 // ⚠️ 必须在 mount 之前：先把 `--safe-top` 写成实测/兜底值，
 // 否则首帧会按 `env()` 的 0 画一遍，再于下一帧整体下移（顶栏闪一下）。
@@ -19,6 +21,19 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(router);
 app.mount('#app');
+
+/**
+ * 存储配额兜底（REV-34）：IndexedDB 写满时 Dexie 抛 QuotaExceededError，
+ * 此前它是 unhandled rejection —— UI 静默失败，用户以为保存成功、重开 App 才发现没了。
+ * 统一在这里接住并给出可见提示（useToast 是模块级单例，App 挂载后即可显示）。
+ * 根治要靠「申请持久存储 + 导出提醒」，这里至少做到「失败看得见」。
+ */
+window.addEventListener('unhandledrejection', (e) => {
+  const name = (e.reason as { name?: string } | null)?.name ?? '';
+  if (name === 'QuotaExceededError') {
+    useToast().show('存储空间已满，最近一次操作可能没有保存。请清理浏览器数据或导出备份。', 5000);
+  }
+});
 
 // 原生壳里绝对不能注册 Service Worker：WebView 加载本地资源，
 // SW 会缓存旧版本，导致「改了代码 APK 里还是旧的」这种极难排查的问题。

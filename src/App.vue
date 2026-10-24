@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
 import { db } from '@/data';
+import { onDataChanged } from '@/data/sync';
 import { ensureSeed } from '@/data/seed';
 import { useSettingsStore } from '@/stores/settings';
 import { useDictStore } from '@/stores/dict';
@@ -19,7 +20,7 @@ const items = useItemsStore();
 const shopping = useShoppingStore();
 const barcodes = useBarcodesStore();
 const reminder = useReminder();
-const { message, action, runAction } = useToast();
+const { message, action, runAction, show } = useToast();
 const theme = useTheme();
 
 const ready = ref(false);
@@ -40,6 +41,18 @@ watch(
   { immediate: true },
 );
 
+/**
+ * 提醒设置一变就重排程（REV-11）。此前 `refresh()` 只在启动时调一次：
+ * 改提醒时间不重启不生效；**关掉提醒也不会取消已排程的通知**，第二天照弹。
+ * 放在 App 层 watch 而不是 settings store 里调，避免 store ↔ composable 循环依赖。
+ */
+watch(
+  () => [settings.settings.remindEnabled, settings.settings.remindHour, settings.settings.remindMinute] as const,
+  () => {
+    if (ready.value) void reminder.refresh();
+  },
+);
+
 onMounted(async () => {
   try {
     const ok = await db.probe();
@@ -49,6 +62,14 @@ onMounted(async () => {
       return;
     }
     await ensureSeed(db);
+    // 申请持久存储（批次 5，REV-34 的结构性补丁）：Chrome 在存储紧张时会清理 IndexedDB，
+    // 纯本地无备份是本产品最大的数据风险。是否批准由浏览器按站点参与度决定，静默请求即可；
+    // 被拒绝也不影响功能。状态展示（「已保护/可能被清理」）待后续版本接入 UI。
+    try {
+      await navigator.storage?.persist?.();
+    } catch {
+      /* 老 WebView 不支持：忽略 */
+    }
     await Promise.all([
       settings.load(),
       dict.load(),
@@ -61,6 +82,19 @@ onMounted(async () => {
     ready.value = true;
     await shopping.generate();
     await reminder.refresh();
+
+    // 多标签同步（REV-15）：其它窗口写库后本窗口自动重读全部 store。
+    // 不做的话，本窗口继续用旧快照整条 put，会把另一个窗口的写入无声覆盖掉。
+    // 防抖 300ms：一次批量写会触发一串 broadcast，只需重读一次。
+    let syncTimer: ReturnType<typeof setTimeout> | null = null;
+    onDataChanged(() => {
+      if (!ready.value) return;
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(async () => {
+        await Promise.all([settings.load(), dict.load(), locations.load(), items.load(), shopping.load(), barcodes.load()]);
+        show('已同步其它窗口的改动', 1800);
+      }, 300);
+    });
   } catch (e) {
     bootError.value = (e as Error).message || '初始化失败';
     ready.value = true;
