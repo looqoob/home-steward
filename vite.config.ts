@@ -81,7 +81,7 @@ export default defineConfig({
   },
   build: {
     target: 'es2020',
-    // 中文文件名资源在部分 WebView 上有问题，统一用 ASCII 命名
+    // 小于 4KB 的静态资源内联进产物：减少 PWA 预缓存条目与离线请求数（REV-40：旧注释「中文名资源」的理由不成立）
     assetsInlineLimit: 4096,
   },
   server: { host: 'localhost', port: 5173 },

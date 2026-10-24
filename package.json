@@ -10,7 +10,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview --port 4173",
+    "preview": "vite preview",
     "icons": "node scripts/gen-icons.mjs",
     "cap:add": "npx cap add android",
     "cap:sync": "npm run build && npx cap sync android",
@@ -32,7 +32,8 @@
   "devDependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
-    "@tailwindcss/vite": "^4.1.13",
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/node": "^26.0.0",
     "@vitejs/plugin-vue": "^6.0.9",
     "sharp": "^0.35.4",
     "tailwindcss": "^4.1.13",
