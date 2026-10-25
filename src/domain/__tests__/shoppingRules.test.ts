@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { planShopping, DISMISS_DAYS, shoppingListText } from '../shoppingRules';
-import type { ConsumeLog, ShoppingItem } from '../types';
+import { planShopping, planShoppingRetirements, DISMISS_DAYS, shoppingListText } from '../shoppingRules';
+import type { ConsumeLog, ShopReason, ShoppingItem } from '../types';
 import { mkItem, mkShopping, NOW } from './fixtures';
 
 const DAY = 86_400_000;
@@ -152,5 +152,42 @@ describe('planShopping · 临期替换别名去重（v1.1 F15-12）', () => {
     const near = planShopping(items, [], [], NOW).filter((s) => s.reason === 'near_expiry');
     expect(near).toHaveLength(1);
     expect(near[0].sourceItemId).toBe('d');
+  });
+});
+
+describe('planShoppingRetirements · 原因消失自动退场（v1.1 F18）', () => {
+  const mkAuto = (name: string, reason: ShopReason, over: Partial<ShoppingItem> = {}): ShoppingItem => ({
+    ...mkShopping({ name }),
+    reason,
+    auto: true,
+    checked: false,
+    ...over,
+  });
+
+  it('★ 建议集里没有它 → 退场（原因消失的牛奶行）', () => {
+    const existing = [mkAuto('牛奶', 'near_expiry'), mkAuto('酸奶', 'near_expiry')];
+    const out = planShoppingRetirements(existing, [
+      { name: '酸奶', reason: 'near_expiry', why: '', sourceItemId: 'x', locationId: null, unit: null, quantity: null },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toBe(existing[0].id);
+  });
+
+  it('手动项 / 已勾选 / 已入库 / 已软删的行永不退场', () => {
+    const existing = [
+      mkAuto('牛奶', 'near_expiry', { auto: false }),
+      mkAuto('牛奶', 'near_expiry', { checked: true }),
+      mkAuto('牛奶', 'near_expiry', { inboundItemId: 'i1' }),
+      mkAuto('牛奶', 'near_expiry', { deletedAt: NOW }),
+    ];
+    expect(planShoppingRetirements(existing, [])).toHaveLength(0);
+  });
+
+  it('同名不同 reason 不互抵：临期建议消失但库存 0 建议在场 → 不退', () => {
+    const existing = [mkAuto('牛奶', 'near_expiry')];
+    const out = planShoppingRetirements(existing, [
+      { name: '牛奶', reason: 'out_of_stock', why: '', sourceItemId: null, locationId: null, unit: null, quantity: null },
+    ]);
+    expect(out).toHaveLength(1);
   });
 });

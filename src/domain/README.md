@@ -308,6 +308,7 @@ groupByFreshness(rows);
 | `CompareRow` | 接口 | 多位置对比表的一行 |
 | `compareLocations` | `(input, locations, resolver, fallback) => CompareRow[]` | 列出每个候选位置下的到期日。`envLabel` 是**文案**（「冷藏」，来自 `ENV_MAP`），不是枚举值 |
 | `manualDaysForExpiry` | `(expireAt, storedAt, producedAt?) => number \| null` | **v1.1 F17**：用户指定的到期日 → `manualShelfLife` 天数（基准 `producedAt \|\| storedAt`，早于基准返回 `null`）。入库/编辑入口「到期日直改」的落库换算 |
+| `planShoppingRetirements` | `(liveRows, suggestions) => string[]` | **v1.1 F18**：找出「原因已不成立」的自动建议 id（未勾选/未入库且不在原因集）。⚠️ `suggestions` 必须是**全部成立原因**——调用方（stores/shopping.generate）喂给 planShopping 的 existing 只传软删行，否则幂等过滤会误判退场 |
 
 ## statsCsv.ts（v1.1 F2）
 

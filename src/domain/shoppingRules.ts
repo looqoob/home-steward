@@ -254,3 +254,35 @@ export function shoppingListText(groups: { label: string; items: ShoppingItem[] 
   if (!total) return '';
   return [`购物清单（${total} 件）`, ...parts].join('\n');
 }
+
+/* ==================== 自动建议的自动退场（v1.1 F18） ==================== */
+
+/**
+ * 找出「原因已不成立」的自动建议 id。
+ *
+ * 背景：`planShopping` 只负责**新增**建议，从不删除——自动项一旦生成就会一直留着，
+ * 哪怕理由已经消失（物品买到了 / 保质期改长了 / 最近没再浪费）。用户看到
+ * 「牛奶·临期替换」挂着而牛奶明明还有 7 天，只会觉得清单不可信。
+ *
+ * 退场条件（**全部满足**才退）：
+ * - `auto: true`（手动项永远由用户自己管理）；
+ * - 未软删、**未勾选、未入库**（勾了说明用户说买过了，等他入库或清除）；
+ * - 不在当前建议集中（同 `planShopping` 的幂等键：归一名 + reason）。
+ *
+ * ⚠️ 退场**不设** `dismissedUntil`：理由真的消失了，抑制无从谈起；
+ * 将来理由再次成立（东西又吃完了）由 `planShopping` 正常重新生成。
+ * 7 天抑制逻辑只属于用户主动 ✕ 的路径（`remove()`），两者不要混。
+ *
+ * @param existing 清单活行（未软删；调用方从 `allIncludingDeleted()` 结果里过滤）
+ * @param suggestions **当前成立的全部原因集**——调用方必须让 `planShopping`
+ *   返回包含已存在建议的完整集（做法：喂给它的 `existing` 只传软删行，
+   * 否则幂等过滤会把已存在的建议剔除，退场会把所有老建议误判成「原因消失」）
+ * @returns 应退场的清单项 id 列表（调用方逐条软删）
+ */
+export function planShoppingRetirements(existing: ShoppingItem[], suggestions: Suggestion[]): string[] {
+  const liveKeys = new Set(suggestions.map((s) => `${normalizeName(s.name)}|${s.reason}`));
+  return existing
+    .filter((e) => e.auto && !e.deletedAt && !e.checked && !e.inboundItemId)
+    .filter((e) => !liveKeys.has(`${normalizeName(e.name)}|${e.reason}`))
+    .map((e) => e.id);
+}

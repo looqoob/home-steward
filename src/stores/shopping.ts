@@ -3,7 +3,8 @@ import { computed, ref } from 'vue';
 import { db } from '@/data';
 import type { Item, ShoppingItem } from '@/domain/types';
 import { newId } from '@/domain/ids';
-import { planShopping, DISMISS_DAYS, type Suggestion } from '@/domain/shoppingRules';
+import { planShopping, planShoppingRetirements, DISMISS_DAYS, type Suggestion } from '@/domain/shoppingRules';
+import { normalizeName } from '@/domain/normalize';
 import { inboundInputs } from '@/domain/inbound';
 import { manualDaysForExpiry } from '@/domain/shelfLife';
 import { todayStr } from '@/domain/dates';
@@ -29,14 +30,19 @@ export const useShoppingStore = defineStore('shopping', () => {
   }
 
   /**
-   * 根据商品与消耗日志自动生成购物建议并落库。
+   * 根据商品与消耗日志自动生成购物建议并落库（**双向同步**，v1.1 F18）。
    *
-   * **幂等**：同一 `name|reason` 不会重复生成，且被删除的自动项在 `DISMISS_DAYS`（7 天）内
-   * 不会重生（`domain/shoppingRules.planShopping` 保证），所以可以安全地每次启动都调用。
+   * - **新增**：`planShopping` 产出的建议落库（幂等：同 `name|reason` 不重复）；
+   * - **退场**：不在「当前成立原因全集」里的自动项软删（`planShoppingRetirements`：
+   *   未勾选/未入库）。此前只增不减，物品买到了或保质期改长了建议还挂着，
+   *   用户会觉得清单不可信。
    *
-   * ⚠️ 喂给 `planShopping` 的必须是 `allIncludingDeleted()`（含软删除行）：抑制依据住在
-   * 软删除行里。此前传 `list.value`（`all()` 已滤软删），dismissed 集合恒为空，
-   * 「忽略牛奶建议」后下次启动又冒出来（REV-43）。
+   * ⚠️ 调 `planShopping` 时**只喂软删行**（抑制依据）：它的幂等过滤会把已存在的
+   * 建议从返回集里剔除——若喂全量，「当前成立的全部原因」就只剩新建议，
+   * 退场会把所有老建议误判成「原因消失」全部退掉（F18 preview 实测踩到）。
+   *
+   * 抑制语义：用户主动 ✕ 的行带 `dismissedUntil`，7 天内不重生（`DISMISS_DAYS`）；
+   * 自动退场**不设**抑制——理由真的消失了无从抑制，将来理由再成立会正常重生。
    *
    * @returns 本次新增条数；`0` 表示没有新建议。
    * @remarks 依赖 `items`、`settings` store 已加载，否则结果为空。
@@ -46,10 +52,21 @@ export const useShoppingStore = defineStore('shopping', () => {
     const items = useItemsStore();
     const settings = useSettingsStore();
     const existing = await db.shopping.allIncludingDeleted();
-    const suggestions: Suggestion[] = planShopping(items.list, items.logs, existing, Date.now(), settings.settings);
-    if (!suggestions.length) return 0;
+    const live = existing.filter((e) => !e.deletedAt);
+    const suggestions: Suggestion[] = planShopping(
+      items.list,
+      items.logs,
+      existing.filter((e) => e.deletedAt),
+      Date.now(),
+      settings.settings,
+    );
+    await retireStale(live, suggestions);
+    // 新增 = 成立原因集中「还没有活行」的部分（已有的不重复建）
+    const liveKeys = new Set(live.map((e) => `${normalizeName(e.name)}|${e.reason}`));
+    const fresh = suggestions.filter((s) => !liveKeys.has(`${normalizeName(s.name)}|${s.reason}`));
+    if (!fresh.length) return 0;
     const now = Date.now();
-    const rows: ShoppingItem[] = suggestions.map((s) => ({
+    const rows: ShoppingItem[] = fresh.map((s) => ({
       id: newId(),
       name: s.name,
       quantity: s.quantity,
@@ -69,6 +86,17 @@ export const useShoppingStore = defineStore('shopping', () => {
     await db.shopping.bulkPut(rows);
     await load();
     return rows.length;
+  }
+
+  /** 执行自动退场（v1.1 F18）：一次 bulkPut 软删所有「原因已不成立」的自动项。 */
+  async function retireStale(live: ShoppingItem[], suggestions: Suggestion[]) {
+    const ids = planShoppingRetirements(live, suggestions);
+    if (!ids.length) return;
+    const now = Date.now();
+    const set = new Set(ids);
+    const rows = live.filter((e) => set.has(e.id)).map((e) => ({ ...e, deletedAt: now, updatedAt: now }));
+    await db.shopping.bulkPut(rows);
+    await load();
   }
 
   async function toggle(id: string) {

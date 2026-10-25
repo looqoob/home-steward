@@ -456,7 +456,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | 品类默认天数 / 关键词归类 | `src/domain/categories.ts`（`CATEGORY_DEFAULTS`、`KEYWORDS` **顺序敏感**） |
 | 新鲜度阈值 / 颜色 | `src/domain/freshness.ts` + `src/styles/index.css` |
 | 到期日算法 / 位置对比 | `src/domain/shelfLife.ts` |
-| 购物清单自动生成规则 / 忽略抑制时长 | `src/domain/shoppingRules.ts`（`DISMISS_DAYS` 唯一定义） |
+| 购物清单自动生成规则 / 忽略抑制时长 | `src/domain/shoppingRules.ts`（`DISMISS_DAYS` 唯一定义；**建议退场** `planShoppingRetirements`——suggestions 必须是全部成立原因集，见函数 JSDoc） |
 | 清单按位置分组顺序 | `src/domain/shoppingRules.ts`（`groupShoppingByLocation`） |
 | 同名折叠 / FEFO / 入库真合并 | `src/domain/grouping.ts` |
 | 库存列表分组顺序 | `src/domain/freshness.ts`（`groupByFreshness`；**折叠必须在此之前**，§5.6） |

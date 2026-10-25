@@ -23,6 +23,11 @@ const locations = useLocationsStore();
 const { show } = useToast();
 const manualName = ref('');
 
+/** 「手动添加」默认收起（v1.1 F18）：低频操作不该占自动建议的第一屏 */
+const manualOpen = ref(false);
+/** 「规则说明」默认收起：想了解的人点开，不打扰高频动线 */
+const helpOpen = ref(false);
+
 /**
  * 清单的两种分组维度（V3-01）。
  *
@@ -182,6 +187,8 @@ async function addManual() {
   if (!n) return;
   await shopping.addManual(n);
   manualName.value = '';
+  // 加完自动收起：手动添加是「记一笔就走」的动作，不留在展开态
+  manualOpen.value = false;
 }
 
 /**
@@ -235,7 +242,16 @@ async function doClearDone() {
       </PageHeader>
 
       <div class="tip mb-3">
-        清单根据库存与消耗自动生成；手动项不会被自动清理。
+        清单根据库存与消耗自动生成。
+        <button
+          type="button"
+          class="bg-transparent border-0 text-primary-600 text-[12px] cursor-pointer p-0"
+          :aria-expanded="helpOpen"
+          @click="helpOpen = !helpOpen"
+        >{{ helpOpen ? '收起说明' : '规则说明' }}</button>
+        <div v-if="helpOpen" class="mt-1.5 leading-relaxed">
+          自动出现的三种情况：<b>没库存了</b>（最近吃过、现在没有了）、<b>临期替换</b>（快到期了）、<b>易浪费</b>（最近总扔）。买了就<b>勾选</b>入库；点 <b>✕</b> 移除，自动项 7 天内不再提醒；手动加的项不会被自动清理。
+        </div>
       </div>
 
     <!--
@@ -253,8 +269,21 @@ async function doClearDone() {
       </PillGroup>
     </template>
 
-    <!-- 用项目自己的输入样式（label 在上 + 原生 input），不用 van-field：后者的固定宽度标签会挤压输入区 -->
-    <FormField label="手动添加" for-id="manual-name">
+    <!--
+      v1.1 F18：「手动添加」收成一行入口——低频操作不该占自动建议的第一屏。
+      展开后仍是同一套输入（label 在上 + 原生 input），不用 van-field。
+    -->
+    <div v-if="!manualOpen" class="mb-1">
+      <button
+        type="button"
+        class="w-full inline-flex items-center justify-center gap-1.5 text-[13px] text-ink-2 bg-transparent border border-dashed border-line rounded-md cursor-pointer min-h-11"
+        @click="manualOpen = true"
+      >
+        <svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5.5" x2="12" y2="18.5" /><line x1="5.5" y1="12" x2="18.5" y2="12" /></svg>
+        手动添加
+      </button>
+    </div>
+    <FormField v-else label="手动添加" for-id="manual-name">
       <div class="flex gap-2">
         <input
           id="manual-name"
