@@ -5,6 +5,8 @@ import type { Item, ShoppingItem } from '@/domain/types';
 import { newId } from '@/domain/ids';
 import { planShopping, DISMISS_DAYS, type Suggestion } from '@/domain/shoppingRules';
 import { inboundInputs } from '@/domain/inbound';
+import { manualDaysForExpiry } from '@/domain/shelfLife';
+import { todayStr } from '@/domain/dates';
 import { foodKeyOf } from '@/data/dict';
 import { useItemsStore } from './items';
 import { useLocationsStore } from './locations';
@@ -172,9 +174,17 @@ export const useShoppingStore = defineStore('shopping', () => {
    *
    * 走 `items.addMany`（一次 bulkPut）而不是循环 `add()`，后者每次都会全量重读。
    *
+   * @param expiry 用户指定的到期日（v1.1 F17，null = 自动推算）；换算为手填保质期天数
+   *               （基准是入库日 = 今天）挂到新建物品上，换位置也不会被字典覆盖。
    * @returns 新建的物品；清单项已不存在时返回 `null`
    */
-  async function inboundOne(id: string, quantity: number, locationId: string, price: number | null = null): Promise<Item | null> {
+  async function inboundOne(
+    id: string,
+    quantity: number,
+    locationId: string,
+    price: number | null = null,
+    expiry: string | null = null,
+  ): Promise<Item | null> {
     const items = useItemsStore();
     const locs = useLocationsStore();
     const s = list.value.find((x) => x.id === id && !x.deletedAt);
@@ -188,6 +198,8 @@ export const useShoppingStore = defineStore('shopping', () => {
       overrides: new Map([[s.id, { quantity, locationId, price }]]),
     });
     if (!rows.length) return null;
+    // v1.1 F17：指定到期日 → 手填保质期天数（快速入库同口径）
+    if (expiry) rows[0].input.manualShelfLife = manualDaysForExpiry(expiry, todayStr(Date.now())) ?? undefined;
     const created = await items.addMany([rows[0].input]);
     const item = created[0];
     if (item) await markInbound(id, item.id);

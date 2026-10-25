@@ -1,6 +1,6 @@
 import type { EnvType, Item, Location, ShelfLifeSource } from './types';
 import { NOT_RECOMMENDED, ENV_MAP } from './types';
-import { addDays } from './dates';
+import { addDays, diffDays } from './dates';
 
 export interface ResolveResult {
   days: number | typeof NOT_RECOMMENDED | null;
@@ -92,6 +92,25 @@ export function compareLocations(input: ExpiryInput, locations: Location[], reso
       reason: r.reason,
     };
   });
+}
+
+/**
+ * 把「用户指定的到期日」换算成 `manualShelfLife`（手填保质期天数）的落库形态。
+ *
+ * v1.1 F17：三个入库入口（快速入库 / 扫码 / 清单入库卡）与编辑页的「到期日」
+ * 直改都走这里——用户指定的是**日期**，而体系里「用户明确指定」的唯一载体是
+ * manualShelfLife（优先级最高、换位置不被字典覆盖，语义恰好匹配）。
+ *
+ * ⚠️ 基准与 `computeExpiry` 一致：`producedAt || storedAt`（有生产日从生产日起算）。
+ * 传入早于基准的日期返回 `null`（手填天数必须 > 0，无法表达「已过期」——
+ * UI 层把日期选择器的 min 设为基准日，不留这个入口）。
+ *
+ * @example manualDaysForExpiry('2026-10-30', '2026-10-25') // 5
+ */
+export function manualDaysForExpiry(expireAt: string, storedAt: string, producedAt?: string | null): number | null {
+  const base = producedAt || storedAt;
+  const d = diffDays(expireAt, base);
+  return d > 0 ? d : null;
 }
 
 export interface ExpiryPreviewOptions {

@@ -5,7 +5,7 @@ import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { inboundDefaults } from '@/domain/inbound';
 import { foodKeyOf } from '@/data/dict';
-import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
+import { computeExpiry } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { useToday } from '@/composables/useNow';
 import { fmtMoney, normalizePrice, priceFromInput, round2 } from '@/domain/price';
@@ -14,6 +14,7 @@ import { ENV_MAP, type ShoppingItem } from '@/domain/types';
 import QtyStepper from '@/components/QtyStepper.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
+import ExpiryEditRow from '@/components/ExpiryEditRow.vue';
 
 /**
  * 清单项的行内入库卡。
@@ -28,7 +29,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'inbound', quantity: number, locationId: string, price: number | null): void;
+  /** @param expiry 用户指定的到期日（null = 跟随自动推算），由父级换算为手填天数落库 */
+  (e: 'inbound', quantity: number, locationId: string, price: number | null, expiry: string | null): void;
   (e: 'dismiss'): void;
   (e: 'undo'): void;
 }>();
@@ -49,6 +51,8 @@ const locId = ref<string | null>(null);
  * `null` = 没填 —— 与 `0` 区分开，统计里「没填价」不能被当成「免费」。
  */
 const price = ref<number | null>(null);
+/** 用户指定的到期日（v1.1 F17，null = 跟随自动推算） */
+const expiryDate = ref<string | null>(null);
 
 watch(
   () => props.item.id,
@@ -57,6 +61,7 @@ watch(
     qty.value = d.quantity;
     locId.value = d.locationId;
     price.value = d.price;
+    expiryDate.value = null;
   },
   { immediate: true },
 );
@@ -64,18 +69,26 @@ watch(
 const enabled = computed(() => locations.enabled);
 const canSubmit = computed(() => locId.value !== null && qty.value > 0);
 
-/** 到期日预览：与快速入库（QuickAddSheet）用同一套推算，措辞也保持一致 */
-const preview = computed(() => {
-  if (!locId.value) return '';
+/** 到期日推算：与快速入库（QuickAddSheet）同一套（v1.1 F17 升级为可编辑行） */
+const expiryCalc = computed(() => {
+  if (!locId.value) return null;
   const loc = locations.byId(locId.value);
-  if (!loc) return '';
-  const r = computeExpiry(
+  if (!loc) return null;
+  return computeExpiry(
     { name: props.item.name, category: null, storedAt: today.value, producedAt: null, manualShelfLife: null },
     loc.env,
     dict.resolve,
     fallbackDays,
   );
-  return expiryPreviewText(props.item.name, r, { envLabel: ENV_MAP[loc.env].label });
+});
+
+const expiryHint = computed(() => {
+  const r = expiryCalc.value;
+  if (!r) return '';
+  if (r.notRecommended) return `不建议存放（${r.reason}）`;
+  if (!r.expireAt || !r.days) return '未设置保质期，可手动指定';
+  const loc = locations.byId(locId.value as string);
+  return `${ENV_MAP[loc?.env ?? 'none'].label} · 按 ${r.days} 天推算`;
 });
 
 /**
@@ -92,7 +105,7 @@ const totalHint = computed(() => {
 
 function submit() {
   if (!canSubmit.value || !locId.value) return;
-  emit('inbound', qty.value, locId.value, normalizePrice(price.value));
+  emit('inbound', qty.value, locId.value, normalizePrice(price.value), expiryDate.value);
 }
 </script>
 
@@ -148,7 +161,14 @@ function submit() {
     <div v-if="enabled.length === 0" class="tip tip-danger mb-2.5">
       所有位置都被停用了，请先到「位置管理」启用一个位置再入库。
     </div>
-    <div v-else class="tip mb-2.5">{{ preview }}</div>
+    <!-- v1.1 F17：到期日从只读预览升级为可编辑行 -->
+    <div v-else class="mb-2.5">
+      <ExpiryEditRow
+        v-model="expiryDate"
+        :auto-expire-at="expiryCalc?.expireAt ?? null"
+        :hint="expiryHint"
+      />
+    </div>
 
     <div class="flex gap-2">
       <button

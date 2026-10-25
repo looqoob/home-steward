@@ -6,7 +6,7 @@ import { useLocationsStore } from '@/stores/locations';
 import { useItemsStore } from '@/stores/items';
 import { useDictStore } from '@/stores/dict';
 import { fallbackDays } from '@/domain/categories';
-import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
+import { computeExpiry, manualDaysForExpiry } from '@/domain/shelfLife';
 import { todayStr } from '@/domain/dates';
 import { ENV_MAP } from '@/domain/types';
 import { useToast } from '@/composables/useToast';
@@ -15,6 +15,7 @@ import QtyStepper from '@/components/QtyStepper.vue';
 import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import FormField from '@/components/FormField.vue';
+import ExpiryEditRow from '@/components/ExpiryEditRow.vue';
 import type { Item } from '@/domain/types';
 // 仅类型导入：运行时代码走动态 import，不会让 html5-qrcode 进主包
 import type { Html5Qrcode } from 'html5-qrcode';
@@ -188,6 +189,7 @@ async function doInbound(
   unit: string,
   locationId: string | null,
   price: number | null = null,
+  expiry: string | null = null,
 ) {
   if (!locationId) {
     show('请先到「位置管理」启用一个位置');
@@ -195,7 +197,9 @@ async function doInbound(
   }
   // ⚠️ 先停扫、再写库：解码回调按帧触发，等 addMany 落库完再停，中间那几帧已经各入库一次了
   await stopScanner();
-  const [row] = await items.addMany([{ name, quantity, unit, locationId, price: normalizePrice(price) }]);
+  // v1.1 F17：指定到期日 → 手填保质期天数（与快速入库同口径，基准 storedAt = 今天）
+  const manual = expiry ? manualDaysForExpiry(expiry, todayStr()) : null;
+  const [row] = await items.addMany([{ name, quantity, unit, locationId, price: normalizePrice(price), manualShelfLife: manual ?? undefined }]);
   if (!row) return;
   show(`已加入库存：${row.name} ${row.quantity}${row.unit}`, 2200, {
     text: '撤销',
@@ -223,7 +227,7 @@ async function saveNewMapping() {
       locationId: newLoc.value,
       price: newPrice.value,
     });
-    await doInbound(name, newQty.value, newUnit.value, newLoc.value, newPrice.value);
+    await doInbound(name, newQty.value, newUnit.value, newLoc.value, newPrice.value, expiryDate.value);
   } finally {
     busy.value = false;
   }
@@ -260,26 +264,33 @@ async function submitManual() {
   await onScan(code);
 }
 
-const expiryPreview = ref('');
-
-watch([newLoc, newName], () => {
-  if (!newLoc.value || !newName.value.trim()) {
-    expiryPreview.value = '';
-    return;
-  }
+/**
+ * 到期日推算（v1.1 F17）：把原只读 tip 拆成「预览日期 + 无日期说明」，交给
+ * ExpiryEditRow 呈现为可编辑行——扫码入口此前连预览都没有，是三个入口里最缺的一个。
+ */
+const expiryCalc = computed(() => {
+  if (!newLoc.value || !newName.value.trim()) return null;
   const loc = locations.byId(newLoc.value);
-  if (!loc) {
-    expiryPreview.value = '';
-    return;
-  }
-  const r = computeExpiry(
+  if (!loc) return null;
+  return computeExpiry(
     { name: newName.value.trim(), category: null, storedAt: todayStr(), producedAt: null, manualShelfLife: null },
     loc.env,
     dict.resolve,
     fallbackDays,
   );
-  expiryPreview.value = expiryPreviewText(loc.name, r, { unsetText: '不计入保质期' });
 });
+
+const expiryHint = computed(() => {
+  const r = expiryCalc.value;
+  if (!r) return '';
+  if (r.notRecommended) return `不建议存放（${r.reason}）`;
+  if (!r.expireAt || !r.days) return '未设置保质期，可手动指定';
+  const loc = locations.byId(newLoc.value as string);
+  return `${ENV_MAP[loc?.env ?? 'none'].label} · 按 ${r.days} 天推算`;
+});
+
+/** 用户指定的到期日（null = 跟随自动推算） */
+const expiryDate = ref<string | null>(null);
 
 watch(
   () => props.modelValue,
@@ -291,6 +302,7 @@ watch(
       await stopScanner();
       pendingCode.value = null;
       newPrice.value = null;
+      expiryDate.value = null;
       failed.value = '';
     }
   },
@@ -379,7 +391,14 @@ onBeforeUnmount(() => {
           </div>
         </FormField>
 
-        <div v-if="expiryPreview" class="tip mb-3">{{ expiryPreview }}</div>
+        <!-- v1.1 F17：到期日可编辑行（此前扫码入口连只读预览都没有） -->
+        <div v-if="expiryCalc" class="mb-3">
+          <ExpiryEditRow
+            v-model="expiryDate"
+            :auto-expire-at="expiryCalc.expireAt"
+            :hint="expiryHint"
+          />
+        </div>
 
         <div class="flex flex-col gap-2">
           <van-button block type="primary" :disabled="!newName.trim() || busy" @click="saveNewMapping">记住并入库</van-button>

@@ -14,6 +14,7 @@ declare module 'vue' {
     ConsumeSheet: typeof import('./components/ConsumeSheet.vue')['default']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
     EnvDotLabel: typeof import('./components/EnvDotLabel.vue')['default']
+    ExpiryEditRow: typeof import('./components/ExpiryEditRow.vue')['default']
     FormField: typeof import('./components/FormField.vue')['default']
     FreshnessBadge: typeof import('./components/FreshnessBadge.vue')['default']
     GroupConsumeSheet: typeof import('./components/GroupConsumeSheet.vue')['default']

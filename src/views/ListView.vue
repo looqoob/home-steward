@@ -97,8 +97,8 @@ async function toggleCheck(s: ShoppingItem) {
   }
 }
 
-async function doInbound(s: ShoppingItem, quantity: number, locationId: string, price: number | null) {
-  const item = await shopping.inboundOne(s.id, quantity, locationId, price);
+async function doInbound(s: ShoppingItem, quantity: number, locationId: string, price: number | null, expiry: string | null = null) {
+  const item = await shopping.inboundOne(s.id, quantity, locationId, price, expiry);
   if (!item) {
     show('入库失败，请检查位置设置');
     return;
@@ -339,7 +339,7 @@ async function doClearDone() {
           v-if="openInboundId === s.id && !s.inboundItemId"
           :item="s"
           :inbound="false"
-          @inbound="(q, l, p) => doInbound(s, q, l, p)"
+          @inbound="(q, l, p, e) => doInbound(s, q, l, p, e)"
           @dismiss="openInboundId = null"
           @undo="undoInbound(s)"
         />

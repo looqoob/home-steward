@@ -307,6 +307,7 @@ groupByFreshness(rows);
 | `computeExpiry` | `(input, env, resolver, fallback) => ExpiryResult` | 主函数，见下 |
 | `CompareRow` | 接口 | 多位置对比表的一行 |
 | `compareLocations` | `(input, locations, resolver, fallback) => CompareRow[]` | 列出每个候选位置下的到期日。`envLabel` 是**文案**（「冷藏」，来自 `ENV_MAP`），不是枚举值 |
+| `manualDaysForExpiry` | `(expireAt, storedAt, producedAt?) => number \| null` | **v1.1 F17**：用户指定的到期日 → `manualShelfLife` 天数（基准 `producedAt \|\| storedAt`，早于基准返回 `null`）。入库/编辑入口「到期日直改」的落库换算 |
 
 ## statsCsv.ts（v1.1 F2）
 

@@ -457,6 +457,24 @@
 
 **验证**：typecheck 0 错误；vitest **276 例**全过；`audit:ui` 0 违规；build 成功。preview 实测（注入演示数据逐页截图）：三行卡一屏多看一张、紧凑待办展开后搜索框仍可见（限高生效）、明细压缩头 + 4px 色条、我的页两组卡、统计页从在库价值开始。走查 #9（进度条）按定案未动。
 
+### 批次 F17 · 到期日填写简化（2026-10-25 定案与落地）
+
+**需求来源**：需求方反馈「到期日与生产日期每次都要入库后进详情、点展开才能改，太繁琐」。定案 A+B+删预览表。
+
+**现状痛点**：三个入库入口的到期日全是只读（快速入库一行 tip 预览、清单入库卡预览文案、扫码什么都没有）；编辑页日期字段折叠在「更多选项」且只有「手填保质期（天数）」——改日期要自己换算天数。
+
+**落地**：
+
+| 项 | 内容 |
+| --- | --- |
+| 数据口径 | 新增 `domain/shelfLife.manualDaysForExpiry(expireAt, storedAt, producedAt?)`：用户指定日期 → `manualShelfLife` 天数（基准 `producedAt \|\| storedAt`，与 computeExpiry 同口径；早于基准返回 null，UI 日期 min 挡入口）。**为什么走 manual**：它是「用户明确指定」的唯一载体（优先级最高、换位置不被字典覆盖），不动 schema、备份零成本。+3 单测 |
+| 新组件 | `ExpiryEditRow.vue`：view（预览 + 修改）/ edit（今天/明天/3 天/一周胶囊 + date input + 恢复自动推算）两形态；`minDate` prop 供编辑页放宽到入库日 |
+| A · 三入口 | QuickAddSheet（只读 tip → 行，提交换算落库；换食材重置指定日期）、ScanSheet（**新增**该行——原本连预览都没有；doInbound 带 expiry）、ShoppingInboundRow（只读预览 → 行；emit 链带出 → `inboundOne` 挂 manualShelfLife） |
+| B · 编辑页 | 「到期日」主字段（`pickedExpiry` 双向 computed：日期形态 ⇄ manualShelfLife 天数形态）；「手填保质期（天数）」输入退役；生产日期/单价/备注维持折叠；**删「各位置到期日预览」表**（手填后失去意义；换位置决策已有带预览的 LocationPickerSheet） |
+| 附带修复 | QuickAddSheet 深链 `?quickadd=1` 挂载即打开时 `watch(modelValue)` 不触发、`locId` 恒 null（位置不预选、到期日行不出现）→ watch 加 `immediate: true` |
+
+**验证**：typecheck 0 错误；vitest **279 例**全过；`audit:ui` 0 违规；build 成功。preview 实测：三入口行渲染正常；快速入库选「3 天」→ DB `manual=3 / source=manual / expireAt=+3`；编辑页「恢复自动推算」→ `manual=null / source=builtin / expireAt=+7`；编辑页无预览表、无天数字段。
+
 ### 建议落地顺序
 
 F1（复用现有流水，成本最低）→ F3（原生壳体验短板）→ F2 → F5 → F4（唯一动 schema 的，放最后单独升版）。

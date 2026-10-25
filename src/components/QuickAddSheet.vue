@@ -6,7 +6,7 @@ import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { lookupFood, foodKeyOf } from '@/data/dict';
-import { computeExpiry, expiryPreviewText } from '@/domain/shelfLife';
+import { computeExpiry, manualDaysForExpiry } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP } from '@/domain/types';
 import { fmtMoney, normalizePrice, priceFromInput, round2 } from '@/domain/price';
@@ -20,6 +20,7 @@ import Pill from '@/components/Pill.vue';
 import PillGroup from '@/components/PillGroup.vue';
 import FormField from '@/components/FormField.vue';
 import IconPicker from '@/components/IconPicker.vue';
+import ExpiryEditRow from '@/components/ExpiryEditRow.vue';
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
@@ -120,17 +121,37 @@ function pickFood(f: string) {
   customName.value = '';
 }
 
-const note = computed(() => {
-  if (!selected.value || !locId.value) return '';
+/**
+ * 到期日推算（v1.1 F17）：把原只读 tip 的推算拆成「预览日期 + 无日期说明」，
+ * 交给 ExpiryEditRow 呈现为可编辑行。selected / locId 任一变化都会重算。
+ */
+const expiryCalc = computed(() => {
+  if (!selected.value || !locId.value) return null;
   const env = locations.envOf(locId.value);
-  const r = computeExpiry(
+  return computeExpiry(
     { name: selected.value, category: lookupFood(selected.value)?.category ?? null, storedAt: today.value, producedAt: null },
     env,
     dict.resolve,
     fallbackDays,
   );
-  const envLabel = ENV_MAP[env].label;
-  return expiryPreviewText(selected.value, r, { envLabel });
+});
+
+const expiryHint = computed(() => {
+  const r = expiryCalc.value;
+  if (!r) return '';
+  if (r.notRecommended) return `不建议存放（${r.reason}）`;
+  if (!r.expireAt || !r.days) return '未设置保质期，可手动指定';
+  const envLabel = ENV_MAP[locations.envOf(locId.value as string)].label;
+  return `${envLabel} · 按 ${r.days} 天推算`;
+});
+
+/**
+ * 用户指定的到期日（null = 跟随自动推算）。
+ * ⚠️ 换食材必须清掉：给牛奶选的「三天后」对下一件鸡蛋多半是错的。
+ */
+const expiryDate = ref<string | null>(null);
+watch(selected, () => {
+  expiryDate.value = null;
 });
 
 watch(
@@ -143,9 +164,13 @@ watch(
       unit.value = '个';
       price.value = null;
       icon.value = null;
+      expiryDate.value = null;
       locId.value = locations.enabled[0]?.id ?? null;
     }
   },
+  // ⚠️ immediate：深链直达 ?quickadd=1 时弹层挂载即打开，不触发 change——
+  // 不加的话 locId 恒为 null，到期日行与位置预选全部失效（F17 实测踩到）
+  { immediate: true },
 );
 
 function close() {
@@ -171,6 +196,9 @@ async function confirm(keepOpen = false) {
       locationId: locId.value,
       price: normalizePrice(price.value),
       icon: icon.value,
+      // v1.1 F17：用户指定的到期日换算为手填保质期天数落库（优先级最高、换位置不被字典覆盖）；
+      // null = 跟随字典/品类自动推算。基准是 storedAt（快速入库 storedAt = 今天，无生产日）。
+      manualShelfLife: expiryDate.value ? manualDaysForExpiry(expiryDate.value, today.value) : undefined,
     });
     show(`已加入：${name}`);
     if (keepOpen) {
@@ -334,6 +362,15 @@ function openScan() {
             </PillGroup>
           </div>
 
+          <!-- v1.1 F17：到期日可编辑行（默认自动推算，点「修改」指定日期） -->
+          <div v-if="selected && locId" class="mb-3.5">
+            <ExpiryEditRow
+              v-model="expiryDate"
+              :auto-expire-at="expiryCalc?.expireAt ?? null"
+              :hint="expiryHint"
+            />
+          </div>
+
           <!--
             单价：**每 1 单位**的价格（元），不是整份总价。右侧实时算合计兜住这个歧义。
             口径走 `priceFromInput`：负数会污染月度统计，`1e999` 会变 `Infinity`。
@@ -354,8 +391,6 @@ function openScan() {
               <span v-if="priceTotal" class="text-[12px] text-ink-3 flex-none whitespace-nowrap">{{ priceTotal }}</span>
             </div>
           </FormField>
-
-          <div class="tip mb-3.5">{{ note }}</div>
         </template>
 
     <template #footer>

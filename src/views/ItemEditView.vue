@@ -2,16 +2,17 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageShell from '@/components/PageShell.vue';
+import ExpiryEditRow from '@/components/ExpiryEditRow.vue';
 import ConfirmSheet from '@/components/ConfirmSheet.vue';
 import { useItemsStore } from '@/stores/items';
 import { useLocationsStore } from '@/stores/locations';
 import { useDictStore } from '@/stores/dict';
 import { lookupFood, foodKeyOf } from '@/data/dict';
 import { isEmojiIcon } from '@/domain/itemFactory';
-import { computeExpiry, compareLocations } from '@/domain/shelfLife';
+import { computeExpiry, manualDaysForExpiry } from '@/domain/shelfLife';
 import { fallbackDays } from '@/domain/categories';
 import { ENV_MAP, type Item } from '@/domain/types';
-import { todayStr } from '@/domain/dates';
+import { addDays, todayStr } from '@/domain/dates';
 import { normalizeName } from '@/domain/normalize';
 import { normalizePrice, priceFromInput } from '@/domain/price';
 import { fmtQty } from '@/domain/quantity';
@@ -96,9 +97,19 @@ const baseInput = computed(() => ({
   manualShelfLife: draft.manualShelfLife,
 }));
 
-const compareRows = computed(() =>
-  compareLocations(baseInput.value, locations.all, dict.resolve, fallbackDays),
-);
+/**
+ * 「不手填时」的推算结果（manualShelfLife 强制置 null）——ExpiryEditRow 的自动预览。
+ * 与 currentPreview（含手填）分开：用户指定的日期要和「字典本来会说的话」同屏对比。
+ */
+const autoExpiry = computed(() => {
+  if (!draft.locationId) return null;
+  return computeExpiry(
+    { ...baseInput.value, manualShelfLife: null },
+    locations.envOf(draft.locationId),
+    dict.resolve,
+    fallbackDays,
+  );
+});
 
 const currentPreview = computed(() => {
   if (!draft.locationId) return null;
@@ -106,6 +117,25 @@ const currentPreview = computed(() => {
 });
 
 const storedAt = computed(() => item.value?.storedAt ?? todayStr());
+
+/**
+ * 用户指定的到期日（v1.1 F17）：`manualShelfLife` 的**日期形态**。
+ * get：手填天数按 `addDays(producedAt || storedAt, days)` 还原成日期（与 computeExpiry 同基准）；
+ * set：选中的日期经 `manualDaysForExpiry` 换算回天数落 draft——日期是交互语言，天数是存储语言。
+ */
+const pickedExpiry = computed<string | null>({
+  get() {
+    const base = draft.producedAt || storedAt.value;
+    return draft.manualShelfLife ? addDays(base, draft.manualShelfLife) : null;
+  },
+  set(date) {
+    if (!date) {
+      draft.manualShelfLife = null;
+      return;
+    }
+    draft.manualShelfLife = manualDaysForExpiry(date, storedAt.value, draft.producedAt);
+  },
+});
 
 /** 防连点：双击保存会建出两条记录；编辑时第一条已 `router.back()`，第二条照样落库 */
 const saving = ref(false);
@@ -277,46 +307,25 @@ async function removeItem() {
         </PillGroup>
       </FormField>
 
-      <div
-        class="tip mb-3.5"
-        :class="currentPreview?.notRecommended ? 'tip-soon' : ''"
-      >
-        <template v-if="currentPreview?.notRecommended">
-          <b class="font-medium">不建议存放：</b>{{ currentPreview.reason }}
-        </template>
-        <template v-else-if="currentPreview?.expireAt">
-          当前位置到期日 <b class="font-medium text-ink-1">{{ currentPreview.expireAt }}</b>（{{ currentPreview.days }} 天）
-        </template>
-        <template v-else>该位置未设置保质期，可手填。</template>
-      </div>
+      <!--
+        v1.1 F17：到期日升级为**主字段直改**（此前折叠在「更多选项」里且只有天数形态）。
+        ExpiryEditRow 显示自动推算预览；手填过（manualShelfLife）时显示指定日期 + 「手动指定」
+        徽标，可一键恢复自动。min 放宽到入库日——录入存量时「东西早过期了」是合法状态。
+      -->
+      <FormField label="到期日">
+        <ExpiryEditRow
+          v-model="pickedExpiry"
+          :auto-expire-at="autoExpiry?.expireAt ?? null"
+          :hint="currentPreview?.notRecommended
+            ? `不建议存放（${currentPreview.reason}）`
+            : autoExpiry?.expireAt
+              ? `按 ${autoExpiry.days} 天推算`
+              : '未设置保质期，可手动指定'"
+          :min-date="storedAt"
+        />
+      </FormField>
 
-      <div class="section-label">各位置到期日预览</div>
-      <table class="w-full text-[12px] border-collapse">
-        <thead>
-          <tr><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">位置</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">环境</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">天数</th><th class="text-left text-ink-3 font-normal py-1.5 border-b border-line">到期日</th></tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in compareRows"
-            :key="row.locationId"
-            :class="row.locationId === draft.locationId ? 'text-fresh-fg font-medium' : ''"
-          >
-            <td class="py-1.5 border-b border-dashed border-line text-ink-1">{{ row.locationName }}</td>
-            <td class="py-1.5 border-b border-dashed border-line text-ink-2">{{ ENV_MAP[row.env].label }}</td>
-            <td class="py-1.5 border-b border-dashed border-line text-ink-2">
-              <template v-if="row.notRecommended">不建议</template>
-              <template v-else-if="row.days">{{ row.days }} 天</template>
-              <template v-else>—</template>
-            </td>
-            <td class="py-1.5 border-b border-dashed border-line text-ink-2">
-              <template v-if="row.notRecommended">{{ row.reason }}</template>
-              <template v-else-if="row.expireAt">{{ row.expireAt }}</template>
-              <template v-else>—</template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
+      <!-- 更多选项：生产日期 / 单价 / 备注（可选低频项；到期日已升级为主字段，天数字段退役） -->
       <div class="section-label flex justify-between items-center">
         <span>更多选项（可选）</span>
         <button
@@ -330,17 +339,6 @@ async function removeItem() {
       <div v-show="moreOpen">
         <FormField label="生产日期（可选）">
           <input v-model="draft.producedAt" type="date" class="field-input" />
-        </FormField>
-
-        <FormField label="手填保质期（天，覆盖自动推算）">
-          <input
-            :value="draft.manualShelfLife ?? ''"
-            type="number"
-            min="1"
-            class="field-input"
-            placeholder="留空则按字典/品类自动推算"
-            @input="draft.manualShelfLife = ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null"
-          />
         </FormField>
 
         <!--

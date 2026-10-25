@@ -22,6 +22,7 @@
 | `GroupHead.vue` | **v1.1 F14**：列表分组段头（`variant="sticky"` 吸顶带出血 / `"plain"` 普通流），间距统一由组件定，调用方不要再挂 mt/mb | StockView、ListView、ConsumeLogView |
 | `FreshnessBadge.vue` | **v1.1 F14**：新鲜度六态徽标（状态色映射唯一住址；over 实底白字）。收编前曾 4 处手写、F11-② 漏改盘点面板 | ItemGroupCard、TodayTodo、StocktakePanel |
 | `EnvDotLabel.vue` | **v1.1 F14**：环境色点 + 名称（`tone`：sunken / on-tint（彩底行）/ bare）。「中性灰底+彩点」约定的组件化 | ItemGroupCard、TodayTodo、StocktakePanel |
+| `ExpiryEditRow.vue` | **v1.1 F17**：到期日「预览 + 修改」行（自动推算 + 快捷胶囊 + 日期选择，`minDate` 可放宽到入库日）。指定日期由调用方经 `manualDaysForExpiry` 换算为手填天数落库 | QuickAddSheet、ScanSheet、ShoppingInboundRow、ItemEditView |
 | `ItemGroupCard.vue` | **v3**：同名折叠组卡（组卡头 + 展开后的各份明细），取代 `ItemCard` 成为库存列表主体。默认展开（≤2 份）会**跟随份数变化重算**（消耗一份后自动展开，批次 4，REV-21）。**v1.1 F15** 三行化：名称+状态 / 数量·单价·位置 / 进度条+到期日（位置不再被挤到独立行） | StockView |
 | `LocationChipBar.vue` | 位置横滑筛选 chips（含「全部」「管理」） | StockView |
 | `NavBar.vue` | 子页顶栏：标题 + 返回按钮 | 独立子页 + `meta.header` 页面（由 TabLayout 渲染） |

@@ -497,6 +497,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | 金额显示 | `domain/price.fmtMoney`（单价区间等特例见 audit-ignore 注释） |
 | 长列表窗口化 | `composables/useWindowedList.ts` |
 | 单件消耗动线（≤1 直执行 / 弹层 / 撤销） | `composables/useConsumeFlow.ts` |
+| 到期日修改（入库 / 编辑） | `components/ExpiryEditRow.vue` + `domain/shelfLife.manualDaysForExpiry`（日期→手填天数，换位置不丢） |
 
 ---
 
