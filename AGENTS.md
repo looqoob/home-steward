@@ -143,6 +143,7 @@ home-steward/
     │   ├── StatsView.vue         # 统计（趋势 / Top / 周转 / 品类 / 在库价值）
     │   ├── ConsumeLogView.vue    # 消耗明细（meta.header 外壳顶栏）
     │   ├── ItemEditView.vue      # 商品新建/编辑（含位置对比、改价、改名刷新 dictKey）
+    │   ├── ItemDetailView.vue    # v1.1 F20：商品详情（消费视角：状态/到期日校准/快捷消耗/记录）
     │   ├── LocationManageView.vue# 位置管理
     │   ├── DictView.vue          # 保质期字典（保存即自动重算在库商品）
     │   ├── BarcodeManageView.vue # 条码映射管理
@@ -474,7 +475,7 @@ import { ItemGroupCard } from '@/components/ItemGroupCard.vue';  // ❌ 构建�
 | 跨零点 / 当前时间 | `src/composables/useNow.ts`（按天计算一律 `useToday()`） |
 | 多标签数据同步 | `src/data/sync.ts`（BroadcastChannel） |
 | 列表页搜索框 | `src/components/SearchField.vue` |
-| 新增路由 | `src/router/index.ts`（懒加载；**不要**加静态 `/item/new`，坑位 #13） |
+| 新增路由 | `src/router/index.ts`（懒加载；`/item/new` 静态、`/item/:id` 详情、`/item/:id/edit` 编辑——三者关系见坑位 #13） |
 | 更新日志（面向用户） | `src/views/ChangelogView.vue`（发版在 ENTRIES 顶部追加条目，与 BATCHES 台账同步） |
 | 主题色 / 间距 / 圆角 | `src/styles/index.css` |
 | 提醒时间 / 通知方式 | `src/composables/useReminder.ts` |

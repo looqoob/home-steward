@@ -39,10 +39,17 @@ const router = createRouter({
         },
       ],
     },
-    // ⚠️ 不要再加静态的 '/item/new'：它会抢在 '/item/:id' 前面匹配，导致 route.params.id 为 undefined，
-    // ItemEditView 的 `isNew = id === 'new'` 判定失效，新增页会显示「该物资不存在或已删除」。
-    // '/item/new' 由下面的 '/item/:id' 匹配，params.id === 'new'。
-    { path: '/item/:id', component: () => import('@/views/ItemEditView.vue') },
+    // v1.1 F20：路由按「消费视角」拆分——
+    //   /item/new     静态注册 → 编辑页（新增）。Vue Router 静态段优先于参数段，
+    //                 不会被 /item/:id 抢走；ItemEditView 的 isNew 判定保留作双保险。
+    //   /item/:id     物品详情页（消费视角：状态 / 快捷消耗 / 校准 / 历史）——
+    //                 通知直达、卡片点击、待办等所有「看某个物品」的落点。
+    //   /item/:id/edit 编辑页（表单视角）。
+    // ⚠️ 历史（坑位 #13）：单一 /item/:id 时代静态 /item/new 会抢匹配导致 isNew 失效；
+    //    拆分后 /item/new 静态注册是**必须**的，否则新增会落到详情页。
+    { path: '/item/new', component: () => import('@/views/ItemEditView.vue') },
+    { path: '/item/:id', component: () => import('@/views/ItemDetailView.vue') },
+    { path: '/item/:id/edit', component: () => import('@/views/ItemEditView.vue') },
     { path: '/locations', component: () => import('@/views/LocationManageView.vue') },
     { path: '/dict', component: () => import('@/views/DictView.vue') },
     { path: '/appearance', component: () => import('@/views/AppearanceView.vue') },

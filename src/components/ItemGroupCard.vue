@@ -28,6 +28,8 @@ const emit = defineEmits<{
   (e: 'consume-one', item: Item, type: ConsumeType): void;
   (e: 'select', group: ItemGroup): void;
   (e: 'longpress', group: ItemGroup): void;
+  /** v1.1 F20：点击状态徽标 → 随手校准到期日（按包装日期） */
+  (e: 'calibrate', group: ItemGroup): void;
 }>();
 
 /* ---------------- 多选：长按进入 ---------------- */
@@ -225,7 +227,19 @@ const dueSummary = computed(() => {
               v-if="props.group.members.length > 1"
               class="text-[12px] px-2 py-0.5 rounded-full bg-sunken text-ink-2 flex-none whitespace-nowrap"
             >共 {{ props.group.members.length }} 份</span>
-            <FreshnessBadge :state="leadFresh.state" :label="leadFresh.label" />
+            <!--
+              v1.1 F20：徽标可点 → 随手校准（痛点：App 推算的到期日与包装不符时，
+              「发现不符」的第一秒就该能纠正，而不是攒着去详情页）。
+              span 而非 button：徽标在主开卡按钮内部，HTML 不允许嵌套交互元素；
+              click.stop 防止触发开卡。
+            -->
+            <span
+              class="cursor-pointer"
+              title="按包装日期校准到期日"
+              @click.stop="emit('calibrate', props.group)"
+            >
+              <FreshnessBadge :state="leadFresh.state" :label="leadFresh.label" />
+            </span>
           </span>
           <!--
             v1.1 F15-1 三行化：属性行（数量 · 单价 · 位置）+ 末行（进度条 + 到期日）。

@@ -46,9 +46,11 @@ watch(customUnitOpen, (open) => {
 /** 路由参数 id 改为 computed：此前是 `const id = route.params.id as string`，
  *  非 reactive，从 /item/A 直接 push /item/B 时组件被复用，watch 触发 init
  *  但 init 内读 item.value 仍走旧 id，draft 被填充成 A 的数据，保存会覆盖 B。 */
-const id = computed(() => route.params.id as string);
-const isNew = computed(() => id.value === 'new');
-const item = computed(() => (isNew.value ? undefined : items.byId(id.value)));
+const id = computed(() => (route.params.id as string) ?? null);
+// v1.1 F20：/item/new 改为静态路由后 params.id 是 undefined——新增判定同时覆盖两种入口
+//（静态路由 + 老的 'new' 参数值，旧链接/历史记录里可能还留着 #/item/new 形态）
+const isNew = computed(() => !id.value || id.value === 'new');
+const item = computed(() => (isNew.value || !id.value ? undefined : items.byId(id.value)));
 
 const draft = reactive({
   name: '',
@@ -86,8 +88,8 @@ function init() {
     draft.note = null;
   }
 }
-init();
-watch(() => route.params.id, init);
+// immediate 覆盖挂载时机（/item/new 静态路由下 params.id 为 undefined 也要初始化为新增模式）
+watch(() => route.params.id, init, { immediate: true });
 
 const baseInput = computed(() => ({
   name: draft.name.trim() || '未命名',

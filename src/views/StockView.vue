@@ -259,6 +259,37 @@ function openQuickAdd() {
  */
 const { target: consumeTarget, ask: askConsume, confirm: confirmConsume } = useConsumeFlow();
 
+/* ==================== 随手校准（v1.1 F20 痛点 1） ==================== */
+
+/**
+ * 点击组卡状态徽标 → 校准弹层。
+ * 「App 推算的到期日」与包装印刷日期不符时，在发现的第一秒纠正：
+ * 弹层预填当前日期，用户改成包装日期 → 换算手填天数落库（换位置不丢），可撤销。
+ * 只校准 lead（最早到期那份）——组内其他份有自己的日期，详情页可逐份处理。
+ */
+const calibrateTarget = ref<ItemGroup | null>(null);
+const calibrateDate = ref('');
+
+function openCalibrate(group: ItemGroup) {
+  calibrateTarget.value = group;
+  calibrateDate.value = group.lead.expireAt ?? today.value;
+}
+
+async function applyCalibration() {
+  const g = calibrateTarget.value;
+  if (!g || !calibrateDate.value) return;
+  const snap = await items.calibrateExpiry(g.lead.id, calibrateDate.value);
+  calibrateTarget.value = null;
+  if (snap === undefined) {
+    show('日期无效：不能早于入库日期');
+    return;
+  }
+  show('已按包装日期校准', 2200, {
+    text: '撤销',
+    run: () => items.calibrateExpiry(g.lead.id, null, snap),
+  });
+}
+
 /* ---------- 折叠组的消耗（V3-06）：弹层里选份，确认后按 FEFO 扣 ---------- */
 
 const groupTarget = ref<{ group: ItemGroup; type: ConsumeType } | null>(null);
@@ -656,6 +687,7 @@ function exitStocktake() {
           @consume-one="askConsume"
           @select="toggleSelectGroup"
           @longpress="enterSelectGroup"
+          @calibrate="openCalibrate"
         />
       </section>
 
@@ -717,6 +749,51 @@ function exitStocktake() {
       danger
       @confirm="bulkRemove"
     />
+
+    <!--
+      v1.1 F20 随手校准弹层：点组卡状态徽标弹出。
+      预填当前推算日期，用户改成包装上的印刷日期即可——
+      「App 说的」永远可以在看到现实的第一秒被纠正。
+    -->
+    <BottomSheet
+      :model-value="calibrateTarget !== null"
+      title="按包装日期校准"
+      fixed-footer
+      @update:model-value="calibrateTarget = null"
+    >
+      <div v-if="calibrateTarget">
+        <p class="text-[13px] text-ink-2 leading-relaxed mb-4">
+          {{ calibrateTarget.name }}（{{ fmtQty(calibrateTarget.lead.quantity) }}{{ calibrateTarget.lead.unit }}）
+          · 只校准最早到期这份，其余份可在详情页单独调整。
+        </p>
+        <FormField label="到期日（包装上印的日期）" for-id="cal-date">
+          <input
+            id="cal-date"
+            v-model="calibrateDate"
+            type="date"
+            class="field-input"
+            :min="calibrateTarget.lead.storedAt"
+          />
+        </FormField>
+      </div>
+
+      <template #footer>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            class="flex-1 min-h-11 rounded-md border border-line-strong text-ink-2 text-[14px]"
+            @click="calibrateTarget = null"
+          >取消</button>
+          <button
+            type="button"
+            data-autofocus
+            class="flex-1 min-h-11 rounded-md bg-primary-600 text-white text-[14px] font-medium disabled:opacity-40"
+            :disabled="!calibrateTarget || !calibrateDate"
+            @click="applyCalibration"
+          >校准</button>
+        </div>
+      </template>
+    </BottomSheet>
 
     <!--
       批量改价面板：一个单价输入框。

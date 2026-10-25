@@ -12,6 +12,7 @@ import { lookupFood, foodKeyOf } from '@/data/dict';
 import { snoozeUntilOf } from '@/domain/todo';
 import { planBulkConsume, planBulkMove, planBulkRemove, buildConsumeLog, type BulkOp } from '@/domain/bulk';
 import { planGroupConsume, foldKeyOf, expiryCompatible } from '@/domain/grouping';
+import { manualDaysForExpiry } from '@/domain/shelfLife';
 import { useDictStore } from './dict';
 import { useLocationsStore } from './locations';
 
@@ -293,6 +294,45 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   /**
+   * 「随手校准」到期日（v1.1 F20）：用户看到包装上的印刷日期与 App 推算不符时，
+   * 一键以包装日期为准。换算为 `manualShelfLife`（手填天数）落库——它是「用户明确
+   * 指定」的唯一载体，换位置不会被字典覆盖（与入库/编辑的到期日直改同一口径）。
+   *
+   * @param id 物品 id
+   * @param date 包装上的到期日（YYYY-MM-DD）；早于入库/生产日返回 `null`（不生效）
+   * @returns 撤销快照：校准前的 `manualShelfLife`（null = 之前是自动推算）；
+   *          传回本方法即可撤销。物品不存在或日期非法时返回 `undefined`（无快照可撤）。
+   * @example
+   * const snap = await items.calibrateExpiry(id, '2026-11-03');
+   * show('已按包装日期校准', 2200, snap !== undefined ? { text: '撤销', run: () => items.calibrateExpiry(id, null, snap) } : undefined);
+   */
+  async function calibrateExpiry(
+    id: string,
+    date: string | null,
+    restoreManual?: number | null,
+  ): Promise<number | null | undefined> {
+    const cur = byId(id);
+    if (!cur || cur.status !== 'in_stock') return undefined;
+    const prev = cur.manualShelfLife;
+    let manual: number | null;
+    if (restoreManual !== undefined) {
+      // 撤销路径：直接恢复校准前的值
+      manual = restoreManual;
+    } else {
+      if (!date) return undefined;
+      manual = manualDaysForExpiry(date, cur.storedAt, cur.producedAt);
+      if (manual === null) return undefined;
+    }
+    const dict = useDictStore();
+    const locs = useLocationsStore();
+    const next = { ...cur, manualShelfLife: manual };
+    const patch = recomputeForLocation(next, locs.envOf(cur.locationId), dict.resolve, fallbackDays);
+    await db.items.put({ ...next, ...patch, updatedAt: Date.now() });
+    await load();
+    return prev;
+  }
+
+  /**
    * 软删除商品（不写消耗日志）。用于「手滑加错了」的场景，
    * 与 `consume` 的区别是不影响统计。
    *
@@ -501,7 +541,7 @@ export const useItemsStore = defineStore('items', () => {
 
   return {
     list, logs, loaded, active, load, byId, add, addMany, save, moveTo, setManualShelfLife,
-    snooze, unsnooze, consume, undoConsume, remove, restore, recomputeAll,
+    snooze, unsnooze, consume, undoConsume, remove, restore, recomputeAll, calibrateExpiry,
     bulkConsume, consumeGroup, bulkMoveTo, bulkRemove, bulkSetPrice, undoBulk,
   };
 });

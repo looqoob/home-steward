@@ -10,8 +10,9 @@
 | `/` → `/stock` | `StockView.vue` | TabLayout | 库存主页（默认Tab） |
 | `/list` | `ListView.vue` | TabLayout | 购物清单 |
 | `/me` | `MeView.vue` | TabLayout | 我的 / 统计 |
-| `/item/new` | `ItemEditView.vue` | NavBar | 新建商品 |
-| `/item/:id` | `ItemEditView.vue` | NavBar | 编辑商品 |
+| `/item/new` | `ItemEditView.vue` | NavBar | 新建商品（静态路由，见坑位 #13） |
+| `/item/:id` | `ItemDetailView.vue` | NavBar | **v1.1 F20**：商品详情（消费视角：状态/到期日校准/快捷消耗/记录） |
+| `/item/:id/edit` | `ItemEditView.vue` | NavBar | 编辑商品 |
 | `/locations` | `LocationManageView.vue` | NavBar | 位置管理 |
 | `/dict` | `DictView.vue` | NavBar | 保质期字典 |
 | `/appearance` | `AppearanceView.vue` | NavBar | 外观与主题（深浅模式 + 主题色） |
@@ -286,7 +287,7 @@ async function toggleCheck(s) {
 ---
 
 ## StatsView.vue — **v3**：统计
-
+
 > **v1.1 F9 起自持滚动**：整页内容型页面，根元素即 `h-full overflow-y-auto`（顶栏由 meta.header 外壳渲染）。
 
 > v1.1 F4 起新增「本月 vs 上月末」区：上月末快照 vs 当前在库的差集（新购 / 减少+去向对账），无快照时显示生成时机说明。v1.1 F2 新增底部「导出 CSV」。

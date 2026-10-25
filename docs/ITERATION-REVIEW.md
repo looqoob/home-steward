@@ -488,6 +488,23 @@
 
 **验证**：typecheck 0 错误；vitest **282 例**全过（+3 退场用例：原因消失退场 / 手动·已勾选·已入库·已软删不退 / 同名不同 reason 不互抵）；`audit:ui` 0 违规；build 成功。preview 实测（真实使用数据）：stale 牛奶建议自动退场且未重生、酸奶/面包保留、需买数正确、说明与手动添加交互正常。
 
+### 批次 F20 · 物品详情页 + 随手校准（2026-10-25 定案与落地）
+
+**需求来源**：需求方从日常使用痛点出发定案「第一批」（痛点 1+2 合并），其余痛点（批量补记/智能默认/名称防分裂）与 F20 分享图、F21 PWA 通知均定案不做。
+
+**痛点**：① App 推算的到期日与包装印刷日期必然有偏差，「发现不符」时纠正要三四步——虚假过期是这类工具用户流失的第一原因；② 所有「点进物品」的路径（通知直达、卡片点击）都落在编辑表单上，用户要的是「看 + 处理」不是「填写」。
+
+**落地**：
+
+| 项 | 内容 |
+| --- | --- |
+| 路由拆分 | `/item/:id` → 新 `ItemDetailView`（消费视角）；`/item/:id/edit` → `ItemEditView`（表单视角）；`/item/new` → 静态注册（**坑位 #13 反转**：拆分后静态注册是必须的，`isNew` 判定改为 `!params.id \|\| params.id === 'new'`——静态路由下 params.id 是 undefined） |
+| 详情页 | 状态卡（图标 + 名称 + FreshnessBadge + 数量/单价/位置）→ 到期日校准行（ExpiryEditRow，`minDate=storedAt` 允许存量过期）→ 用掉/扔掉大按钮（useConsumeFlow 同源）+「明天再说」（仅 urgent/over）→ 消耗记录（该物品日志最新 10 条）→ 编辑资料/删除出口；finished 状态只读 |
+| 校准 | `items.calibrateExpiry(id, date, restoreManual?)`：日期 → `manualDaysForExpiry` 换算手填天数落库（换位置不丢），返回校准前的 manualShelfLife 作撤销快照；restoreManual 直接恢复。组卡状态徽标可点 → 校准弹层（预填当前日期、只校准 lead——其余份在详情页单独调整），toast 带撤销 |
+| 附带修复 | BottomSheet 的 `#footer` 插槽只在 `fixedFooter` 时渲染——校准弹层漏传导致按钮不存在（preview 实测抓到） |
+
+**验证**：typecheck 0 错误；vitest **282 例**全过；`audit:ui` 0 违规；build 成功。preview 实测：组卡徽标点击 → 校准为包装日期 11-03 → DB `manual=12 / source=manual / expireAt=11-03`；卡片点击 → 详情页布局完整；`/item/new` 正常出「添加物资」。
+
 ### 建议落地顺序
 
 F1（复用现有流水，成本最低）→ F3（原生壳体验短板）→ F2 → F5 → F4（唯一动 schema 的，放最后单独升版）。
